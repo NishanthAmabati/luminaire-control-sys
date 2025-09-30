@@ -1,0 +1,1 @@
+A microservices based luminare control application. Custom luminaires connect via ethernet to a python tcp server. Luminaires respond and react to commands sent over the established socekt connection.
