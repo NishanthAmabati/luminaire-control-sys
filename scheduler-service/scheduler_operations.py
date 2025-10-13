@@ -158,20 +158,56 @@ class SchedulerOperations:
             if scene_name not in scene_data:
                 raise FileNotFoundError(f"Scene {scene_name} not found in scene_data")
             
+            # Load scene_data_list from CSV
             with open(csv_path, newline='') as csvfile:
                 reader = csv.reader(csvfile)
-                #next(reader)
+                next(reader)  # Skip header
                 scene_data_list = [(int(row[0].split(':')[0]) * 60 + int(row[0].split(':')[1]), float(row[1]), float(row[2])) for row in reader]
             
             self.total_intervals = len(scene_data_list)
-            self.state["scheduler"]["total_intervals"] = 8640
+            self.state["scheduler"]["total_intervals"] = 8640  # 86,400 seconds / 10 for frontend
             self._set_state(self.state)
 
+            # Initialize index based on time of day
             start_time = datetime.datetime.now()
             seconds_since_midnight = (start_time.hour * 3600) + (start_time.minute * 60) + start_time.second
             self.current_interval_index = seconds_since_midnight
             self.start_time = time.time()
             logging.debug(f"Scheduler started at index: {self.current_interval_index}, start_time: {self.start_time}")
+
+            # Set initial state
+            current_idx = seconds_since_midnight
+            current_interval = (current_idx // 1800) % self.total_intervals
+            next_interval = (current_interval + 1) % self.total_intervals
+            interval_progress = (current_idx % 1800) / 1799.0
+            start_min, start_cct, start_intensity = scene_data_list[current_interval]
+            end_min, end_cct, end_intensity = scene_data_list[next_interval]
+            time_diff = ((end_min - start_min + 1440) % 1440) * 60
+            cct_diff = end_cct - start_cct
+            intensity_diff = end_intensity - start_intensity
+
+            initial_cct = start_cct + (cct_diff * interval_progress)
+            initial_intensity = start_intensity + (intensity_diff * interval_progress)
+            cw, ww = self.calculate_cw_ww_from_cct_intensity(initial_cct, initial_intensity)
+            self.state["current_cct"] = initial_cct
+            self.state["current_intensity"] = initial_intensity
+            self.state["cw"], self.state["ww"] = cw, ww
+            self.state["scheduler"]["interval_progress"] = (current_idx / 86400) * 100
+            self.state["scheduler"]["current_interval"] = current_idx // 10
+            self._set_state(self.state)
+            logging.info(f"Initial state set - CCT: {initial_cct:.1f}K, Intensity: {initial_intensity:.1f}lux, CW: {cw:.1f}%, WW: {ww:.1f}%")
+
+            # Send initial values to luminaire-service
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                    json={"cw": cw, "ww": ww}
+                )
+                if resp.status_code != 200:
+                    self.log_advanced(f"Initial SendAll failed: {resp.text}")
+                    logging.warning(f"Initial SendAll failed: {resp.text}")
+                else:
+                    self.log_basic(f"Applied initial scene values: CCT {initial_cct:.1f}K, Intensity {initial_intensity:.1f}lux")
 
             last_interval_update = self.current_interval_index
             update_interval = config.get("luminaire_operations", {}).get("scheduler_update_interval", 1.0)
@@ -189,7 +225,7 @@ class SchedulerOperations:
 
                 current_interval = (current_idx // 1800) % self.total_intervals
                 next_interval = (current_interval + 1) % self.total_intervals
-                interval_progress = (current_idx % 1800) / 1799
+                interval_progress = (current_idx % 1800) / 1799.0
 
                 start_min, start_cct, start_intensity = scene_data_list[current_interval]
                 end_min, end_cct, end_intensity = scene_data_list[next_interval]
@@ -207,7 +243,7 @@ class SchedulerOperations:
 
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
-                        f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                        f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                         json={"cw": cw, "ww": ww}
                     )
                     if resp.status_code != 200:
@@ -353,7 +389,7 @@ class SchedulerOperations:
         self.log_basic(f"Adjusted {data.light_type.upper()} by {data.delta}%")
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                 json={"cw": self.state["cw"], "ww": self.state["ww"]}
             )
             if resp.status_code != 200:
@@ -367,7 +403,7 @@ class SchedulerOperations:
         self.state["current_cct"] = self.calculate_cct_from_cw_ww(data.cw, data.ww)
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                 json={"cw": data.cw, "ww": data.ww}
             )
             if resp.status_code != 200:
@@ -383,7 +419,7 @@ class SchedulerOperations:
         self.state["cw"], self.state["ww"] = cw, ww
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                 json={"cw": cw, "ww": ww}
             )
             if resp.status_code != 200:
@@ -399,7 +435,7 @@ class SchedulerOperations:
         self.state["cw"], self.state["ww"] = cw, ww
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                 json={"cw": cw, "ww": ww}
             )
             if resp.status_code != 200:
@@ -425,7 +461,7 @@ class SchedulerOperations:
             self.state["cw"], self.state["ww"] = 0.0, 0.0
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
-                    f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                    f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                     json={"cw": 0.0, "ww": 0.0}
                 )
                 if resp.status_code != 200:
@@ -451,7 +487,7 @@ class SchedulerOperations:
             # Send restored CW/WW
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
-                    f"http://{config['server']['host']}:{config['microservices']['device_port']}/sendAll",
+                    f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                     json={"cw": self.state["cw"], "ww": self.state["ww"]}
                 )
                 if resp.status_code != 200:
@@ -487,7 +523,7 @@ class SchedulerOperations:
 
     async def run_timer_scheduler(self):
         logging.debug("Starting timer scheduler")
-        api_url = f"http://{config['server']['host']}:{config['microservices']['api_port']}"
+        api_url = f"http://{config['microservices']['api_service']['host']}:{config['microservices']['api_service']['port']}"
         while True:
             if not self.state.get("isTimerEnabled", False):
                 logging.debug("Timer scheduler disabled, skipping checks")

@@ -1,0 +1,84 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    volumes:
+      - redis-data:/data
+    environment:
+      - TZ=Asia/Kolkata
+    network_mode: host
+    restart: unless-stopped
+
+  luminaire-service:
+    image: nishanthambati/luminaire-service:v1.0
+    container_name: luminaire-service
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - TZ=Asia/Kolkata
+    network_mode: host
+    restart: unless-stopped
+
+  scheduler-service:
+    image: nishanthambati/scheduler-service:v1.0
+    container_name: scheduler-service
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./scenes:/app/scenes
+    environment:
+      - TZ=Asia/Kolkata
+    depends_on:
+      - redis
+      - luminaire-service
+    network_mode: host
+    restart: unless-stopped
+
+  monitoring-service:
+    image: nishanthambati/monitoring-service:v1.0
+    container_name: monitoring-service
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - TZ=Asia/Kolkata
+    network_mode: host
+    restart: unless-stopped
+
+  api-service:
+    image: nishanthambati/api-service:v1.0
+    container_name: api-service
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - TZ=Asia/Kolkata
+    depends_on:
+      - redis
+      - scheduler-service
+      - luminaire-service
+      - monitoring-service
+    network_mode: host
+    restart: unless-stopped
+
+  websocket-service:
+    image: nishanthambati/websocket-service:v1.0
+    container_name: websocket-service
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - TZ=Asia/Kolkata
+    depends_on:
+      - redis
+      - api-service
+    network_mode: host
+    restart: unless-stopped
+
+  webapp:
+    image: nishanthambati/nginx-webapp:v1.0
+    container_name: nginx-webapp
+    depends_on:
+      - websocket-service
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  redis-data:

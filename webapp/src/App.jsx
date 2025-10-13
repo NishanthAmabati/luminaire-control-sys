@@ -581,7 +581,7 @@ const App = () => {
 
     const connectWebSocket = () => {
       setIsLoading(true);
-      ws.current = new WebSocket("ws://localhost:9999");
+      ws.current = new WebSocket("ws://localhost:5001");
       ws.current.onopen = () => {
         console.log("WebSocket Connected");
         logAdvanced("WebSocket connected");
@@ -629,7 +629,7 @@ const App = () => {
       : prev.advancedLogs,
   }));
             } else if (data.type === "live_update") {
-              console.log("Processing live_update:", data.data);
+              //console.log("Processing live_update:", data.data);
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
                   logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");

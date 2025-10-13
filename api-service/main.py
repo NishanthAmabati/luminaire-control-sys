@@ -29,6 +29,8 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="API Service", version="1.0.0")
+scheduler_url = f"http://{config['microservices']['scheduler_service']['host']}:{config['microservices']['scheduler_service']['port']}"
+monitoring_url = f"http://{config['microservices']['monitoring_service']['host']}:{config['microservices']['monitoring_service']['port']}"
 
 @app.get("/health")
 async def health():
@@ -37,8 +39,7 @@ async def health():
 
 @app.post("/api/set_mode")
 async def api_set_mode(data: SetModeData):
-    """Set auto/manual mode by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
+    """Set auto/manual mode by calling Scheduler Service."""    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/set_mode", json=data.dict())
@@ -49,8 +50,7 @@ async def api_set_mode(data: SetModeData):
 
 @app.post("/api/load_scene")
 async def api_load_scene(data: LoadSceneData):
-    """Load a scene by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
+    """Load a scene by calling Scheduler Service."""    
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/load_scene", json=data.dict())
@@ -62,7 +62,6 @@ async def api_load_scene(data: LoadSceneData):
 @app.post("/api/activate_scene")
 async def api_activate_scene(data: ActivateSceneData):
     """Activate a scene by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/activate_scene", json=data.dict())
@@ -74,7 +73,6 @@ async def api_activate_scene(data: ActivateSceneData):
 @app.post("/api/stop_scheduler")
 async def api_stop_scheduler():
     """Stop the scheduler by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/stop_scheduler")
@@ -86,7 +84,6 @@ async def api_stop_scheduler():
 @app.post("/api/pause_resume")
 async def api_pause_resume(data: PauseResumeData):
     """Pause or resume the scheduler by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/pause_resume", json=data.dict())
@@ -98,7 +95,6 @@ async def api_pause_resume(data: PauseResumeData):
 @app.post("/api/manual_override")
 async def api_manual_override(data: ManualOverrideData):
     """Set manual override by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/manual_override", json=data.dict())
@@ -110,7 +106,6 @@ async def api_manual_override(data: ManualOverrideData):
 @app.post("/api/adjust_light")
 async def api_adjust_light(data: AdjustLightData):
     """Adjust light settings by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/adjust_light", json=data.dict())
@@ -122,7 +117,6 @@ async def api_adjust_light(data: AdjustLightData):
 @app.post("/api/send_all")
 async def api_send_all(data: SendAllData):
     """Send CW/WW/intensity to all devices via Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/send_all", json=data.dict())
@@ -134,7 +128,6 @@ async def api_send_all(data: SendAllData):
 @app.post("/api/set_cct")
 async def api_set_cct(data: SetCCTData):
     """Set CCT by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/set_cct", json=data.dict())
@@ -146,7 +139,6 @@ async def api_set_cct(data: SetCCTData):
 @app.post("/api/set_intensity")
 async def api_set_intensity(data: SetIntensityData):
     """Set intensity by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/set_intensity", json=data.dict())
@@ -158,7 +150,6 @@ async def api_set_intensity(data: SetIntensityData):
 @app.post("/api/toggle_system")
 async def api_toggle_system(data: ToggleSystemData):
     """Toggle system on/off by calling Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/toggle_system", json=data.dict())
@@ -170,7 +161,6 @@ async def api_toggle_system(data: ToggleSystemData):
 @app.get("/api/available_scenes")
 async def api_available_scenes():
     """Get available scenes from Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(f"{scheduler_url}/available_scenes")
@@ -182,7 +172,6 @@ async def api_available_scenes():
 @app.get("/api/system_stats")
 async def api_system_stats():
     """Get system stats from Monitoring Service."""
-    monitoring_url = f"http://{config['server']['host']}:{config['microservices']['monitoring_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(f"{monitoring_url}/system_stats")
@@ -194,7 +183,6 @@ async def api_system_stats():
 @app.post("/api/set_timer")
 async def api_set_timer(data: SetTimerData):
     """Set system on/off timers via Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/set_timer", json=data.dict())
@@ -206,7 +194,6 @@ async def api_set_timer(data: SetTimerData):
 @app.get("/api/get_timers")
 async def api_get_timers():
     """Get current system timers from Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(f"{scheduler_url}/get_timers")
@@ -218,7 +205,6 @@ async def api_get_timers():
 @app.post("/api/toggle_timer")
 async def api_toggle_timer(data: ToggleTimerData):
     """Enable or disable timers via Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/toggle_timer", json=data.dict())
@@ -230,7 +216,6 @@ async def api_toggle_timer(data: ToggleTimerData):
 @app.post("/api/reset_timers")
 async def api_reset_timers():
     """Reset all timers via Scheduler Service."""
-    scheduler_url = f"http://{config['server']['host']}:{config['microservices']['scheduler_port']}"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(f"{scheduler_url}/reset_timers")
@@ -256,9 +241,9 @@ async def main():
     # Start FastAPI
     config_uvicorn = uvicorn.Config(
         app,
-        host="0.0.0.0",
-        port=config["microservices"]["api_port"],
-        log_level="info"
+        host=config['microservices']['api_service']['host'],
+        port=config["microservices"]['api_service']['port'],
+        log_level=config['microservices']['api_service']['log_level']
     )
     server = uvicorn.Server(config_uvicorn)
     await server.serve()

@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/ws': {  // Proxy WebSocket to API Service
-        target: 'ws://localhost:5000',
+        target: 'ws://localhost:5001',
         ws: true
       },
       '/api': {  // Proxy REST to API Service

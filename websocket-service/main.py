@@ -55,10 +55,11 @@ async def subscribe_to_updates():
     """Subscribe to Redis pub/sub channels and broadcast to clients."""
     try:
         redis_client = redis.Redis(
-            host=config["server"]["host"],
-            port=6379,
+            host=config['redis']["host"],
+            port=config['redis']['port'],
             decode_responses=False
         )
+
         pubsub = redis_client.pubsub()
         pubsub.subscribe("state_update", "system_stats_update", "log_update")
         logging.debug("Subscribed to state_update, system_stats_update, log_update channels")
@@ -124,7 +125,7 @@ async def subscribe_to_updates():
 
 async def forward_command_to_api(command):
     """Forward frontend command to api-service via HTTP."""
-    api_url = f"http://{config['server']['host']}:{config['microservices']['api_port']}"
+    api_url = f"http://{config['microservices']['api_service']['host']}:{config['microservices']['api_service']['port']}"
     endpoint_map = {
         "set_mode": "/api/set_mode",
         "load_scene": "/api/load_scene",
@@ -205,13 +206,13 @@ async def main():
     
     async with websockets.serve(
         websocket_handler,
-        config["server"]["websocket_host"],
-        config["microservices"]["websocket_service_port"],
+        config['microservices']['websocket_service']['host'],
+        config['microservices']['websocket_service']['port'],
         max_size=config["server"].get("max_message_size", 1000000),
         ping_interval=30,
         ping_timeout=90
     ):
-        logging.info(f"WebSocket server started on ws://{config['server']['websocket_host']}:{config['microservices']['websocket_service_port']}")
+        logging.info(f"WebSocket server started on ws://{config['microservices']['websocket_service']['host']}:{config['microservices']['websocket_service']['port']}")
         await asyncio.Future()
 
 if __name__ == "__main__":

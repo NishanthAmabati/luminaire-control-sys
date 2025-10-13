@@ -150,8 +150,8 @@ if __name__ == "__main__":
     # Start uvicorn with custom startup hook
     config_uvicorn = uvicorn.Config(
         app=app,
-        host="0.0.0.0",
-        port=config["microservices"]["scheduler_port"]
+        host=config['microservices']['scheduler_service']['host'],
+        port=config['microservices']['scheduler_service']['port']
     )
     server = uvicorn.Server(config_uvicorn)
 

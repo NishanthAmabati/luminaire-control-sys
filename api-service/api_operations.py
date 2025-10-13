@@ -46,7 +46,7 @@ async def status_loop():
         password=config["redis"]["password"],
         decode_responses=False
     )
-    luminaire_url = f"http://{config['server']['host']}:{config['microservices']['device_port']}/list"
+    luminaire_url = f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/list"
     
     while True:
         try:
