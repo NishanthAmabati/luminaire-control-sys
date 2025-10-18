@@ -1,5 +1,5 @@
 # stage 1
-FROM --platform=$BUILDPLATFORM python:3.11-bookworm AS builder 
+FROM python:3.11-bookworm AS builder 
 WORKDIR /app
 
 # The '-dev' packages are required to compile any C-extensions in the requirements.
