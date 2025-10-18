@@ -11,13 +11,14 @@ services:
     restart: unless-stopped
 
   luminaire-service:
-    image: nishanthambati/luminaire-service:v1.0
+    image: nishanthambati/luminaire-service:v1.1
     container_name: luminaire-service
     ports:
       - "5250:5250"
       - "5555:5555"
     volumes:
       - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
     environment:
       - TZ=Asia/Kolkata
     networks:
@@ -25,12 +26,13 @@ services:
     restart: unless-stopped
 
   scheduler-service:
-    image: nishanthambati/scheduler-service:v1.0
+    image: nishanthambati/scheduler-service:v1.1
     container_name: scheduler-service
     ports:
       - "6666:6666"
     volumes:
       - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
       - ./scenes:/app/scenes
     environment:
       - TZ=Asia/Kolkata
@@ -42,12 +44,13 @@ services:
     restart: unless-stopped
 
   monitoring-service:
-    image: nishanthambati/monitoring-service:v1.0
+    image: nishanthambati/monitoring-service:v1.1
     container_name: monitoring-service
     ports:
       - "7777:7777"
     volumes:
       - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
     environment:
       - TZ=Asia/Kolkata
     networks:
@@ -55,12 +58,13 @@ services:
     restart: unless-stopped
 
   api-service:
-    image: nishanthambati/api-service:v1.0
+    image: nishanthambati/api-service:v1.1
     container_name: api-service
     ports:
       - "8888:8888"
     volumes:
       - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
     environment:
       - TZ=Asia/Kolkata
     depends_on:
@@ -73,12 +77,13 @@ services:
     restart: unless-stopped
 
   websocket-service:
-    image: nishanthambati/websocket-service:v1.0
+    image: nishanthambati/websocket-service:v1.1
     container_name: websocket-service
     ports:
       - "5001:5001"
     volumes:
       - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
     environment:
       - TZ=Asia/Kolkata
     depends_on:

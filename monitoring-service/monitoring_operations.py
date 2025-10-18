@@ -6,25 +6,38 @@ import yaml
 import redis
 import pickle
 import psutil
-from logging.handlers import TimedRotatingFileHandler
+import structlog
+import uuid
 
 # Load config
-with open("config.yaml", "r") as f:
+with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Logging setup
-timestamp = time.strftime(config["logging"]["filename_template"])
-handler = TimedRotatingFileHandler(
-    timestamp,
+# Structured logging setup
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso", utc=False),
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+timestamp = time.strftime("%Y-%m-%d.log")
+handler = logging.handlers.TimedRotatingFileHandler(
+    f"/app/logs/{timestamp}",
     when=config["logging"]["rotation_when"],
     interval=config["logging"]["rotation_interval"],
     backupCount=config["logging"]["rotation_backup_count"]
 )
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
-    format="%(asctime)s [%(levelname)s] - %(message)s",
+    format="%(message)s",
     handlers=[handler, logging.StreamHandler()]
 )
+logger = structlog.get_logger(service="monitoring-operations")
 
 redis_client = redis.Redis(
     host=config["redis"]["host"],
@@ -36,17 +49,22 @@ redis_client = redis.Redis(
 class MonitoringOperations:
     def __init__(self):
         self._state_lock = threading.Lock()
-        self.update_interval = config.get("monitoring", {}).get("update_interval", 1.0)  # Default 1 second
+        self.update_interval = config.get("monitoring", {}).get("update_interval", 1.0)
         self.state = {
             "cpu_percent": 0.0,
             "mem_percent": 0.0,
             "temperature": None
         }
-        logging.debug("MonitoringOperations initialized with state")
+        self.last_reported = {
+            "cpu_percent": None,
+            "mem_percent": None,
+            "temperature": None
+        }
+        logger.debug("MonitoringOperations initialized", correlation_id=str(uuid.uuid4()))
 
     def get_system_stats(self):
-        """Fetch system stats (CPU, memory, temperature)."""
-        logging.debug("Fetching system stats")
+        correlation_id = str(uuid.uuid4())
+        logger.debug("Fetching system stats", correlation_id=correlation_id)
         try:
             cpu_percent = psutil.cpu_percent(interval=None)
             mem_percent = psutil.virtual_memory().percent
@@ -58,33 +76,63 @@ class MonitoringOperations:
                         temperature = temps[sensor][0].current
                         break
                 if temperature is None:
-                    logging.debug("No temperature sensor data available")
+                    logger.debug("No temperature sensor data available", correlation_id=correlation_id)
                 else:
-                    logging.debug(f"Temperature: {temperature}°C")
+                    logger.debug("Temperature fetched", correlation_id=correlation_id, temperature=temperature)
             except (AttributeError, NotImplementedError):
-                logging.warning("Temperature monitoring not supported on this platform")
+                logger.warning("Temperature monitoring not supported", correlation_id=correlation_id)
             return cpu_percent, mem_percent, temperature
         except Exception as e:
-            logging.error(f"Error fetching system stats: {e}")
+            logger.error("Error fetching system stats", correlation_id=correlation_id, error=str(e))
             return 0.0, 0.0, None
 
     def update_stats_redis(self):
-        """Update metrics in Redis and local state."""
+        correlation_id = str(uuid.uuid4())
         with self._state_lock:
             try:
-                self.state["cpu_percent"], self.state["mem_percent"], self.state["temperature"] = self.get_system_stats()
+                cpu_percent, mem_percent, temperature = self.get_system_stats()
+                self.state["cpu_percent"], self.state["mem_percent"], self.state["temperature"] = cpu_percent, mem_percent, temperature
                 redis_client.set("cpu_percent", str(self.state["cpu_percent"]))
                 redis_client.set("mem_percent", str(self.state["mem_percent"]))
                 redis_client.set("temperature", str(self.state["temperature"]) if self.state["temperature"] is not None else "null")
                 stats_msg = pickle.dumps(self.state)
                 redis_client.publish("system_stats_update", stats_msg)
-                logging.debug(f"Updated Redis with stats: CPU={self.state['cpu_percent']}%, Mem={self.state['mem_percent']}%, Temp={self.state['temperature']}°C")
+
+                # Log only significant changes
+                should_log_info = (
+                    self.last_reported["cpu_percent"] is None or
+                    abs(self.state["cpu_percent"] - self.last_reported["cpu_percent"]) > 1.0 or
+                    abs(self.state["mem_percent"] - self.last_reported["mem_percent"]) > 1.0 or
+                    (self.state["temperature"] is not None and
+                     (self.last_reported["temperature"] is None or
+                      abs(self.state["temperature"] - self.last_reported["temperature"]) > 0.5)) or
+                    (self.state["temperature"] is None and self.last_reported["temperature"] is not None)
+                )
+                if should_log_info:
+                    logger.info(
+                        "Updated system stats",
+                        correlation_id=correlation_id,
+                        cpu_percent=self.state["cpu_percent"],
+                        mem_percent=self.state["mem_percent"],
+                        temperature=self.state["temperature"]
+                    )
+                    self.last_reported["cpu_percent"] = self.state["cpu_percent"]
+                    self.last_reported["mem_percent"] = self.state["mem_percent"]
+                    self.last_reported["temperature"] = self.state["temperature"]
+                else:
+                    logger.debug(
+                        "System stats updated",
+                        correlation_id=correlation_id,
+                        cpu_percent=self.state["cpu_percent"],
+                        mem_percent=self.state["mem_percent"],
+                        temperature=self.state["temperature"]
+                    )
             except Exception as e:
-                logging.error(f"Error updating Redis stats: {e}")
+                logger.error("Error updating Redis stats", correlation_id=correlation_id, error=str(e))
 
     async def broadcast_system_stats(self):
-        """Background task to periodically update and broadcast stats."""
-        logging.info("Starting system stats broadcast")
+        correlation_id = str(uuid.uuid4())
+        logger.info("Starting system stats broadcast", correlation_id=correlation_id)
         while True:
             self.update_stats_redis()
             await asyncio.sleep(self.update_interval)

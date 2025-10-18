@@ -9,103 +9,123 @@ from typing import Set
 import yaml
 from datetime import datetime
 from fastapi import WebSocket
-from .client_manager import clients
+import structlog
+import uuid
+import os
+from logging.handlers import TimedRotatingFileHandler
+from api_service.client_manager import clients
 
 # Load config
-with open("config.yaml", "r") as f:
+with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Logging setup
-timestamp = time.strftime(config["logging"]["filename_template"])
-from logging.handlers import TimedRotatingFileHandler
-handler = TimedRotatingFileHandler(
-    timestamp,
+# Structured logging setup
+log_dir = "/app/logs/api-service"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+timestamp = time.strftime("%Y-%m-%d.log")
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso", utc=False),
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+handler = logging.handlers.TimedRotatingFileHandler(
+    f"{log_dir}/{timestamp}",
     when=config["logging"]["rotation_when"],
     interval=config["logging"]["rotation_interval"],
     backupCount=config["logging"]["rotation_backup_count"]
 )
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
-    format="%(asctime)s [%(levelname)s] - %(message)s",
+    format="%(message)s",
     handlers=[handler, logging.StreamHandler()]
 )
+logger = structlog.get_logger(service="api-operations")
 
 redis_client = redis.Redis(
     host=config["redis"]["host"],
     port=config["redis"]["port"],
     db=config["redis"]["db"],
-    password=config["redis"]["password"]
+    password=config["redis"]["password"],
+    decode_responses=False
 )
 
 async def status_loop():
-    """Periodically fetch device list from luminaire-service and full state from Redis, then publish to Redis."""
-    redis_client = redis.Redis(
-        host=config["redis"]["host"],
-        port=config["redis"]["port"],
-        db=config["redis"]["db"],
-        password=config["redis"]["password"],
-        decode_responses=False
-    )
+    correlation_id = str(uuid.uuid4())
+    logger.info("Starting status loop", correlation_id=correlation_id)
     luminaire_url = f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/list"
-    
+    last_device_count = None
+    first_update = True
     while True:
         try:
-            # Fetch device list from luminaire-service
             async with httpx.AsyncClient() as client:
                 resp = await client.get(luminaire_url)
-                if resp.status_code == 200:
-                    devices = resp.json()
-                    #logging.debug(f"Fetched device list: {devices}")
-                else:
-                    logging.error(f"Failed to fetch devices from luminaire-service: {resp.status_code} {resp.text}")
-                    devices = {}
-                # Fetch full state from Redis
+                devices = resp.json() if resp.status_code == 200 else {}
+                if resp.status_code != 200:
+                    logger.error("Failed to fetch devices", correlation_id=correlation_id, status_code=resp.status_code, response=resp.text)
+                
                 state_bytes = redis_client.get("state")
-                if state_bytes:
-                    state = pickle.loads(state_bytes)
-                    #logging.debug(f"Fetched Redis state: {state}")
-                    #logging.debug(f"Fetched Redis state.")
+                state = pickle.loads(state_bytes) if state_bytes else {}
+                device_count = len(devices.get("devices", {}))
+                should_log_info = first_update or device_count != last_device_count
+                if should_log_info:
+                    logger.info(
+                        "Published state update",
+                        correlation_id=correlation_id,
+                        device_count=device_count,
+                        state_keys=list(state.keys())
+                    )
+                    last_device_count = device_count
+                    first_update = False
                 else:
-                    state = {}
-                    #logging.debug("No state in Redis, using empty state")
-                # Merge device list and state
+                    logger.debug("Fetched devices and state", correlation_id=correlation_id, device_count=device_count)
+                
                 state.update({
                     "devices": devices,
                     "timestamp": datetime.now().isoformat()
                 })
                 redis_client.publish("state_update", pickle.dumps(state))
-                #logging.debug(f"Published state_update: {state}")
-                #logging.debug(f"Published state_update")
+                logger.debug("Published state update", correlation_id=correlation_id)
         except httpx.HTTPError as e:
-            logging.error(f"HTTP error in status_loop: {e}")
+            logger.error("HTTP error in status loop", correlation_id=correlation_id, error=str(e))
         except Exception as e:
-            logging.error(f"Unexpected error in status_loop: {e}")
+            logger.error("Unexpected error in status loop", correlation_id=correlation_id, error=str(e))
         await asyncio.sleep(config["api"]["broadcast_interval"])
 
 def _get_state():
-    """Retrieve the current state from Redis."""
+    correlation_id = str(uuid.uuid4())
+    logger.debug("Fetching state from Redis", correlation_id=correlation_id)
     try:
         state_bytes = redis_client.get("state")
         if state_bytes:
-            logging.debug("Successfully fetched state from Redis")
+            logger.info("Successfully fetched state from Redis", correlation_id=correlation_id) if not hasattr(_get_state, "logged") else None
+            _get_state.logged = True
             return pickle.loads(state_bytes)
-        logging.warning("No state found in Redis")
+        logger.warning("No state found in Redis", correlation_id=correlation_id)
         return {}
     except redis.RedisError as e:
-        logging.error(f"Redis error in _get_state: {e}")
+        logger.error("Redis error in get_state", correlation_id=correlation_id, error=str(e))
         return {}
 
 def _set_state(state):
-    """Set the current state in Redis."""
+    correlation_id = str(uuid.uuid4())
+    logger.debug("Setting state in Redis", correlation_id=correlation_id)
     try:
         redis_client.set("state", pickle.dumps(state))
-        logging.debug("Successfully set state in Redis")
+        logger.info("Successfully set state in Redis", correlation_id=correlation_id) if not hasattr(_set_state, "logged") else None
+        _set_state.logged = True
     except redis.RedisError as e:
-        logging.error(f"Redis error in _set_state: {e}")
+        logger.error("Redis error in set_state", correlation_id=correlation_id, error=str(e))
 
 async def subscribe_to_updates():
-    """Subscribe to Redis Pub/Sub channels and forward updates to WebSocket clients."""
-    logging.debug("Starting updates subscription")
+    correlation_id = str(uuid.uuid4())
+    logger.info("Starting updates subscription", correlation_id=correlation_id)
     async with redis.asyncio.Redis(
         host=config["redis"]["host"],
         port=config["redis"]["port"],
@@ -114,7 +134,7 @@ async def subscribe_to_updates():
     ) as async_redis:
         pubsub = async_redis.pubsub()
         await pubsub.subscribe("state_update", "system_stats_update", "log_update")
-        logging.debug("Subscribed to state_update, system_stats_update, log_update channels")
+        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["state_update", "system_stats_update", "log_update"])
         async for message in pubsub.listen():
             if message["type"] == "message":
                 try:
@@ -136,8 +156,7 @@ async def subscribe_to_updates():
                             "isTimerEnabled": data.get("isTimerEnabled", False),
                             "scene_data": data.get("scene_data", {"cct": [], "intensity": []})
                         }
-                        #logging.debug(f"Prepared live_update from state_update: {update}")
-                        logging.debug(f"Prepared live_update from state_update")
+                        logger.debug("Prepared live_update", correlation_id=correlation_id)
                     elif channel == "system_stats_update":
                         update = {
                             "type": "system_stats",
@@ -145,34 +164,59 @@ async def subscribe_to_updates():
                             "mem_percent": data.get("mem_percent", 0.0),
                             "temperature": data.get("temperature", None),
                         }
-                        #logging.debug(f"Prepared system_stats from stats_update: {update}")
-                        logging.debug(f"Prepared system_stats from stats_update")
+                        logger.debug("Prepared system_stats update", correlation_id=correlation_id)
                     elif channel == "log_update":
                         update = {
                             "type": "log_update",
                             "basicLogs": list(data.get("basicLogs", [])),
                             "advancedLogs": list(data.get("advancedLogs", [])),
                         }
-                        #logging.debug(f"Prepared log_update: {update}")
-                        logging.debug(f"Prepared log_update")
+                        logger.debug("Prepared log_update", correlation_id=correlation_id)
                     else:
                         continue
 
-                    # Create a copy of clients to avoid concurrent modification
                     current_clients = list(clients)
                     if not current_clients:
-                        logging.warning(f"No WebSocket clients connected for {update['type']} update, clients: {[f'{c.client.host}:{c.client.port}' for c in current_clients]}")
+                        logger.warning("No WebSocket clients connected", correlation_id=correlation_id, update_type=update["type"])
                     for client in current_clients:
                         if not client.closed:
                             try:
                                 await client.send_json(update)
-                                logging.debug(f"Sent {update['type']} to {client.client.host}:{client.client.port}, clients: {[f'{c.client.host}:{c.client.port}' for c in clients]}")
+                                logger.debug(
+                                    "Sent update to client",
+                                    correlation_id=correlation_id,
+                                    update_type=update["type"],
+                                    client_host=client.client.host,
+                                    client_port=client.client.port
+                                )
                             except Exception as e:
-                                logging.error(f"Failed to send {update['type']} to {client.client.host}:{client.client.port}: {e}")
+                                logger.error(
+                                    "Failed to send update to client",
+                                    correlation_id=correlation_id,
+                                    update_type=update["type"],
+                                    client_host=client.client.host,
+                                    client_port=client.client.port,
+                                    error=str(e)
+                                )
                                 clients.discard(client)
-                                logging.debug(f"Removed client {client.client.host}:{client.client.port} due to send error")
+                                logger.info(
+                                    "Removed client due to send error",
+                                    correlation_id=correlation_id,
+                                    client_host=client.client.host,
+                                    client_port=client.client.port
+                                )
                         else:
-                            logging.debug(f"Removing closed client {client.client.host}:{client.client.port}")
+                            logger.info(
+                                "Removing closed client",
+                                correlation_id=correlation_id,
+                                client_host=client.client.host,
+                                client_port=client.client.port
+                            )
                             clients.discard(client)
                 except Exception as e:
-                    logging.error(f"Pub/sub message processing error for channel {message.get('channel', b'unknown').decode()}: {e}")
+                    logger.error(
+                        "Pub/sub message processing error",
+                        correlation_id=correlation_id,
+                        channel=message.get("channel", b"unknown").decode(),
+                        error=str(e)
+                    )

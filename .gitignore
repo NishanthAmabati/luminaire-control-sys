@@ -70,4 +70,4 @@ Thumbs.db
 /build/
 
 # Miscellaneous files (optional)
-*.tmp
+*.tmpconfig copy.yaml

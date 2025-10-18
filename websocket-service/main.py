@@ -10,41 +10,58 @@ from logging.handlers import TimedRotatingFileHandler
 import websockets
 import httpx
 from concurrent.futures import ThreadPoolExecutor
+import structlog
+import uuid
+import os
+import time
 
 # Load config
-with open("config.yaml", "r") as f:
+with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Configure logging
-timestamp = datetime.now().strftime(config["logging"]["filename_template"])
-handler = TimedRotatingFileHandler(
-    timestamp,
+# Structured logging setup
+log_dir = "/app/logs/websocket-service"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+timestamp = datetime.now().strftime("%Y-%m-%d.log")
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso", utc=False),
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+handler = logging.handlers.TimedRotatingFileHandler(
+    f"{log_dir}/{timestamp}",
     when=config["logging"]["rotation_when"],
     interval=config["logging"]["rotation_interval"],
     backupCount=config["logging"]["rotation_backup_count"]
 )
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
-    format="%(asctime)s [%(levelname)s] - %(message)s",
+    format="%(message)s",
     handlers=[handler, logging.StreamHandler()]
 )
+logger = structlog.get_logger(service="websocket-service")
 
 clients = set()
 clients_lock = asyncio.Lock()
 executor = ThreadPoolExecutor(max_workers=2)
 
 def redis_subscribe(pubsub):
-    """Synchronous Redis subscription function to run in thread pool."""
     try:
         for message in pubsub.listen():
             if message["type"] == "message":
                 return message
     except Exception as e:
-        logging.error(f"Redis subscription error in thread: {e}")
+        logger.error("Redis subscription error in thread", correlation_id=str(uuid.uuid4()), error=str(e))
         return None
 
 def custom_json_serializer(obj):
-    """Custom JSON serializer to handle non-serializable objects like deque."""
     if isinstance(obj, deque):
         return list(obj)
     if isinstance(obj, datetime):
@@ -52,18 +69,19 @@ def custom_json_serializer(obj):
     return str(obj)
 
 async def subscribe_to_updates():
-    """Subscribe to Redis pub/sub channels and broadcast to clients."""
+    correlation_id = str(uuid.uuid4())
+    logger.info("Starting Redis subscription", correlation_id=correlation_id)
     try:
         redis_client = redis.Redis(
             host=config['redis']["host"],
             port=config['redis']['port'],
             decode_responses=False
         )
-
         pubsub = redis_client.pubsub()
         pubsub.subscribe("state_update", "system_stats_update", "log_update")
-        logging.debug("Subscribed to state_update, system_stats_update, log_update channels")
+        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["state_update", "system_stats_update", "log_update"])
         
+        last_available_scenes = None
         loop = asyncio.get_event_loop()
         while True:
             message = await loop.run_in_executor(executor, redis_subscribe, pubsub)
@@ -75,25 +93,25 @@ async def subscribe_to_updates():
                     if isinstance(channel, bytes):
                         channel = channel.decode("utf-8")
                 except UnicodeDecodeError as e:
-                    logging.error(f"Failed to decode channel: {e}, raw: {channel!r}")
+                    logger.error("Failed to decode channel", correlation_id=str(uuid.uuid4()), error=str(e), raw_channel=channel)
                     continue
                 
                 try:
                     data = pickle.loads(data_bytes)
-                    #logging.debug(f"Unpickled Redis message: channel={channel}, data={data}")
-                    # Debug: Log available_scenes specifically
                     if 'available_scenes' in data:
-                        logging.info(f"Received available_scenes: {data['available_scenes']}")
+                        if data['available_scenes'] != last_available_scenes:
+                            logger.info("Received available_scenes", correlation_id=str(uuid.uuid4()), available_scenes=data['available_scenes'])
+                            last_available_scenes = data['available_scenes']
                     else:
-                        logging.warning("No available_scenes in Redis message")
+                        logger.warning("No available_scenes in Redis message", correlation_id=str(uuid.uuid4()))
                 except pickle.UnpicklingError as e:
-                    logging.error(f"Pickle unpickling error: {e}, raw data (first 100 bytes): {data_bytes[:100]!r}")
+                    logger.error("Pickle unpickling error", correlation_id=str(uuid.uuid4()), error=str(e), raw_data=data_bytes[:100])
                     continue
                 
                 try:
                     ws_data = json.dumps(data, default=custom_json_serializer)
                 except Exception as e:
-                    logging.error(f"JSON serialization error: {e}, data: {data}")
+                    logger.error("JSON serialization error", correlation_id=str(uuid.uuid4()), error=str(e), data=str(data)[:200])
                     continue
                 
                 message_type = {
@@ -104,27 +122,47 @@ async def subscribe_to_updates():
                 
                 if message_type != "unknown":
                     ws_message = json.dumps({"type": message_type, "data": json.loads(ws_data)})
-                    #logging.debug(f"Prepared {message_type}: {ws_message[:200]}...")
+                    logger.debug("Prepared message", correlation_id=str(uuid.uuid4()), message_type=message_type)
                     async with clients_lock:
                         disconnected = []
                         for ws in clients:
                             try:
                                 await ws.send(ws_message)
-                                logging.debug(f"Sent {message_type} to {ws.remote_address[0]}:{ws.remote_address[1]}")
+                                logger.debug(
+                                    "Sent message to client",
+                                    correlation_id=str(uuid.uuid4()),
+                                    message_type=message_type,
+                                    client_host=ws.remote_address[0],
+                                    client_port=ws.remote_address[1]
+                                )
                             except Exception as e:
-                                logging.error(f"Failed to send to client: {e}")
+                                logger.error(
+                                    "Failed to send to client",
+                                    correlation_id=str(uuid.uuid4()),
+                                    message_type=message_type,
+                                    client_host=ws.remote_address[0],
+                                    client_port=ws.remote_address[1],
+                                    error=str(e)
+                                )
                                 disconnected.append(ws)
                         for ws in disconnected:
                             clients.discard(ws)
-                            logging.debug(f"Removed disconnected client")
+                            logger.info(
+                                "Removed disconnected client",
+                                correlation_id=str(uuid.uuid4()),
+                                client_host=ws.remote_address[0],
+                                client_port=ws.remote_address[1]
+                            )
             await asyncio.sleep(0.01)
     except Exception as e:
-        logging.error(f"Error in subscribe_to_updates: {e}")
+        logger.error("Error in subscribe_to_updates", correlation_id=correlation_id, error=str(e))
     finally:
         redis_client.close()
 
 async def forward_command_to_api(command):
-    """Forward frontend command to api-service via HTTP."""
+    correlation_id = str(uuid.uuid4())
+    command_type = command.get("type")
+    logger.info("Forwarding command to api-service", correlation_id=correlation_id, command_type=command_type)
     api_url = f"http://{config['microservices']['api_service']['host']}:{config['microservices']['api_service']['port']}"
     endpoint_map = {
         "set_mode": "/api/set_mode",
@@ -143,9 +181,9 @@ async def forward_command_to_api(command):
         "reset_timers": "/api/reset_timers",
         "get_timers": "/api/get_timers",
     }
-    endpoint = endpoint_map.get(command.get("type"))
+    endpoint = endpoint_map.get(command_type)
     if not endpoint:
-        logging.warning(f"Unknown command type: {command.get('type')}")
+        logger.warning("Unknown command type", correlation_id=correlation_id, command_type=command_type)
         return False
     
     payload = {k: v for k, v in command.items() if k != "type"}
@@ -153,28 +191,35 @@ async def forward_command_to_api(command):
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(f"{api_url}{endpoint}", json=payload)
             if resp.status_code == 200:
-                logging.debug(f"Forwarded {command['type']} to api-service: success")
+                logger.info("Command forwarded successfully", correlation_id=correlation_id, command_type=command_type)
                 return True
             else:
-                logging.error(f"Forwarded {command['type']} to api-service: {resp.status_code} {resp.text}")
+                logger.error(
+                    "Failed to forward command",
+                    correlation_id=correlation_id,
+                    command_type=command_type,
+                    status_code=resp.status_code,
+                    response=resp.text
+                )
                 return False
     except httpx.HTTPError as e:
-        logging.error(f"HTTP error forwarding {command['type']}: {e}")
+        logger.error("HTTP error forwarding command", correlation_id=correlation_id, command_type=command_type, error=str(e))
         return False
 
 async def websocket_handler(websocket):
-    """Handle WebSocket connections and forward commands to api-service."""
     client_id = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
-    logging.debug(f"WebSocket client connected: {client_id}")
+    correlation_id = str(uuid.uuid4())
+    logger.info("WebSocket client connected", correlation_id=correlation_id, client_id=client_id)
     async with clients_lock:
         clients.add(websocket)
     try:
         async for message in websocket:
             try:
                 command = json.loads(message)
-                logging.debug(f"Received command from {client_id}: {command}")
+                logger.info("Received command", correlation_id=str(uuid.uuid4()), client_id=client_id, command_type=command.get("type"))
                 if command.get("type") == "ping":
                     await websocket.send(json.dumps({"type": "pong", "isSystemOn": True}))
+                    logger.debug("Sent pong response", correlation_id=str(uuid.uuid4()), client_id=client_id)
                 else:
                     success = await forward_command_to_api(command)
                     await websocket.send(json.dumps({
@@ -183,25 +228,42 @@ async def websocket_handler(websocket):
                         **({"error": "Failed to forward command"} if not success else {})
                     }))
             except json.JSONDecodeError as e:
-                logging.error(f"JSON decode error from {client_id}: {e}, message: {message[:100]}")
+                logger.error(
+                    "JSON decode error",
+                    correlation_id=str(uuid.uuid4()),
+                    client_id=client_id,
+                    error=str(e),
+                    message=message[:100]
+                )
                 await websocket.send(json.dumps({"type": "command_error", "error": f"Invalid JSON: {str(e)}"}))
             except websockets.exceptions.ConnectionClosed:
-                logging.debug(f"Client {client_id} closed connection")
+                logger.info("Client closed connection", correlation_id=str(uuid.uuid4()), client_id=client_id)
                 break
             except Exception as e:
-                logging.error(f"Error handling message from {client_id}: {e}")
+                logger.error(
+                    "Error handling message",
+                    correlation_id=str(uuid.uuid4()),
+                    client_id=client_id,
+                    error=str(e)
+                )
                 await websocket.send(json.dumps({"type": "command_error", "error": f"Server error: {str(e)}"}))
     except websockets.exceptions.ConnectionClosed:
-        logging.debug(f"WebSocket client {client_id} disconnected normally")
+        logger.info("WebSocket client disconnected normally", correlation_id=correlation_id, client_id=client_id)
     except Exception as e:
-        logging.error(f"Unexpected WebSocket error for {client_id}: {e}")
+        logger.error("Unexpected WebSocket error", correlation_id=correlation_id, client_id=client_id, error=str(e))
     finally:
         async with clients_lock:
             clients.discard(websocket)
-        logging.debug(f"WebSocket client disconnected: {client_id}")
+        logger.info("WebSocket client disconnected", correlation_id=correlation_id, client_id=client_id)
 
 async def main():
-    """Main entrypoint: Start WebSocket server and Redis subscription."""
+    correlation_id = str(uuid.uuid4())
+    logger.info(
+        "Starting WebSocket server",
+        correlation_id=correlation_id,
+        host=config['microservices']['websocket_service']['host'],
+        port=config['microservices']['websocket_service']['port']
+    )
     asyncio.create_task(subscribe_to_updates())
     
     async with websockets.serve(
@@ -212,7 +274,6 @@ async def main():
         ping_interval=30,
         ping_timeout=90
     ):
-        logging.info(f"WebSocket server started on ws://{config['microservices']['websocket_service']['host']}:{config['microservices']['websocket_service']['port']}")
         await asyncio.Future()
 
 if __name__ == "__main__":
