@@ -1,6 +1,6 @@
 import asyncio
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import yaml
 import resource
 import logging
@@ -9,7 +9,19 @@ import time
 import os
 import uuid
 import structlog
-from logging.handlers import TimedRotatingFileHandler
+import psutil
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Info,
+    PlatformCollector,
+    ProcessCollector,
+)
+from starlette.responses import Response
 from api_service.api_operations import status_loop
 from api_service.models import *
 
@@ -17,11 +29,7 @@ from api_service.models import *
 with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Structured logging setup
-log_dir = "/app/logs/api-service"
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-timestamp = time.strftime("%Y-%m-%d.log")
+# Structured logging setup (JSON to STDOUT)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso", utc=False),
@@ -33,16 +41,10 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"{log_dir}/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="api-service")
 
@@ -50,6 +52,51 @@ app = FastAPI(title="API Service", version="1.0.0")
 scheduler_url = f"http://{config['microservices']['scheduler_service']['host']}:{config['microservices']['scheduler_service']['port']}"
 monitoring_url = f"http://{config['microservices']['monitoring_service']['host']}:{config['microservices']['monitoring_service']['port']}"
 
+# --- Prometheus Metrics setup ---
+REGISTRY = CollectorRegistry()
+ProcessCollector(registry=REGISTRY)
+PlatformCollector(registry=REGISTRY)
+REQUEST_COUNT = Counter('api_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'http_status'], registry=REGISTRY)
+REQUEST_LATENCY = Histogram('api_request_latency_seconds', 'Request latency', ['endpoint'], registry=REGISTRY)
+ERROR_COUNT = Counter('api_errors_total', 'Total API errors', ['endpoint'], registry=REGISTRY)
+CPU_USAGE = Gauge('api_cpu_usage_percent', 'CPU usage percent', registry=REGISTRY)
+MEM_USAGE = Gauge('api_memory_usage_percent', 'Memory usage percent', registry=REGISTRY)
+UPTIME = Gauge('api_uptime_seconds', 'API service uptime in seconds', registry=REGISTRY)
+SERVICE_INFO = Info('api_service', 'API service build info', registry=REGISTRY)
+SERVICE_INFO.info({'version': '1.0.0', 'service': 'api-service'})
+START_TIME = time.time()
+
+@app.middleware('http')
+async def prometheus_request_metrics(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    start = time.time()
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception:
+        ERROR_COUNT.labels(endpoint=endpoint).inc()
+        logger.exception("Request error", extra={"endpoint": endpoint})
+        raise
+    latency = time.time() - start
+    REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+    return response
+
+@app.on_event("startup")
+async def on_startup():
+    logger.info("Starting status loop background task")
+    asyncio.create_task(status_loop())
+
+@app.get("/metrics")
+async def metrics():
+    # Live system metrics before scrape
+    CPU_USAGE.set(psutil.cpu_percent())
+    MEM_USAGE.set(psutil.virtual_memory().percent)
+    UPTIME.set(time.time() - START_TIME)
+    data = generate_latest(REGISTRY)
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+    
 @app.get("/health")
 async def health():
     correlation_id = str(uuid.uuid4())

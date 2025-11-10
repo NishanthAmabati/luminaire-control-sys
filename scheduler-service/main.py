@@ -1,21 +1,28 @@
 import asyncio
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import yaml
 import resource
 import logging
+import structlog
+import psutil
 import time
 import uuid
-import pickle
-import redis
-import structlog
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Info,
+    ProcessCollector,
+    PlatformCollector,
+)
+from starlette.responses import Response
 from scheduler_service.scheduler_operations import SchedulerOperations
 from scheduler_service.scene_loader import load_scenes
-from scheduler_service.models import (
-    SetModeData, LoadSceneData, ActivateSceneData, PauseResumeData,
-    ManualOverrideData, AdjustLightData, SendAllData, SetCCTData,
-    SetIntensityData, ToggleSystemData, SetTimerData, ToggleTimerData
-)
+from scheduler_service.models import *
 
 # Load config
 with open("/app/config.yaml", "r") as f:
@@ -33,31 +40,59 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-timestamp = time.strftime("%Y-%m-%d.log")
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"/app/logs/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="scheduler-service")
 
-# Initialize Redis client
-redis_client = redis.Redis(
-    host=config["redis"]["host"],
-    port=config["redis"]["port"],
-    db=config["redis"]["db"],
-    password=config["redis"]["password"],
-    decode_responses=False
-)
-
 app = FastAPI(title="Scheduler Service", version="1.0.0")
 ops = SchedulerOperations()
+
+# Prometheus metrics
+REGISTRY = CollectorRegistry()
+ProcessCollector(registry=REGISTRY)
+PlatformCollector(registry=REGISTRY)
+REQUEST_COUNT = Counter('scheduler_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'http_status'], registry=REGISTRY)
+REQUEST_LATENCY = Histogram('scheduler_request_latency_seconds', 'Request latency', ['endpoint'], registry=REGISTRY)
+ERROR_COUNT = Counter('scheduler_api_errors_total', 'Total Scheduler API errors', ['endpoint'], registry=REGISTRY)
+CPU_USAGE = Gauge('scheduler_cpu_usage_percent', 'CPU usage percent', registry=REGISTRY)
+MEM_USAGE = Gauge('scheduler_memory_usage_percent', 'Memory usage percent', registry=REGISTRY)
+UPTIME = Gauge('scheduler_uptime_seconds', 'Service uptime in seconds', registry=REGISTRY)
+SERVICE_INFO = Info('scheduler_service', 'Scheduler service build info', registry=REGISTRY)
+SERVICE_INFO.info({'version': '1.0.0', 'service': 'scheduler-service'})
+START_TIME = time.time()
+
+@app.middleware('http')
+async def prometheus_request_metrics(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    start = time.time()
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception:
+        ERROR_COUNT.labels(endpoint=endpoint).inc()
+        logger.exception("Request error", extra={"endpoint": endpoint})
+        raise
+    latency = time.time() - start
+    REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+    return response
+
+@app.on_event("startup")
+async def on_startup():
+    correlation_id = str(uuid.uuid4())
+    logger.info("Scheduler service startup", correlation_id=correlation_id)
+
+@app.get("/metrics")
+async def metrics():
+    CPU_USAGE.set(psutil.cpu_percent())
+    MEM_USAGE.set(psutil.virtual_memory().percent)
+    UPTIME.set(time.time() - START_TIME)
+    data = generate_latest(REGISTRY)
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/health")
 async def health():

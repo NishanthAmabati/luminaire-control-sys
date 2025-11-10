@@ -1,3 +1,4 @@
+version: "3.8"
 services:
   redis:
     image: redis:7.0
@@ -14,8 +15,15 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+
   api-service:
-    image: nishanthambati/api-service
+    build:
+      context: ./$API_APP
+      args:
+        APP_NAME: $API_APP
+        APP_PORT: $API_PORT
+        MAIN_MODULE: api_service/main.py
+        APP_USER: $APP_USER
     container_name: $API_APP
     environment:
       - TZ=Asia/Kolkata
@@ -26,42 +34,49 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://api-service:8888/health || exit 1"]
+      test: [
+        "CMD-SHELL",
+         curl -f http://luminaire-service:5555/docs && 
+         curl -f http://scheduler-service:6666/docs || exit 1"
+        ]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 10s
-    depends_on:
-      luminaire-service:
-        condition: service_healthy
-      scheduler-service:
-        condition: service_healthy
 
   luminaire-service:
-    image: nishanthambati/luminaire-service
-    container_name: $LUMINAIRE_APP
+    build:
+      context: ./$LUMINAIRE_APP
+      args:
+        APP_NAME: $LUMINAIRE_APP
+        APP_PORT: $LUMINAIRE_PORT
+        MAIN_MODULE: luminaire_service/main.py
+        APP_USER: $APP_USER
+      container_name: $LUMINAIRE_APP
     environment:
       - TZ=Asia/Kolkata
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "$LUMINAIRE_PORT:$LUMINAIRE_PORT"
-      - "5250:5250"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://luminaire-service:5555/health || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8888/list || exit 1"]
+      interval: 15s
+      timeout: 10s
       retries: 3
-      start_period: 3s
-    depends_on:
-        redis:
-          condition: service_healthy
+      start_period: 10s
 
   scheduler-service:
-    image: nishanthambati/scheduler-service
-    container_name: $SCHEDULER_APP
+    build:
+      context: ./$SCHEDULER-APP
+      args:
+        APP_NAME: $SCHEDULER-APP
+        APP_PORT: $SCHEDULER_PORT
+        MAIN_MODULE: scheduler_service/main.py
+        APP_USER: $APP_USER
+    container_name: $SCHEDULER-APP
     environment:
       - TZ=Asia/Kolkata
       - PYTHONUNBUFFERED=1
@@ -70,19 +85,21 @@ services:
       - "$SCHEDULER_PORT:$SCHEDULER_PORT"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./scenes:/app/scenes:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://scheduler-service:6666/health || exit 1"]
-      interval: 10s
-      timeout: 5s
+    healtcheck:
+      test: ["CMD-SHELL", ""]
+      interval: 15s
+      timeout: 10s
       retries: 3
-      start_period: 3s
-    depends_on:
-        redis:
-          condition: service_healthy
+      start_period: 10s
 
   monitoring-service:
-    image: nishanthambati/monitoring-service
+    build:
+      context: ./$MONITORING_APP
+      args:
+        APP_NAME: $MONITORING_APP
+        APP_PORT: $MONITORING_PORT
+        MAIN_MODULE: monitoring_service/main.py
+        APP_USER: $APP_USER
     container_name: $MONITORING_APP
     environment:
       - TZ=Asia/Kolkata
@@ -92,18 +109,18 @@ services:
       - "$MONITORING_PORT:$MONITORING_PORT"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://monitoring-service:7777/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 3s
     depends_on:
         redis:
           condition: service_healthy
 
   websocket-service:
-    image: nishanthambati/websocket-service
+    build:
+      context: ./$WEBSOCKET_APP
+      args:
+        APP_NAME: $WEBSOCKET_APP
+        APP_PORT: $WEBSOCKET_PORT
+        MAIN_MODULE: websocket_service/main.py
+        APP_USER: $APP_USER
     container_name: $WEBSOCKET_APP
     environment:
       - TZ=Asia/Kolkata
@@ -118,21 +135,21 @@ services:
           condition: service_healthy
 
   webapp:
-    image: nishanthambati/nginx-webapp:2.0
+    build:
+      context: ./$WEBAPP
+      args:
+        APP_USER: $APP_USER
     container_name: $WEBAPP
     ports:
       - "$WEBAPP_PORT:80"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     depends_on:
-      websocket-service:
-        condition: service_started
+      - websocket-service
   
   prometheus:
     image: prom/prometheus:v2.48.1
     container_name: prometheus
-    environment:
-      - TZ=Asia/Kolkata
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus

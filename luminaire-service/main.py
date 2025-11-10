@@ -8,7 +8,20 @@ import redis
 import structlog
 import uuid
 import time
-from fastapi import FastAPI
+import psutil
+from fastapi import FastAPI, Request
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Info,
+    ProcessCollector,
+    PlatformCollector,
+)
+from starlette.responses import Response
 from luminaire_service.luminaire_operations import LuminaireOperations
 from luminaire_service.models import SendData, SendAllData, AdjustData
 
@@ -16,7 +29,7 @@ from luminaire_service.models import SendData, SendAllData, AdjustData
 with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Structured logging setup
+# Structured logging setup – JSON to STDOUT only
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso", utc=False),
@@ -28,17 +41,10 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-timestamp = time.strftime("%Y-%m-%d.log")
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"/app/logs/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="luminaire-service")
 
@@ -51,6 +57,50 @@ redis_client = redis.Redis(
 
 app = FastAPI(title="Luminaire Service", version="1.0.0")
 ops = LuminaireOperations()
+
+# --- Prometheus Metrics ---
+REGISTRY = CollectorRegistry()
+ProcessCollector(registry=REGISTRY)
+PlatformCollector(registry=REGISTRY)
+REQUEST_COUNT = Counter('luminaire_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'http_status'], registry=REGISTRY)
+REQUEST_LATENCY = Histogram('luminaire_request_latency_seconds', 'Request latency', ['endpoint'], registry=REGISTRY)
+ERROR_COUNT = Counter('luminaire_api_errors_total', 'Total Luminaire API errors', ['endpoint'], registry=REGISTRY)
+CPU_USAGE = Gauge('luminaire_cpu_usage_percent', 'CPU usage percent', registry=REGISTRY)
+MEM_USAGE = Gauge('luminaire_memory_usage_percent', 'Memory usage percent', registry=REGISTRY)
+UPTIME = Gauge('luminaire_uptime_seconds', 'Service uptime in seconds', registry=REGISTRY)
+SERVICE_INFO = Info('luminaire_service', 'Luminaire service build info', registry=REGISTRY)
+SERVICE_INFO.info({'version': '1.0.0', 'service': 'luminaire-service'})
+START_TIME = time.time()
+
+@app.middleware('http')
+async def prometheus_request_metrics(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    start = time.time()
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception:
+        ERROR_COUNT.labels(endpoint=endpoint).inc()
+        logger.exception("Request error", extra={"endpoint": endpoint})
+        raise
+    latency = time.time() - start
+    REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status).inc()
+    return response
+
+@app.on_event("startup")
+async def on_startup():
+    correlation_id = str(uuid.uuid4())
+    logger.info("Luminaire service startup", correlation_id=correlation_id)
+
+@app.get("/metrics")
+async def metrics():
+    CPU_USAGE.set(psutil.cpu_percent())
+    MEM_USAGE.set(psutil.virtual_memory().percent)
+    UPTIME.set(time.time() - START_TIME)
+    data = generate_latest(REGISTRY)
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/health")
 async def health():

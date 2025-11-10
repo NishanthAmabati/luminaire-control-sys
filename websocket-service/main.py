@@ -6,7 +6,6 @@ import logging
 import json
 from datetime import datetime
 from collections import deque
-from logging.handlers import TimedRotatingFileHandler
 import websockets
 import httpx
 from concurrent.futures import ThreadPoolExecutor
@@ -14,16 +13,17 @@ import structlog
 import uuid
 import os
 import time
+import psutil
+from prometheus_client import (
+    Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry, Info, ProcessCollector, PlatformCollector
+)
+from aiohttp import web
 
 # Load config
 with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Structured logging setup
-log_dir = "/app/logs/websocket-service"
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-timestamp = datetime.now().strftime("%Y-%m-%d.log")
+# Structured logging: JSON to STDOUT only (remove file handler for Docker best practice)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso", utc=False),
@@ -35,22 +35,30 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"{log_dir}/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="websocket-service")
 
 clients = set()
 clients_lock = asyncio.Lock()
 executor = ThreadPoolExecutor(max_workers=2)
+
+# --- Prometheus Metrics ---
+REGISTRY = CollectorRegistry()
+ProcessCollector(registry=REGISTRY)
+PlatformCollector(registry=REGISTRY)
+WS_CLIENTS = Gauge('websocket_clients', 'Current WebSocket clients', registry=REGISTRY)
+COMMAND_COUNT = Counter('websocket_command_forward_total', 'Total commands forwarded', ['command_type'], registry=REGISTRY)
+COMMAND_ERROR = Counter('websocket_command_error_total', 'Command forwarding errors', ['command_type'], registry=REGISTRY)
+CPU_USAGE = Gauge('websocket_cpu_usage_percent', 'CPU usage percent', registry=REGISTRY)
+MEM_USAGE = Gauge('websocket_memory_usage_percent', 'Memory usage percent', registry=REGISTRY)
+UPTIME = Gauge('websocket_uptime_seconds', 'Service uptime in seconds', registry=REGISTRY)
+SERVICE_INFO = Info('websocket_service', 'WebSocket service build info', registry=REGISTRY)
+SERVICE_INFO.info({'version': '1.0.0', 'service': 'websocket-service'})
+START_TIME = time.time()
 
 def redis_subscribe(pubsub):
     try:
@@ -184,6 +192,7 @@ async def forward_command_to_api(command):
     endpoint = endpoint_map.get(command_type)
     if not endpoint:
         logger.warning("Unknown command type", correlation_id=correlation_id, command_type=command_type)
+        COMMAND_ERROR.labels(command_type=command_type or "unknown").inc()
         return False
     
     payload = {k: v for k, v in command.items() if k != "type"}
@@ -192,6 +201,7 @@ async def forward_command_to_api(command):
             resp = await client.post(f"{api_url}{endpoint}", json=payload)
             if resp.status_code == 200:
                 logger.info("Command forwarded successfully", correlation_id=correlation_id, command_type=command_type)
+                COMMAND_COUNT.labels(command_type=command_type or "unknown").inc()
                 return True
             else:
                 logger.error(
@@ -201,9 +211,11 @@ async def forward_command_to_api(command):
                     status_code=resp.status_code,
                     response=resp.text
                 )
+                COMMAND_ERROR.labels(command_type=command_type or "unknown").inc()
                 return False
     except httpx.HTTPError as e:
         logger.error("HTTP error forwarding command", correlation_id=correlation_id, command_type=command_type, error=str(e))
+        COMMAND_ERROR.labels(command_type=command_type or "unknown").inc()
         return False
 
 async def websocket_handler(websocket):
@@ -212,6 +224,7 @@ async def websocket_handler(websocket):
     logger.info("WebSocket client connected", correlation_id=correlation_id, client_id=client_id)
     async with clients_lock:
         clients.add(websocket)
+        WS_CLIENTS.set(len(clients))
     try:
         async for message in websocket:
             try:
@@ -254,7 +267,24 @@ async def websocket_handler(websocket):
     finally:
         async with clients_lock:
             clients.discard(websocket)
+            WS_CLIENTS.set(len(clients))
         logger.info("WebSocket client disconnected", correlation_id=correlation_id, client_id=client_id)
+
+async def metrics_handler(request):
+    # aiohttp endpoint for /metrics (runs on separate small metrics server)
+    CPU_USAGE.set(psutil.cpu_percent())
+    MEM_USAGE.set(psutil.virtual_memory().percent)
+    UPTIME.set(time.time() - START_TIME)
+    data = generate_latest(REGISTRY)
+    return web.Response(body=data, content_type=CONTENT_TYPE_LATEST)
+
+async def start_metrics_server():
+    app = web.Application()
+    app.router.add_get('/metrics', metrics_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, config['microservices']['websocket_service']['host'], config['microservices']['websocket_service'].get('metrics_port', 9103))
+    await site.start()
 
 async def main():
     correlation_id = str(uuid.uuid4())
@@ -265,7 +295,7 @@ async def main():
         port=config['microservices']['websocket_service']['port']
     )
     asyncio.create_task(subscribe_to_updates())
-    
+    asyncio.create_task(start_metrics_server())
     async with websockets.serve(
         websocket_handler,
         config['microservices']['websocket_service']['host'],

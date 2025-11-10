@@ -13,7 +13,7 @@ import uuid
 with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Structured logging setup
+# Structured logging setup (to STDOUT ONLY)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso", utc=False),
@@ -25,17 +25,10 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-timestamp = time.strftime("%Y-%m-%d.log")
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"/app/logs/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="monitoring-operations")
 

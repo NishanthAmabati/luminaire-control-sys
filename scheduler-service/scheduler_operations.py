@@ -24,7 +24,7 @@ from scheduler_service.scene_loader import scene_data
 with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Structured logging setup
+# Structured logging setup to STDOUT ONLY (no file handler)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso", utc=False),
@@ -36,17 +36,10 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-timestamp = time.strftime("%Y-%m-%d.log")
-handler = logging.handlers.TimedRotatingFileHandler(
-    f"/app/logs/{timestamp}",
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
-)
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
     format="%(message)s",
-    handlers=[handler, logging.StreamHandler()]
+    handlers=[logging.StreamHandler()]
 )
 logger = structlog.get_logger(service="scheduler-operations")
 
@@ -591,40 +584,79 @@ class SchedulerOperations:
         return self.state
 
     async def run_timer_scheduler(self):
-        correlation_id = str(uuid.uuid4())
-        logger.debug("Starting timer scheduler", correlation_id=correlation_id)
-        api_url = f"http://{config['microservices']['api_service']['host']}:{config['microservices']['api_service']['port']}"
-        last_timer_state = None
+        logging.debug("Starting timer scheduler")
+        api_url = f"http://{config['server']['host']}:{config['microservices']['api_port']}"
+
+        # To avoid retriggering within the same day, store last trigger per timer (by "on"/"off")
+        if "timer_last_trigger" not in self.state:
+            self.state["timer_last_trigger"] = {}
+
         while True:
             if not self.state.get("isTimerEnabled", False):
-                logger.debug("Timer scheduler disabled", correlation_id=correlation_id)
+                logging.debug("Timer scheduler disabled, skipping checks")
                 await asyncio.sleep(config["scheduler"]["timer_check_interval"])
                 continue
-            current_time = datetime.datetime.now().strftime("%H:%M")
-            current_timer_state = [(timer["on"], timer["off"], current_time == timer["on"], current_time == timer["off"]) for timer in self.state.get("system_timers", [])]
-            if current_timer_state != last_timer_state:
-                for timer in self.state.get("system_timers", []):
+
+            now = datetime.datetime.now()
+            current_time_str = now.strftime("%H:%M")
+            today_str = now.strftime("%Y-%m-%d")
+
+            timers = self.state.get("system_timers", [])
+            for idx, timer in enumerate(timers):
+                timer_id_on = f"timer{idx}-on:{timer['on']}"
+                timer_id_off = f"timer{idx}-off:{timer['off']}"
+                last_trigger = self.state["timer_last_trigger"]
+
+                # ON logic: Trigger if current time >= timer["on"], today not yet triggered, and system is OFF
+                # (Allows triggering if service started late/loop missed the exact minute.)
+                on_dt = now.replace(
+                    hour=int(timer["on"].split(":")[0]),
+                    minute=int(timer["on"].split(":")[1]),
+                    second=0, microsecond=0
+                )
+                off_dt = now.replace(
+                    hour=int(timer["off"].split(":")[0]),
+                    minute=int(timer["off"].split(":")[1]),
+                    second=0, microsecond=0
+                )
+
+                # ON Trigger
+                if (
+                    now >= on_dt
+                    and last_trigger.get(timer_id_on) != today_str
+                    and not self.state["isSystemOn"]
+                ):
                     try:
-                        if current_time == timer["on"] and not self.state["isSystemOn"]:
-                            async with httpx.AsyncClient() as client:
-                                resp = await client.post(f"{api_url}/api/toggle_system", json={"isSystemOn": True})
-                                if resp.status_code == 200:
-                                    self.log_basic(f"Timer triggered: System turned ON at {timer['on']}")
-                                    logger.info("Timer triggered ON", correlation_id=correlation_id, time=timer["on"])
-                                else:
-                                    self.log_advanced(f"Timer ON failed at {timer['on']}: {resp.text}")
-                                    logger.warning("Timer ON failed", correlation_id=correlation_id, time=timer["on"], error=resp.text)
-                        elif current_time == timer["off"] and self.state["isSystemOn"]:
-                            async with httpx.AsyncClient() as client:
-                                resp = await client.post(f"{api_url}/api/toggle_system", json={"isSystemOn": False})
-                                if resp.status_code == 200:
-                                    self.log_basic(f"Timer triggered: System turned OFF at {timer['off']}")
-                                    logger.info("Timer triggered OFF", correlation_id=correlation_id, time=timer["off"])
-                                else:
-                                    self.log_advanced(f"Timer OFF failed at {timer['off']}: {resp.text}")
-                                    logger.warning("Timer OFF failed", correlation_id=correlation_id, time=timer["off"], error=resp.text)
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(f"{api_url}/api/toggle_system", json={"isSystemOn": True})
+                            if resp.status_code == 200:
+                                self.log_basic(f"Timer triggered: System turned ON at {timer['on']}")
+                                last_trigger[timer_id_on] = today_str
+                            else:
+                                self.log_advanced(f"Timer ON failed at {timer['on']}: {resp.text}")
                     except Exception as e:
-                        self.log_advanced(f"Error processing timer {timer}: {e}")
-                        logger.error("Error processing timer", correlation_id=correlation_id, timer=str(timer), error=str(e))
-                last_timer_state = current_timer_state
+                        self.log_advanced(f"Timer ON error at {timer['on']}: {e}")
+                        logging.error(f"Timer ON error at {timer['on']}: {e}")
+
+                # OFF Trigger
+                if (
+                    now >= off_dt
+                    and last_trigger.get(timer_id_off) != today_str
+                    and self.state["isSystemOn"]
+                ):
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(f"{api_url}/api/toggle_system", json={"isSystemOn": False})
+                            if resp.status_code == 200:
+                                self.log_basic(f"Timer triggered: System turned OFF at {timer['off']}")
+                                last_trigger[timer_id_off] = today_str
+                            else:
+                                self.log_advanced(f"Timer OFF failed at {timer['off']}: {resp.text}")
+                    except Exception as e:
+                        self.log_advanced(f"Timer OFF error at {timer['off']}: {e}")
+                        logging.error(f"Timer OFF error at {timer['off']}: {e}")
+
+            # Persist the last-trigger dict
+            self.state["timer_last_trigger"] = self.state.get("timer_last_trigger", {})
+            self._set_state(self.state)
             await asyncio.sleep(config["scheduler"]["timer_check_interval"])
