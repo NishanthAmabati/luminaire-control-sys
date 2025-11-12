@@ -414,7 +414,7 @@ async def api_list_devices():
         return {"devices": devices}
     except Exception as e:
         logger.error("Error fetching devices", correlation_id=correlation_id, error=str(e))
-        return {"error": f"Error fetching devices: {str(e)}"}
+        return {"error": "Error fetching devices"}
 
 async def main():
     correlation_id = str(uuid.uuid4())
