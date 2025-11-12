@@ -1,0 +1,53 @@
+import { useEffect } from "react"
+import { useDevices } from "../contexts/DeviceContext"
+import { useSystem } from "../contexts/SystemContext"
+
+/**
+ * Custom hook to bootstrap initial state from REST APIs on app load.
+ * Fetches devices, system state, and optionally logs before switching to live updates.
+ */
+export const useBootstrapState = (apiBaseUrl = "http://localhost:5000") => {
+  const { updateDevices } = useDevices()
+  const { updateSystemState } = useSystem()
+
+  useEffect(() => {
+    const bootstrapState = async () => {
+      try {
+        // Fetch initial device list
+        const devicesResponse = await fetch(`${apiBaseUrl}/api/devices`)
+        if (devicesResponse.ok) {
+          const devicesData = await devicesResponse.json()
+          if (devicesData.devices) {
+            console.log("Bootstrapped devices:", devicesData.devices)
+            updateDevices(devicesData.devices)
+          }
+        } else {
+          console.warn("Failed to fetch initial devices:", devicesResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping devices:", error)
+      }
+
+      try {
+        // Fetch available scenes
+        const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
+        if (scenesResponse.ok) {
+          const scenesData = await scenesResponse.json()
+          if (Array.isArray(scenesData.scenes)) {
+            console.log("Bootstrapped available scenes:", scenesData.scenes)
+            updateSystemState({ available_scenes: scenesData.scenes })
+          }
+        } else {
+          console.warn("Failed to fetch available scenes:", scenesResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping scenes:", error)
+      }
+
+      // Note: System state and logs will be populated via WebSocket live_update and log_update
+      console.log("State bootstrap complete - switching to live WebSocket updates")
+    }
+
+    bootstrapState()
+  }, [apiBaseUrl, updateDevices, updateSystemState])
+}

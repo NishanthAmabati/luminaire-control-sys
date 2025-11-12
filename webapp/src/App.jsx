@@ -573,6 +573,47 @@ const App = () => {
     document.body.className = theme
   }, [theme])
 
+  // Bootstrap initial state from REST APIs on app load
+  useEffect(() => {
+    const bootstrapState = async () => {
+      try {
+        // Fetch initial device list
+        const devicesResponse = await fetch("http://localhost:5000/api/devices")
+        if (devicesResponse.ok) {
+          const devicesData = await devicesResponse.json()
+          if (devicesData.devices) {
+            console.log("Bootstrapped devices:", devicesData.devices)
+            setState((prev) => ({ ...prev, connected_devices: devicesData.devices }))
+          }
+        } else {
+          console.warn("Failed to fetch initial devices:", devicesResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping devices:", error)
+      }
+
+      try {
+        // Fetch available scenes
+        const scenesResponse = await fetch("http://localhost:5000/api/available_scenes")
+        if (scenesResponse.ok) {
+          const scenesData = await scenesResponse.json()
+          if (Array.isArray(scenesData.scenes)) {
+            console.log("Bootstrapped available scenes:", scenesData.scenes)
+            setState((prev) => ({ ...prev, available_scenes: scenesData.scenes }))
+          }
+        } else {
+          console.warn("Failed to fetch available scenes:", scenesResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping scenes:", error)
+      }
+
+      console.log("State bootstrap complete - switching to live WebSocket updates")
+    }
+
+    bootstrapState()
+  }, [])
+
   useEffect(() => {
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
@@ -617,15 +658,45 @@ const App = () => {
               temperature: data.data.temperature !== null ? data.data.temperature : prev.temperature,
               error: null,
             }));
-} else if (data.type === "log_update") {
+          } else if (data.type === "device_update") {
+            // Handle granular device updates from the refactored backend
+            console.log("Processing device_update:", data.data);
+            setState((prev) => {
+              // If full devices list is provided, use it
+              if (data.data.devices) {
+                return {
+                  ...prev,
+                  connected_devices: data.data.devices,
+                  error: null,
+                };
+              }
+              // Otherwise, update individual device
+              if (data.data.ip) {
+                return {
+                  ...prev,
+                  connected_devices: {
+                    ...prev.connected_devices,
+                    [data.data.ip]: {
+                      cw: data.data.cw,
+                      ww: data.data.ww,
+                      connected: data.data.connected,
+                      last_seen: data.data.last_seen,
+                    },
+                  },
+                  error: null,
+                };
+              }
+              return prev;
+            });
+          } else if (data.type === "log_update") {
   console.log("Processing log_update:", data.data);
   setState((prev) => ({
     ...prev,
     basicLogs: Array.isArray(data.data.basicLogs)
-      ? [...prev.basicLogs, ...data.data.basicLogs].slice(-50)
+      ? [...prev.basicLogs, ...data.data.basicLogs].slice(-500)
       : prev.basicLogs,
     advancedLogs: Array.isArray(data.data.advancedLogs)
-      ? [...prev.advancedLogs, ...data.data.advancedLogs].slice(-100)
+      ? [...prev.advancedLogs, ...data.data.advancedLogs].slice(-500)
       : prev.advancedLogs,
   }));
             } else if (data.type === "live_update") {
@@ -1619,25 +1690,45 @@ const App = () => {
       <FileText size={18} className="logs-icon" />
       System Logs
     </h3>
-    <button className="close-logs" onClick={() => setIsLogsPanelOpen(false)}>
-      &times;
-    </button>
+    <div className="logs-controls">
+      <button 
+        className="icon-button" 
+        onClick={() => {
+          if (activeLogTab === "basic") {
+            setState((prev) => ({ ...prev, basicLogs: [] }));
+          } else {
+            setState((prev) => ({ ...prev, advancedLogs: [] }));
+          }
+        }}
+        title="Clear logs"
+      >
+        Clear
+      </button>
+      <button className="close-logs" onClick={() => setIsLogsPanelOpen(false)}>
+        &times;
+      </button>
+    </div>
   </div>
   <div className="logs-tabs">
     <button
       className={`log-tab ${activeLogTab === "basic" ? "active" : ""}`}
       onClick={() => setActiveLogTab("basic")}
     >
-      Basic Logs
+      Basic Logs ({state.basicLogs.length})
     </button>
     <button
       className={`log-tab ${activeLogTab === "advanced" ? "active" : ""}`}
       onClick={() => setActiveLogTab("advanced")}
     >
-      Advanced Logs
+      Advanced Logs ({state.advancedLogs.length})
     </button>
   </div>
-  <div className="logs-content">
+  <div className="logs-content" ref={(el) => {
+    // Auto-scroll to bottom when new logs arrive
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }}>
     <div className="log-entries">
       {activeLogTab === "basic" ? (
         state.basicLogs.length > 0 ? (
