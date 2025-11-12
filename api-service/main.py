@@ -1,4 +1,5 @@
 import asyncio
+import asyncio
 import uvicorn
 from fastapi import FastAPI, Request
 import yaml
@@ -10,6 +11,8 @@ import os
 import uuid
 import structlog
 import psutil
+import redis
+import json
 from prometheus_client import (
     Counter,
     Histogram,
@@ -374,6 +377,44 @@ async def api_reset_timers():
         except httpx.HTTPError as e:
             logger.error("HTTP error in reset_timers", correlation_id=correlation_id, error=str(e))
             return {"error": f"HTTP error: {str(e)}"}
+
+@app.get("/api/devices")
+async def api_list_devices():
+    """
+    Aggregate device states from per-device Redis keys.
+    API-service reads device state but never writes.
+    """
+    correlation_id = str(uuid.uuid4())
+    logger.info("Fetching device list", correlation_id=correlation_id)
+    try:
+        import redis
+        redis_client = redis.Redis(
+            host=config["redis"]["host"],
+            port=config["redis"]["port"],
+            db=config["redis"]["db"],
+            password=config["redis"]["password"]
+        )
+        # Find all device state keys
+        device_keys = redis_client.keys("device_state:*")
+        devices = {}
+        for key in device_keys:
+            try:
+                device_data = json.loads(redis_client.get(key))
+                ip = device_data.get("ip")
+                if ip:
+                    devices[ip] = {
+                        "cw": device_data.get("cw"),
+                        "ww": device_data.get("ww"),
+                        "connected": device_data.get("connected"),
+                        "last_seen": device_data.get("last_seen")
+                    }
+            except Exception as e:
+                logger.warning("Error parsing device state", correlation_id=correlation_id, key=key, error=str(e))
+        logger.info("Devices fetched", correlation_id=correlation_id, device_count=len(devices))
+        return {"devices": devices}
+    except Exception as e:
+        logger.error("Error fetching devices", correlation_id=correlation_id, error=str(e))
+        return {"error": f"Error fetching devices: {str(e)}"}
 
 async def main():
     correlation_id = str(uuid.uuid4())
