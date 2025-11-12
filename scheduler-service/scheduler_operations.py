@@ -3,7 +3,7 @@ import threading
 import logging
 import time
 import datetime
-import pickle
+import json
 import redis
 import csv
 import os
@@ -69,9 +69,17 @@ class SchedulerOperations:
         logger.debug("SchedulerOperations initialized", correlation_id=str(uuid.uuid4()))
 
     def _get_state(self):
-        state_bytes = redis_client.get("state")
+        # Try new system_state key first (JSON)
+        state_bytes = redis_client.get("system_state")
+        if not state_bytes:
+            # Fallback to legacy "state" key
+            state_bytes = redis_client.get("state")
         if state_bytes:
-            loaded_state = pickle.loads(state_bytes)
+            try:
+                loaded_state = json.loads(state_bytes)
+            except json.JSONDecodeError:
+                # If JSON fails, just use defaults
+                loaded_state = {}
         else:
             loaded_state = {}
         defaults = {
@@ -88,16 +96,10 @@ class SchedulerOperations:
                 "status": "idle",
                 "interval_progress": 0
             },
-            "connected_devices": {},
-            "basicLogs": deque(maxlen=config["luminaire_operations"]["log_basic_max_entries"]),
-            "advancedLogs": deque(maxlen=config["luminaire_operations"]["log_advanced_max_entries"]),
             "scene_data": {"cct": [], "intensity": []},
             "current_cct": 3500,
             "current_intensity": 250,
             "is_manual_override": False,
-            "cpu_percent": 0.0,
-            "mem_percent": 0.0,
-            "temperature": None,
             "activationTime": None,
             "isSystemOn": True,
             "system_timers": [],
@@ -115,14 +117,23 @@ class SchedulerOperations:
         return state
 
     def _set_state(self, state):
+        """
+        Scheduler service owns system state and publishes to system_update channel.
+        All data is JSON format.
+        """
         correlation_id = str(uuid.uuid4())
         with self._state_lock:
-            redis_client.set("state", pickle.dumps(state))
-            redis_client.publish("state_update", pickle.dumps(state))
+            # Write to new system_state key (JSON)
+            redis_client.set("system_state", json.dumps(state))
+            # Maintain legacy "state" key for backward compatibility
+            redis_client.set("state", json.dumps(state))
+            # Publish to system_update channel (JSON)
+            redis_client.publish("system_update", json.dumps(state))
             self.state = state
             try:
-                with open(config["state"]["file"], "wb") as f:
-                    pickle.dump({
+                # Also save to file as JSON
+                with open(config["state"]["file"], "w") as f:
+                    json.dump({
                         "auto_mode": state["auto_mode"],
                         "current_scene": state["current_scene"],
                         "cw": state["cw"],
@@ -140,23 +151,29 @@ class SchedulerOperations:
     def log_basic(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        self.state["basicLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(self.state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(self.state["basicLogs"]),
-            "advancedLogs": list(self.state["advancedLogs"])
-        }))
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON (no longer storing in state)
+        log_event = {
+            "type": "basic",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
         logger.info("Basic Log", correlation_id=correlation_id, message=message)
 
     def log_advanced(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        self.state["advancedLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(self.state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(self.state["basicLogs"]),
-            "advancedLogs": list(self.state["advancedLogs"])
-        }))
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON (no longer storing in state)
+        log_event = {
+            "type": "advanced",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
         logger.debug("Advanced Log", correlation_id=correlation_id, message=message)
 
     async def run_smooth_scheduler(self, csv_path: str):

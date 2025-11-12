@@ -5,7 +5,8 @@ import time
 import re
 import socket
 import yaml
-import pickle
+import json
+import pickle  # Temporary for backward compatibility during transition
 import redis
 import uuid
 from collections import deque
@@ -110,10 +111,17 @@ class LuminaireOperations:
     def add(self, ip: str, writer):
         with self._devices_lock:
             self.devices[ip] = {"writer": writer, "last_seen": time.time(), "cw": 50.0, "ww": 50.0}
-            state = self._get_state()
-            if ip not in state["connected_devices"]:
-                state["connected_devices"][ip] = {"cw": 50.0, "ww": 50.0}
-            self._set_state(state)
+            # Write per-device state in JSON
+            device_state = {
+                "ip": ip,
+                "cw": 50.0,
+                "ww": 50.0,
+                "last_seen": time.time(),
+                "connected": True
+            }
+            redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+            # Publish device update
+            redis_client.publish("device_update", json.dumps(device_state))
             self.log_basic(f"Luminaire connected: {ip}")
             logger.info("Added luminaire", device_id=ip)
 
@@ -123,13 +131,23 @@ class LuminaireOperations:
                 writer = self.devices[ip].get("writer")
                 if writer:
                     writer.close()
+                # Get current device state before deletion
+                current_cw = self.devices[ip].get("cw", 50.0)
+                current_ww = self.devices[ip].get("ww", 50.0)
                 del self.devices[ip]
                 if ip in self.last_sent:
                     del self.last_sent[ip]
-                state = self._get_state()
-                if ip in state["connected_devices"]:
-                    del state["connected_devices"][ip]
-                self._set_state(state)
+                # Update per-device state to disconnected
+                device_state = {
+                    "ip": ip,
+                    "cw": current_cw,
+                    "ww": current_ww,
+                    "last_seen": time.time(),
+                    "connected": False
+                }
+                redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                # Publish device update
+                redis_client.publish("device_update", json.dumps(device_state))
                 self.log_basic(f"Luminaire disconnected: {ip}")
             logger.info("Disconnected", device_id=ip)
 
@@ -137,9 +155,6 @@ class LuminaireOperations:
         with self._devices_lock:
             for ip in list(self.devices.keys()):
                 self.disconnect(ip)
-            state = self._get_state()
-            state["connected_devices"] = {}
-            self._set_state(state)
         self.log_basic("All luminaires disconnected.")
         logger.info("All luminaires disconnected.")
 
@@ -156,7 +171,19 @@ class LuminaireOperations:
             cw, ww = int(cw_raw) / 10, int(ww_raw) / 10
             with self._devices_lock:
                 if ip in self.devices:
-                    self.update_cw_ww_intensity(ip, cw, ww)
+                    # Update internal state
+                    self.devices[ip].update({"cw": cw, "ww": ww, "last_seen": time.time()})
+                    # Write per-device state in JSON
+                    device_state = {
+                        "ip": ip,
+                        "cw": cw,
+                        "ww": ww,
+                        "last_seen": time.time(),
+                        "connected": True
+                    }
+                    redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                    # Publish device update event-driven
+                    redis_client.publish("device_update", json.dumps(device_state))
                     self.log_basic(f"Received [{ip}]: {response}")
                     logger.debug(f"Updated device {ip}", cw=cw, ww=ww)
                     return True
@@ -169,25 +196,29 @@ class LuminaireOperations:
     def log_basic(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        state = self._get_state()
-        state["basicLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(state["basicLogs"]),
-            "advancedLogs": list(state["advancedLogs"])
-        }))
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON
+        log_event = {
+            "type": "basic",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
         logger.info("Basic Log", correlation_id=correlation_id, message=message)
 
     def log_advanced(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        state = self._get_state()
-        state["advancedLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(state["basicLogs"]),
-            "advancedLogs": list(state["advancedLogs"])
-        }))
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON
+        log_event = {
+            "type": "advanced",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
         logger.debug("Advanced Log", correlation_id=correlation_id, message=message)
 
     def list(self) -> dict:
@@ -202,9 +233,16 @@ class LuminaireOperations:
         with self._devices_lock:
             if ip in self.devices:
                 self.devices[ip].update({"cw": cw, "ww": ww, "last_seen": time.time()})
-                state = self._get_state()
-                state["connected_devices"][ip] = {"cw": cw, "ww": ww}
-                self._set_state(state)
+                # Write per-device state in JSON
+                device_state = {
+                    "ip": ip,
+                    "cw": cw,
+                    "ww": ww,
+                    "last_seen": time.time(),
+                    "connected": True
+                }
+                redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                # Note: Don't publish here, only on ACK or explicit events
                 logger.debug(f"Updated {ip}", cw=cw, ww=ww)
 
     async def send(self, ip: str, cw: float, ww: float) -> bool:
@@ -324,9 +362,21 @@ class LuminaireOperations:
             raise ValueError(f"Invalid IP: {ip}")
 
     def _get_state(self):
-        state_bytes = redis_client.get("state")
+        # Get system state from Redis (JSON format)
+        # This is primarily used for scheduler-related operations
+        # luminaire-service should minimize use of this global state
+        state_bytes = redis_client.get("system_state")
         if state_bytes:
-            return pickle.loads(state_bytes)
+            try:
+                return json.loads(state_bytes)
+            except json.JSONDecodeError:
+                # Fallback for legacy pickle format during transition
+                try:
+                    state_bytes = redis_client.get("state")
+                    if state_bytes:
+                        return pickle.loads(state_bytes)
+                except:
+                    pass
         return {
             "auto_mode": False,
             "available_scenes": [],
@@ -341,30 +391,20 @@ class LuminaireOperations:
                 "status": "idle",
                 "interval_progress": 0
             },
-            "connected_devices": {},
-            "basicLogs": deque(maxlen=config["luminaire_operations"]["log_basic_max_entries"]),
-            "advancedLogs": deque(maxlen=config["luminaire_operations"]["log_advanced_max_entries"]),
             "scene_data": {"cct": [], "intensity": []},
             "current_cct": 3500,
             "current_intensity": 250,
             "is_manual_override": False,
-            "cpu_percent": 0.0,
-            "mem_percent": 0.0,
-            "temperature": None,
             "activationTime": None,
-            "isSystemOn": True,
-            "last_state": {
-                "auto_mode": False,
-                "current_scene": None,
-                "cw": 50.0,
-                "ww": 50.0,
-                "current_intensity": 250
-            }
+            "isSystemOn": True
         }
 
     def _set_state(self, state):
-        redis_client.set("state", pickle.dumps(state))
-        redis_client.publish("state_update", pickle.dumps(state))
+        # Set system state (owned by scheduler, but luminaire-service needs to update for scheduler operations)
+        # Write in JSON format
+        redis_client.set("system_state", json.dumps(state))
+        # Also maintain legacy "state" key during transition
+        redis_client.set("state", json.dumps(state))
 
     async def cleanup_stale_devices(self):
         while True:

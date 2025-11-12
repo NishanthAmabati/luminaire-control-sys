@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import time
-import pickle
 import redis
 import httpx
 from typing import Set
@@ -57,73 +56,52 @@ redis_client = redis.Redis(
 )
 
 async def status_loop():
+    """
+    Status loop now operates in read-only mode for device state.
+    It aggregates device states on-demand and does NOT publish global state updates.
+    This service should never write device state - that's owned by luminaire-service.
+    """
     correlation_id = str(uuid.uuid4())
-    logger.info("Starting status loop", correlation_id=correlation_id)
-    luminaire_url = f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/list"
-    last_device_count = None
-    first_update = True
+    logger.info("Status loop disabled - device state is event-driven via pubsub", correlation_id=correlation_id)
+    # Status loop is now essentially disabled. Device updates come through device_update pubsub channel.
+    # If we need periodic aggregation for monitoring, we can implement that separately.
     while True:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(luminaire_url)
-                devices = resp.json() if resp.status_code == 200 else {}
-                if resp.status_code != 200:
-                    logger.error("Failed to fetch devices", correlation_id=correlation_id, status_code=resp.status_code, response=resp.text)
-                
-                state_bytes = redis_client.get("state")
-                state = pickle.loads(state_bytes) if state_bytes else {}
-                device_count = len(devices.get("devices", {}))
-                should_log_info = first_update or device_count != last_device_count
-                if should_log_info:
-                    logger.info(
-                        "Published state update",
-                        correlation_id=correlation_id,
-                        device_count=device_count,
-                        state_keys=list(state.keys())
-                    )
-                    last_device_count = device_count
-                    first_update = False
-                else:
-                    logger.debug("Fetched devices and state", correlation_id=correlation_id, device_count=device_count)
-                
-                state.update({
-                    "devices": devices,
-                    "timestamp": datetime.now().isoformat()
-                })
-                redis_client.publish("state_update", pickle.dumps(state))
-                logger.debug("Published state update", correlation_id=correlation_id)
-        except httpx.HTTPError as e:
-            logger.error("HTTP error in status loop", correlation_id=correlation_id, error=str(e))
-        except Exception as e:
-            logger.error("Unexpected error in status loop", correlation_id=correlation_id, error=str(e))
-        await asyncio.sleep(config["api"]["broadcast_interval"])
+        await asyncio.sleep(60)  # Keep the loop alive but do minimal work
 
 def _get_state():
+    """
+    Read-only access to system state (JSON format).
+    API service should NOT write state.
+    """
     correlation_id = str(uuid.uuid4())
-    logger.debug("Fetching state from Redis", correlation_id=correlation_id)
+    logger.debug("Fetching system state from Redis (read-only)", correlation_id=correlation_id)
     try:
-        state_bytes = redis_client.get("state")
+        # Try new system_state key first
+        state_bytes = redis_client.get("system_state")
+        if not state_bytes:
+            # Fallback to legacy "state" key
+            state_bytes = redis_client.get("state")
         if state_bytes:
-            logger.info("Successfully fetched state from Redis", correlation_id=correlation_id) if not hasattr(_get_state, "logged") else None
-            _get_state.logged = True
-            return pickle.loads(state_bytes)
+            try:
+                return json.loads(state_bytes)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse state as JSON", correlation_id=correlation_id)
+                return {}
         logger.warning("No state found in Redis", correlation_id=correlation_id)
         return {}
     except redis.RedisError as e:
         logger.error("Redis error in get_state", correlation_id=correlation_id, error=str(e))
         return {}
 
-def _set_state(state):
-    correlation_id = str(uuid.uuid4())
-    logger.debug("Setting state in Redis", correlation_id=correlation_id)
-    try:
-        redis_client.set("state", pickle.dumps(state))
-        logger.info("Successfully set state in Redis", correlation_id=correlation_id) if not hasattr(_set_state, "logged") else None
-        _set_state.logged = True
-    except redis.RedisError as e:
-        logger.error("Redis error in set_state", correlation_id=correlation_id, error=str(e))
+# _set_state function removed - API service should NOT write state
+# State is owned by luminaire-service (device state) and scheduler-service (system state)
 
 async def subscribe_to_updates():
+    """
+    Subscribe to device_update, system_update, and log_update channels.
+    All data is now in JSON format, not pickle.
+    This service forwards updates to WebSocket clients.
+    """
     correlation_id = str(uuid.uuid4())
     logger.info("Starting updates subscription", correlation_id=correlation_id)
     async with redis.asyncio.Redis(
@@ -133,17 +111,30 @@ async def subscribe_to_updates():
         password=config["redis"]["password"]
     ) as async_redis:
         pubsub = async_redis.pubsub()
-        await pubsub.subscribe("state_update", "system_stats_update", "log_update")
-        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["state_update", "system_stats_update", "log_update"])
+        await pubsub.subscribe("device_update", "system_update", "log_update")
+        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update"])
         async for message in pubsub.listen():
             if message["type"] == "message":
                 try:
                     channel = message["channel"].decode()
-                    data = pickle.loads(message["data"])
+                    # Data is now JSON, not pickle
+                    data = json.loads(message["data"])
                     update = {}
-                    if channel == "state_update":
+                    if channel == "device_update":
+                        # Device update - single device state
                         update = {
-                            "type": "live_update",
+                            "type": "device_update",
+                            "ip": data.get("ip"),
+                            "cw": data.get("cw"),
+                            "ww": data.get("ww"),
+                            "connected": data.get("connected"),
+                            "last_seen": data.get("last_seen")
+                        }
+                        logger.debug("Prepared device_update", correlation_id=correlation_id, ip=data.get("ip"))
+                    elif channel == "system_update":
+                        # System state update (scheduler, mode, etc.)
+                        update = {
+                            "type": "system_update",
                             "current_cct": data.get("current_cct", 3500),
                             "current_intensity": data.get("current_intensity", 250),
                             "cw": data.get("cw", 50.0),
@@ -156,20 +147,15 @@ async def subscribe_to_updates():
                             "isTimerEnabled": data.get("isTimerEnabled", False),
                             "scene_data": data.get("scene_data", {"cct": [], "intensity": []})
                         }
-                        logger.debug("Prepared live_update", correlation_id=correlation_id)
-                    elif channel == "system_stats_update":
-                        update = {
-                            "type": "system_stats",
-                            "cpu_percent": data.get("cpu_percent", 0.0),
-                            "mem_percent": data.get("mem_percent", 0.0),
-                            "temperature": data.get("temperature", None),
-                        }
-                        logger.debug("Prepared system_stats update", correlation_id=correlation_id)
+                        logger.debug("Prepared system_update", correlation_id=correlation_id)
                     elif channel == "log_update":
+                        # Log update - basic or advanced
                         update = {
                             "type": "log_update",
-                            "basicLogs": list(data.get("basicLogs", [])),
-                            "advancedLogs": list(data.get("advancedLogs", [])),
+                            "log_type": data.get("type"),
+                            "timestamp": data.get("timestamp"),
+                            "message": data.get("message"),
+                            "formatted": data.get("formatted")
                         }
                         logger.debug("Prepared log_update", correlation_id=correlation_id)
                     else:

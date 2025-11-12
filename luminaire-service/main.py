@@ -3,7 +3,7 @@ import uvicorn
 import logging
 import yaml
 import resource
-import pickle
+import json
 import redis
 import structlog
 import uuid
@@ -168,15 +168,24 @@ class LuminaireServer:
         client_ip = addr[0] if addr else "unknown"
         logger.info("New luminaire connected", correlation_id=correlation_id, client_ip=client_ip)
         self.luminaire_ops.add(client_ip, writer)
-        state_bytes = redis_client.get("state")
+        # Read system state to get initial values for new device
+        state_bytes = redis_client.get("system_state")
+        if not state_bytes:
+            # Fallback to legacy "state" key
+            state_bytes = redis_client.get("state")
         if state_bytes:
-            state = pickle.loads(state_bytes)
-            cw = state.get("cw", 50.0)
-            ww = state.get("ww", 50.0)
-            is_system_on = state.get("isSystemOn", True)
-            if is_system_on:
-                logger.info("Sending initial values to new client", correlation_id=correlation_id, client_ip=client_ip, cw=cw, ww=ww)
-                await self.luminaire_ops.send(client_ip, cw, ww)
+            try:
+                state = json.loads(state_bytes)
+            except json.JSONDecodeError:
+                # If JSON fails, skip initial send
+                state = None
+            if state:
+                cw = state.get("cw", 50.0)
+                ww = state.get("ww", 50.0)
+                is_system_on = state.get("isSystemOn", True)
+                if is_system_on:
+                    logger.info("Sending initial values to new client", correlation_id=correlation_id, client_ip=client_ip, cw=cw, ww=ww)
+                    await self.luminaire_ops.send(client_ip, cw, ww)
         try:
             while self.running:
                 data = await reader.read(1024)
@@ -220,12 +229,21 @@ async def continuous_send_task():
     last_cw, last_ww, last_system_state, last_mode, last_scene = None, None, None, None, None
     while True:
         try:
-            state_bytes = redis_client.get("state")
+            # Read system state from Redis (JSON format)
+            state_bytes = redis_client.get("system_state")
+            if not state_bytes:
+                # Fallback to legacy "state" key
+                state_bytes = redis_client.get("state")
             if not state_bytes:
                 logger.debug("No state in Redis, skipping send", correlation_id=correlation_id)
                 await asyncio.sleep(1)
                 continue
-            state = pickle.loads(state_bytes)
+            try:
+                state = json.loads(state_bytes)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse system state as JSON", correlation_id=correlation_id)
+                await asyncio.sleep(1)
+                continue
             if state.get("scheduler", {}).get("status") == "running":
                 logger.debug("Scheduler is running, skipping continuous send", correlation_id=correlation_id)
                 await asyncio.sleep(1)

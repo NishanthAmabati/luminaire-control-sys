@@ -1,9 +1,8 @@
 import asyncio
 import redis
-import pickle
+import json
 import yaml
 import logging
-import json
 from datetime import datetime
 from collections import deque
 import websockets
@@ -77,6 +76,11 @@ def custom_json_serializer(obj):
     return str(obj)
 
 async def subscribe_to_updates():
+    """
+    Subscribe to device_update, system_update, and log_update channels.
+    All messages are now JSON format (not pickle).
+    Forward relevant updates to webapp clients.
+    """
     correlation_id = str(uuid.uuid4())
     logger.info("Starting Redis subscription", correlation_id=correlation_id)
     try:
@@ -86,10 +90,15 @@ async def subscribe_to_updates():
             decode_responses=False
         )
         pubsub = redis_client.pubsub()
-        pubsub.subscribe("state_update", "system_stats_update", "log_update")
-        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["state_update", "system_stats_update", "log_update"])
+        pubsub.subscribe("device_update", "system_update", "log_update")
+        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update"])
         
-        last_available_scenes = None
+        # Track aggregated device state for webapp
+        devices_state = {}
+        # Track logs for webapp
+        basic_logs = deque(maxlen=50)
+        advanced_logs = deque(maxlen=100)
+        
         loop = asyncio.get_event_loop()
         while True:
             message = await loop.run_in_executor(executor, redis_subscribe, pubsub)
@@ -105,32 +114,65 @@ async def subscribe_to_updates():
                     continue
                 
                 try:
-                    data = pickle.loads(data_bytes)
-                    if 'available_scenes' in data:
-                        if data['available_scenes'] != last_available_scenes:
-                            logger.info("Received available_scenes", correlation_id=str(uuid.uuid4()), available_scenes=data['available_scenes'])
-                            last_available_scenes = data['available_scenes']
-                    else:
-                        logger.warning("No available_scenes in Redis message", correlation_id=str(uuid.uuid4()))
-                except pickle.UnpicklingError as e:
-                    logger.error("Pickle unpickling error", correlation_id=str(uuid.uuid4()), error=str(e), raw_data=data_bytes[:100])
+                    # Parse JSON data
+                    data = json.loads(data_bytes)
+                except json.JSONDecodeError as e:
+                    logger.error("JSON decode error", correlation_id=str(uuid.uuid4()), error=str(e), raw_data=data_bytes[:100])
                     continue
                 
-                try:
-                    ws_data = json.dumps(data, default=custom_json_serializer)
-                except Exception as e:
-                    logger.error("JSON serialization error", correlation_id=str(uuid.uuid4()), error=str(e), data=str(data)[:200])
-                    continue
+                ws_message = None
                 
-                message_type = {
-                    "state_update": "live_update",
-                    "system_stats_update": "system_stats",
-                    "log_update": "log_update"
-                }.get(channel, "unknown")
+                if channel == "device_update":
+                    # Update aggregated device state
+                    ip = data.get("ip")
+                    if ip:
+                        devices_state[ip] = {
+                            "cw": data.get("cw"),
+                            "ww": data.get("ww"),
+                            "connected": data.get("connected"),
+                            "last_seen": data.get("last_seen")
+                        }
+                        # Send device update to webapp
+                        ws_message = json.dumps({
+                            "type": "device_update",
+                            "data": {
+                                "ip": ip,
+                                "cw": data.get("cw"),
+                                "ww": data.get("ww"),
+                                "connected": data.get("connected"),
+                                "devices": devices_state  # Include full device list for convenience
+                            }
+                        })
+                        logger.debug("Prepared device_update message", correlation_id=str(uuid.uuid4()), ip=ip)
+                        
+                elif channel == "system_update":
+                    # Forward system state updates
+                    ws_message = json.dumps({
+                        "type": "live_update",
+                        "data": data
+                    })
+                    logger.debug("Prepared system_update message", correlation_id=str(uuid.uuid4()))
+                    
+                elif channel == "log_update":
+                    # Aggregate logs
+                    log_type = data.get("type")
+                    formatted_msg = data.get("formatted")
+                    if log_type == "basic" and formatted_msg:
+                        basic_logs.append(formatted_msg)
+                    elif log_type == "advanced" and formatted_msg:
+                        advanced_logs.append(formatted_msg)
+                    
+                    # Forward log update
+                    ws_message = json.dumps({
+                        "type": "log_update",
+                        "data": {
+                            "basicLogs": list(basic_logs),
+                            "advancedLogs": list(advanced_logs)
+                        }
+                    })
+                    logger.debug("Prepared log_update message", correlation_id=str(uuid.uuid4()))
                 
-                if message_type != "unknown":
-                    ws_message = json.dumps({"type": message_type, "data": json.loads(ws_data)})
-                    logger.debug("Prepared message", correlation_id=str(uuid.uuid4()), message_type=message_type)
+                if ws_message:
                     async with clients_lock:
                         disconnected = []
                         for ws in clients:
@@ -139,7 +181,7 @@ async def subscribe_to_updates():
                                 logger.debug(
                                     "Sent message to client",
                                     correlation_id=str(uuid.uuid4()),
-                                    message_type=message_type,
+                                    message_type=channel,
                                     client_host=ws.remote_address[0],
                                     client_port=ws.remote_address[1]
                                 )
@@ -147,7 +189,7 @@ async def subscribe_to_updates():
                                 logger.error(
                                     "Failed to send to client",
                                     correlation_id=str(uuid.uuid4()),
-                                    message_type=message_type,
+                                    message_type=channel,
                                     client_host=ws.remote_address[0],
                                     client_port=ws.remote_address[1],
                                     error=str(e)

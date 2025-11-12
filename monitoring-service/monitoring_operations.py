@@ -4,7 +4,7 @@ import time
 import threading
 import yaml
 import redis
-import pickle
+import json
 import psutil
 import structlog
 import uuid
@@ -88,7 +88,9 @@ class MonitoringOperations:
                 redis_client.set("cpu_percent", str(self.state["cpu_percent"]))
                 redis_client.set("mem_percent", str(self.state["mem_percent"]))
                 redis_client.set("temperature", str(self.state["temperature"]) if self.state["temperature"] is not None else "null")
-                stats_msg = pickle.dumps(self.state)
+                # Publish system stats as JSON (not pickle)
+                # Note: This could be part of system_update channel, but keeping separate for monitoring
+                stats_msg = json.dumps(self.state)
                 redis_client.publish("system_stats_update", stats_msg)
 
                 # Log only significant changes
