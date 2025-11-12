@@ -4,7 +4,7 @@ import logging
 import bisect
 from typing import List, Tuple
 import yaml
-import pickle
+import json
 import redis
 import time
 import structlog
@@ -95,11 +95,13 @@ def load_scenes() -> dict:
                     "cct": downsampled_cct,
                     "intensity": downsampled_intensity
                 }
-                redis_client.set(f"scene_data:{scene}", pickle.dumps(scene_data[scene]))
+                # Store scene data as JSON
+                redis_client.set(f"scene_data:{scene}", json.dumps(scene_data[scene]))
             logger.info("Loaded scene", correlation_id=correlation_id, scene=scene)
             logger.debug("Scene data", correlation_id=correlation_id, scene=scene, cct_count=len(scene_data[scene]["cct"]), intensity_count=len(scene_data[scene]["intensity"]))
         except Exception as e:
             logger.error("Error loading scene", correlation_id=correlation_id, scene=scene, error=str(e))
-    redis_client.set("available_scenes", pickle.dumps(available_scenes))
+    # Store available scenes as JSON
+    redis_client.set("available_scenes", json.dumps(available_scenes))
     logger.info("Scenes loaded", correlation_id=correlation_id, scene_count=len(available_scenes))
     return available_scenes
