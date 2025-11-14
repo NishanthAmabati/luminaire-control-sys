@@ -222,6 +222,30 @@ const App = () => {
     [logAdvanced]
   )
 
+  const activateScene = useCallback(() => {
+    if (systemState.loaded_scene) {
+      setIsLoading(true)
+      sendCommand({ type: "activate_scene", scene: systemState.loaded_scene })
+      toast.success(`Scene Activated`)
+      logBasic(`Activated scene: ${systemState.loaded_scene}`)
+      updateSystemState({
+        current_scene: systemState.loaded_scene,
+        auto_mode: true,
+      })
+      updateScheduler({ status: "running" })
+      setRunningScene(systemState.loaded_scene)
+      const currentSecond = getCurrentSecondOfDay()
+      setVerticalLinePosition(Math.floor(currentSecond / 10))
+      lastIntervalUpdateTime.current = Date.now()
+      sceneStartTime.current = Date.now()
+      if (previewTimeout.current) {
+        clearTimeout(previewTimeout.current)
+        previewTimeout.current = null
+      }
+      setTimeout(() => setIsLoading(false), 500)
+    }
+  }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
+
   const setMode = useCallback(
     (auto) => {
       setIsLoading(true)
@@ -288,30 +312,6 @@ const App = () => {
     },
     [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler]
   )
-
-  const activateScene = useCallback(() => {
-    if (systemState.loaded_scene) {
-      setIsLoading(true)
-      sendCommand({ type: "activate_scene", scene: systemState.loaded_scene })
-      toast.success(`Scene Activated`)
-      logBasic(`Activated scene: ${systemState.loaded_scene}`)
-      updateSystemState({
-        current_scene: systemState.loaded_scene,
-        auto_mode: true,
-      })
-      updateScheduler({ status: "running" })
-      setRunningScene(systemState.loaded_scene)
-      const currentSecond = getCurrentSecondOfDay()
-      setVerticalLinePosition(Math.floor(currentSecond / 10))
-      lastIntervalUpdateTime.current = Date.now()
-      sceneStartTime.current = Date.now()
-      if (previewTimeout.current) {
-        clearTimeout(previewTimeout.current)
-        previewTimeout.current = null
-      }
-      setTimeout(() => setIsLoading(false), 500)
-    }
-  }, [systemState.loaded_scene, sendCommand, logBasic])
 
   const stopScheduler = useCallback(() => {
     sendCommand({ type: "stop_scheduler" })
