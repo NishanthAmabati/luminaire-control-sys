@@ -50,7 +50,7 @@ class LuminaireOperations:
         '_devices_lock', '_state_lock', '_send_lock', 'min_cct', 'max_cct',
         'min_intensity', 'max_intensity', 'INACTIVITY_THRESHOLD', 'devices',
         'current_interval_index', 'total_intervals', 'start_time', 'stop_event',
-        'paused', 'current_scheduler_task', 'last_sent'
+        'paused', 'current_scheduler_task', 'last_sent', 'last_published'
     )
 
     def __init__(self):
@@ -70,6 +70,7 @@ class LuminaireOperations:
         self.paused = False
         self.current_scheduler_task = None
         self.last_sent = {}  # Track last sent cw/ww per device
+        self.last_published = {}  # Track last published device state for delta detection
         logger.debug("LuminaireOperations initialized")
 
     def stop_scheduler(self):
@@ -120,8 +121,11 @@ class LuminaireOperations:
                 "connected": True
             }
             redis_client.set(f"device_state:{ip}", json.dumps(device_state))
-            # Publish device update
-            redis_client.publish("device_update", json.dumps(device_state))
+            # Publish device update (delta: only changed fields)
+            # For new devices, publish full state
+            delta_update = device_state.copy()
+            self.last_published[ip] = device_state.copy()
+            redis_client.publish("device_update", json.dumps(delta_update))
             self.log_basic(f"Luminaire connected: {ip}")
             logger.info("Added luminaire", device_id=ip)
 
@@ -137,6 +141,8 @@ class LuminaireOperations:
                 del self.devices[ip]
                 if ip in self.last_sent:
                     del self.last_sent[ip]
+                if ip in self.last_published:
+                    del self.last_published[ip]
                 # Update per-device state to disconnected
                 device_state = {
                     "ip": ip,
@@ -146,8 +152,10 @@ class LuminaireOperations:
                     "connected": False
                 }
                 redis_client.set(f"device_state:{ip}", json.dumps(device_state))
-                # Publish device update
-                redis_client.publish("device_update", json.dumps(device_state))
+                # Publish device update (delta: only changed fields)
+                # For disconnect, publish full state with connected=False
+                delta_update = device_state.copy()
+                redis_client.publish("device_update", json.dumps(delta_update))
                 self.log_basic(f"Luminaire disconnected: {ip}")
             logger.info("Disconnected", device_id=ip)
 
@@ -182,8 +190,24 @@ class LuminaireOperations:
                         "connected": True
                     }
                     redis_client.set(f"device_state:{ip}", json.dumps(device_state))
-                    # Publish device update event-driven
-                    redis_client.publish("device_update", json.dumps(device_state))
+                    
+                    # Publish device update (delta: only changed fields)
+                    delta_update = {"ip": ip}
+                    prev = self.last_published.get(ip, {})
+                    if prev.get("cw") != cw:
+                        delta_update["cw"] = cw
+                    if prev.get("ww") != ww:
+                        delta_update["ww"] = ww
+                    if prev.get("connected") != True:
+                        delta_update["connected"] = True
+                    # Always update last_seen timestamp
+                    delta_update["last_seen"] = device_state["last_seen"]
+                    
+                    # Only publish if there are changes (beyond just last_seen)
+                    if len(delta_update) > 2:  # More than just ip and last_seen
+                        redis_client.publish("device_update", json.dumps(delta_update))
+                        self.last_published[ip] = device_state.copy()
+                    
                     self.log_basic(f"Received [{ip}]: {response}")
                     logger.debug(f"Updated device {ip}", cw=cw, ww=ww)
                     return True
