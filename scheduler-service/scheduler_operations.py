@@ -48,7 +48,7 @@ redis_client = redis.Redis(
     port=config["redis"]["port"],
     db=config["redis"]["db"],
     password=config["redis"]["password"],
-    decode_responses=False
+    decode_responses=True
 )
 
 class SchedulerOperations:
