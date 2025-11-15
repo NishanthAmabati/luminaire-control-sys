@@ -39,7 +39,8 @@ import { debounce } from "lodash"
 import logo from "./SSS.png"
 import { useDevices } from "./contexts/DeviceContext"
 import { useSystem } from "./contexts/SystemContext"
-import { useLogs } from "./contexts/LogContext"
+// Log UI removed for performance - LogContext kept for potential future use
+// import { useLogs } from "./contexts/LogContext"
 
 // Define custom plugin for chart labels
 const currentValueLabelPlugin = {
@@ -126,7 +127,8 @@ const App = () => {
   // Use context hooks for decoupled state management
   const { devices, updateDevices } = useDevices()
   const { systemState, updateSystemState, updateScheduler } = useSystem()
-  const { basicLogs, advancedLogs, addBasicLog, addAdvancedLog, clearBasicLogs, clearAdvancedLogs } = useLogs()
+  // Log UI removed for performance optimization
+  // const { basicLogs, advancedLogs, addBasicLog, addAdvancedLog, clearBasicLogs, clearAdvancedLogs} = useLogs()
 
   // Local UI-only state
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark")
@@ -141,8 +143,9 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [verticalLinePosition, setVerticalLinePosition] = useState(0)
   const [manualSystemOff, setManualSystemOff] = useState(false)
-  const [activeLogTab, setActiveLogTab] = useState("basic")
-  const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(false)
+  // Log panel state removed for performance (logs UI completely removed)
+  // const [activeLogTab, setActiveLogTab] = useState("basic")
+  // const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(false)
   const [deviceSearchQuery, setDeviceSearchQuery] = useState("")
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [isAdjusting, setIsAdjusting] = useState(false)
@@ -618,13 +621,8 @@ const App = () => {
               });
             }
           } else if (data.type === "log_update") {
-            // Logs are now managed by LogContext
-            if (Array.isArray(data.data.basicLogs)) {
-              data.data.basicLogs.forEach(log => addBasicLog(log));
-            }
-            if (Array.isArray(data.data.advancedLogs)) {
-              data.data.advancedLogs.forEach(log => addAdvancedLog(log));
-            }
+            // Logs UI removed for performance - ignoring log updates
+            // Log functionality can be re-enabled by uncommenting LogContext usage
           } else if (data.type === "live_update") {
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
@@ -1559,12 +1557,7 @@ const App = () => {
                     </div>
                   )}
             </div>
-              <div className="logs-button-container">
-                <button className="logs-button" onClick={() => setIsLogsPanelOpen(!isLogsPanelOpen)}>
-                  <FileText size={22} />
-                  <span>{isLogsPanelOpen ? "Hide" : "View"} System Logs</span>
-                </button>
-              </div>
+              {/* Logs button removed for performance - UI completely eliminated */}
             </div>
           <div className="card devices-card">
             <div className="card-header">
@@ -1618,76 +1611,8 @@ const App = () => {
           </div>
         </section>
       </main>
-      <div className={`logs-panel ${isLogsPanelOpen ? "open" : ""}`}>
-  <div className="logs-header">
-    <h3 className="logs-title">
-      <FileText size={18} className="logs-icon" />
-      System Logs
-    </h3>
-    <div className="logs-controls">
-      <button 
-        className="icon-button" 
-        onClick={() => {
-          if (activeLogTab === "basic") {
-            clearBasicLogs();
-          } else {
-            clearAdvancedLogs();
-          }
-        }}
-        title="Clear logs"
-      >
-        Clear
-      </button>
-      <button className="close-logs" onClick={() => setIsLogsPanelOpen(false)}>
-        &times;
-      </button>
-    </div>
-  </div>
-  <div className="logs-tabs">
-    <button
-      className={`log-tab ${activeLogTab === "basic" ? "active" : ""}`}
-      onClick={() => setActiveLogTab("basic")}
-    >
-      Basic Logs ({basicLogs.length})
-    </button>
-    <button
-      className={`log-tab ${activeLogTab === "advanced" ? "active" : ""}`}
-      onClick={() => setActiveLogTab("advanced")}
-    >
-      Advanced Logs ({advancedLogs.length})
-    </button>
-  </div>
-  <div className="logs-content" ref={(el) => {
-    // Auto-scroll to bottom when new logs arrive
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }}>
-    <div className="log-entries">
-      {activeLogTab === "basic" ? (
-        basicLogs.length > 0 ? (
-          basicLogs.map((log, index) => (
-            <div key={index} className="log-entry">
-              {log}
-            </div>
-          ))
-        ) : (
-          <div className="no-logs">No basic logs available</div>
-        )
-      ) : (
-        advancedLogs.length > 0 ? (
-          advancedLogs.map((log, index) => (
-            <div key={index} className="log-entry">
-              {log}
-            </div>
-          ))
-        ) : (
-          <div className="no-logs">No advanced logs available</div>
-        )
-      )}
-    </div>
-  </div>
-</div>
+      {/* Logs panel completely removed for performance optimization */}
+      {/* Log functionality can be re-enabled by uncommenting LogContext and restoring logs UI */}
     </div>
   )
 }
