@@ -384,7 +384,7 @@ const App = () => {
           logBasic(`Set CCT to ${validatedCct}K`)
           updateSystemState({ current_cct: validatedCct })
         }
-      }, 300)
+      }, 500)
     },
     [sendCommand, systemState.current_cct, logBasic, updateSystemState]
   )
@@ -399,7 +399,7 @@ const App = () => {
           logBasic(`Set Intensity to ${validatedIntensity} lux`)
           setLocalIntensity(validatedIntensity)
         }
-      }, 300)
+      }, 500)
     },
     [adjustIntensity, systemState.current_intensity, logBasic]
   )
