@@ -185,17 +185,14 @@ const App = () => {
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
   }
 
+  // Log functions converted to no-ops since logs UI was removed for performance
   const logBasic = useCallback((message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    addBasicLog(logMessage);
-  }, [addBasicLog]);
+    // No-op: logs UI removed for performance optimization
+  }, []);
 
   const logAdvanced = useCallback((message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    addAdvancedLog(logMessage);
-  }, [addAdvancedLog]);
+    // No-op: logs UI removed for performance optimization
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => {
