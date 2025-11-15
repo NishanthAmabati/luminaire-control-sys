@@ -207,6 +207,7 @@ const App = () => {
       const commandString = JSON.stringify(command)
       if (ws.current?.readyState === WebSocket.OPEN && lastCommandSent.current !== commandString) {
         ws.current.send(commandString)
+        console.log("Sent command:", command)
         logAdvanced(
           `Sent [${command.type}]: ${Object.entries(command)
             .filter(([k]) => k !== "type")
@@ -248,10 +249,12 @@ const App = () => {
   const setMode = useCallback(
     (auto) => {
       setIsLoading(true)
+      console.log("Sending set_mode command: auto=", auto)
       sendCommand({ type: "set_mode", auto })
       if (auto) {
         toast.success("Switched to Auto Mode")
         if (systemState.current_scene) {
+          console.log("Reactivating scene:", systemState.current_scene)
           updateSystemState({
             loaded_scene: systemState.current_scene,
             auto_mode: true,
@@ -533,6 +536,7 @@ const App = () => {
         if (devicesResponse.ok) {
           const devicesData = await devicesResponse.json()
           if (devicesData.devices) {
+            console.log("Bootstrapped devices:", devicesData.devices)
             updateDevices(devicesData.devices)
           }
         } else {
@@ -548,6 +552,7 @@ const App = () => {
         if (scenesResponse.ok) {
           const scenesData = await scenesResponse.json()
           if (Array.isArray(scenesData.scenes)) {
+            console.log("Bootstrapped available scenes:", scenesData.scenes)
             updateSystemState({ available_scenes: scenesData.scenes })
           }
         } else {
@@ -557,6 +562,7 @@ const App = () => {
         console.error("Error bootstrapping scenes:", error)
       }
 
+      console.log("State bootstrap complete - switching to live WebSocket updates")
     }
 
     bootstrapState()
@@ -570,8 +576,9 @@ const App = () => {
 
     const connectWebSocket = () => {
       setIsLoading(true);
-      ws.current = new WebSocket(`ws://${window.location.hostname}:5001`);
+      ws.current = new WebSocket("ws://localhost:5001");
       ws.current.onopen = () => {
+        console.log("WebSocket Connected");
         logAdvanced("WebSocket connected");
         setState((prev) => ({ ...prev, error: null }));
         reconnectAttempts = 0;
@@ -585,8 +592,10 @@ const App = () => {
         ws.current.pingInterval = pingInterval;
       };
       ws.current.onmessage = (event) => {
+        console.log("Raw WebSocket message received:", event.data);
         try {
           const data = JSON.parse(event.data);
+          console.log("Parsed message from backend:", data);
           if (data.type === "pong") {
             lastPongTime.current = Date.now();
             const latency = lastPongTime.current - lastPingTime.current;
@@ -595,6 +604,7 @@ const App = () => {
             }
             setState((prev) => ({ ...prev, wsLatency: latency, error: null }));
           } else if (data.type === "system_stats") {
+            console.log("Processing system_stats:", data.data);
             updateSystemState({
               cpu_percent: data.data.cpu_percent || systemState.cpu_percent,
               mem_percent: data.data.mem_percent || systemState.mem_percent,
@@ -602,6 +612,7 @@ const App = () => {
             });
           } else if (data.type === "device_update") {
             // Handle granular device updates from the refactored backend
+            console.log("Processing device_update:", data.data);
             if (data.data.devices) {
               // Full devices list provided
               updateDevices(data.data.devices);
@@ -618,6 +629,7 @@ const App = () => {
               });
             }
           } else if (data.type === "log_update") {
+            console.log("Processing log_update:", data.data);
             // Logs are now managed by LogContext
             if (Array.isArray(data.data.basicLogs)) {
               data.data.basicLogs.forEach(log => addBasicLog(log));
@@ -626,6 +638,7 @@ const App = () => {
               data.data.advancedLogs.forEach(log => addAdvancedLog(log));
             }
           } else if (data.type === "live_update") {
+              //console.log("Processing live_update:", data.data);
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
                   logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");
@@ -705,6 +718,7 @@ const App = () => {
         }
       };
       ws.current.onclose = () => {
+        console.log("WebSocket Disconnected");
         logAdvanced("WebSocket disconnected");
         setState((prev) => ({ ...prev, wsLatency: null, error: "WebSocket connection lost" }));
         setIsLoading(false);
