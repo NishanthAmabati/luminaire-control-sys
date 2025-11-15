@@ -29,19 +29,19 @@ logging:
 microservices:
   luminaire_service:
     host: "luminaire-service"
-    port: 5555
+    port: 8000
     log_level: "INFO"
   scheduler_service:
     host: "scheduler-service"
-    port: 6666
+    port: 8000
     log_level: "INFO"
   monitoring_service:
     host: "monitoring-service"
-    port: 7777
+    port: 8000
     log_level: "INFO"
   api_service:
     host: "api-service"
-    port: 8888
+    port: 8000
     log_level: "info"
   websocket_service:
     host: "websocket-service"
