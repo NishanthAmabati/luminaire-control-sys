@@ -39,6 +39,7 @@ import { debounce } from "lodash"
 import logo from "./SSS.png"
 import { useDevices } from "./contexts/DeviceContext"
 import { useSystem } from "./contexts/SystemContext"
+import DeviceItem from "./components/DeviceItem"
 // Log UI removed for performance - LogContext kept for potential future use
 // import { useLogs } from "./contexts/LogContext"
 
@@ -1588,15 +1589,7 @@ const App = () => {
               <ul className="device-list">
                 {filteredDevices.length > 0 ? (
                   filteredDevices.map(([ip, data]) => (
-                    <li key={ip} className="device-item">
-                      <div className={`device-status ${data.cw !== null ? "connected" : "disconnected"}`}></div>
-                      <div className="device-info">
-                        <div className="device-ip">{ip}</div>
-                        <div className="device-details">
-                          CW: {data.cw !== null ? data.cw.toFixed(1) : "N/A"}%, WW: {data.ww !== null ? data.ww.toFixed(1) : "N/A"}%
-                        </div>
-                      </div>
-                    </li>
+                    <DeviceItem key={ip} ip={ip} data={data} />
                   ))
                 ) : (
                   <li className="no-devices">No luminaires found</li>
