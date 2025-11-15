@@ -637,11 +637,10 @@ class SchedulerOperations:
                     second=0, microsecond=0
                 )
 
-                # ON Trigger
+                # ON Trigger - removed state condition to allow triggering regardless of current state
                 if (
                     now >= on_dt
                     and last_trigger.get(timer_id_on) != today_str
-                    and not self.state["isSystemOn"]
                 ):
                     try:
                         async with httpx.AsyncClient() as client:
@@ -649,17 +648,18 @@ class SchedulerOperations:
                             if resp.status_code == 200:
                                 self.log_basic(f"Timer triggered: System turned ON at {timer['on']}")
                                 last_trigger[timer_id_on] = today_str
+                                # Persist trigger state to Redis immediately
+                                await self.redis_client.hset("state", "timer_last_trigger", json.dumps(last_trigger))
                             else:
                                 self.log_advanced(f"Timer ON failed at {timer['on']}: {resp.text}")
                     except Exception as e:
                         self.log_advanced(f"Timer ON error at {timer['on']}: {e}")
                         logging.error(f"Timer ON error at {timer['on']}: {e}")
 
-                # OFF Trigger
+                # OFF Trigger - removed state condition to allow triggering regardless of current state
                 if (
                     now >= off_dt
                     and last_trigger.get(timer_id_off) != today_str
-                    and self.state["isSystemOn"]
                 ):
                     try:
                         async with httpx.AsyncClient() as client:
@@ -667,6 +667,8 @@ class SchedulerOperations:
                             if resp.status_code == 200:
                                 self.log_basic(f"Timer triggered: System turned OFF at {timer['off']}")
                                 last_trigger[timer_id_off] = today_str
+                                # Persist trigger state to Redis immediately
+                                await self.redis_client.hset("state", "timer_last_trigger", json.dumps(last_trigger))
                             else:
                                 self.log_advanced(f"Timer OFF failed at {timer['off']}: {resp.text}")
                     except Exception as e:
