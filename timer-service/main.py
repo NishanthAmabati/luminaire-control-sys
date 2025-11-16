@@ -14,6 +14,7 @@ import asyncio
 import os
 import logging
 import structlog
+import yaml
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -24,6 +25,15 @@ import uuid
 
 from models import SetTimerData, ToggleTimerData, TimersResponse, TimerStatusResponse
 from timer_operations import TimerOperations
+
+# Load configuration from config.yaml
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+# Get timer service config
+timer_config = config["microservices"]["timer_service"]
+SERVICE_PORT = timer_config["port"]
+LOG_LEVEL = timer_config["log_level"]
 
 # Configure structured logging
 structlog.configure(
@@ -44,12 +54,15 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(service="timer-service")
+logging.basicConfig(level=LOG_LEVEL, format="%(message)s")
 
 # Environment variables
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-API_SERVICE_URL = os.getenv("API_SERVICE_URL", "http://api-service:8000")
-SERVICE_PORT = int(os.getenv("SERVICE_PORT", 7000))
+
+# Get API service URL from config
+api_config = config["microservices"]["api_service"]
+API_SERVICE_URL = f"http://{api_config['host']}:{api_config['port']}"
 
 # Prometheus metrics
 REQUEST_COUNT = Counter('timer_requests_total', 'Total requests to timer service', ['method', 'endpoint', 'status'])

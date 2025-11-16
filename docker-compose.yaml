@@ -112,6 +112,25 @@ services:
         redis:
           condition: service_healthy
 
+  timer-service:
+    image: nishanthambati/timer-service
+    container_name: $TIMER_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://timer-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+
   webapp:
     image: nishanthambati/nginx-webapp
     container_name: $WEBAPP

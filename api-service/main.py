@@ -53,6 +53,7 @@ logger = structlog.get_logger(service="api-service")
 
 app = FastAPI(title="API Service", version="1.0.0")
 scheduler_url = f"http://{config['microservices']['scheduler_service']['host']}:{config['microservices']['scheduler_service']['port']}"
+timer_url = f"http://{config['microservices']['timer_service']['host']}:{config['microservices']['timer_service']['port']}"
 monitoring_url = f"http://{config['microservices']['monitoring_service']['host']}:{config['microservices']['monitoring_service']['port']}"
 
 # --- Prometheus Metrics setup ---
@@ -320,7 +321,7 @@ async def api_set_timer(data: SetTimerData):
     logger.info("Setting timers", correlation_id=correlation_id, timers=[timer.dict() for timer in data.timers])
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(f"{scheduler_url}/set_timer", json=data.dict())
+            resp = await client.post(f"{timer_url}/set_timer", json=data.dict())
             if resp.status_code == 200:
                 logger.info("Timers set", correlation_id=correlation_id, timer_count=len(data.timers))
                 return resp.json()
@@ -336,7 +337,7 @@ async def api_get_timers():
     logger.info("Fetching timers", correlation_id=correlation_id)
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(f"{scheduler_url}/get_timers")
+            resp = await client.get(f"{timer_url}/get_timers")
             if resp.status_code == 200:
                 logger.info("Timers fetched", correlation_id=correlation_id)
                 return resp.json()
@@ -352,7 +353,7 @@ async def api_toggle_timer(data: ToggleTimerData):
     logger.info("Toggling timers", correlation_id=correlation_id, enable=data.enable)
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(f"{scheduler_url}/toggle_timer", json=data.dict())
+            resp = await client.post(f"{timer_url}/toggle_timer", json=data.dict())
             if resp.status_code == 200:
                 logger.info("Timers toggled", correlation_id=correlation_id, enable=data.enable)
                 return resp.json()
@@ -368,7 +369,7 @@ async def api_reset_timers():
     logger.info("Resetting timers", correlation_id=correlation_id)
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(f"{scheduler_url}/reset_timers")
+            resp = await client.post(f"{timer_url}/reset_timers")
             if resp.status_code == 200:
                 logger.info("Timers reset", correlation_id=correlation_id)
                 return resp.json()

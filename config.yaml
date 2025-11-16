@@ -47,6 +47,10 @@ microservices:
     host: "websocket-service"
     port: 5001
     log_level: "INFO"
+  timer_service:
+    host: "timer-service"
+    port: 8000
+    log_level: "INFO"
 
 redis:
   host: "redis"
