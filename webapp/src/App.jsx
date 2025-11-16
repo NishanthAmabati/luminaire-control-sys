@@ -595,11 +595,12 @@ const App = () => {
               setManualSystemOff(false);
             }
             setState((prev) => ({ ...prev, wsLatency: latency, error: null }));
-          } else if (data.type === "system_stats") {
+          } else if (data.type === "system_stats" || data.type === "system_stats_update") {
+            // Handle system stats (CPU, memory, temperature) from monitoring service
             updateSystemState({
-              cpu_percent: data.data.cpu_percent || systemState.cpu_percent,
-              mem_percent: data.data.mem_percent || systemState.mem_percent,
-              temperature: data.data.temperature !== null ? data.data.temperature : systemState.temperature,
+              cpu_percent: (data.data.cpu_percent !== undefined ? data.data.cpu_percent : data.data.cpu) || systemState.cpu_percent,
+              mem_percent: (data.data.mem_percent !== undefined ? data.data.mem_percent : data.data.memory) || systemState.mem_percent,
+              temperature: (data.data.temperature !== undefined && data.data.temperature !== null) ? data.data.temperature : systemState.temperature,
             });
           } else if (data.type === "device_update") {
             // Handle granular device updates from the refactored backend
@@ -691,7 +692,7 @@ const App = () => {
                 sceneStartTime.current = Date.now();
               }
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
-          } 
+          }
         } catch (err) {
           console.error("WebSocket parsing error:", err, "Raw message:", event.data);
           logAdvanced(`WebSocket parsing error: ${err}`);

@@ -90,8 +90,8 @@ async def subscribe_to_updates():
             decode_responses=False
         )
         pubsub = redis_client.pubsub()
-        pubsub.subscribe("device_update", "system_update", "log_update")
-        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update"])
+        pubsub.subscribe("device_update", "system_update", "log_update", "system_stats_update")
+        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update", "system_stats_update"])
         
         # Track aggregated device state for webapp
         devices_state = {}
@@ -152,6 +152,18 @@ async def subscribe_to_updates():
                         "data": data
                     })
                     logger.debug("Prepared system_update message", correlation_id=str(uuid.uuid4()))
+                    
+                elif channel == "system_stats_update":
+                    # Forward system stats (CPU, memory, temperature) to webapp
+                    ws_message = json.dumps({
+                        "type": "system_stats_update",
+                        "data": {
+                            "cpu": data.get("cpu"),
+                            "memory": data.get("memory"),
+                            "temperature": data.get("temperature")
+                        }
+                    })
+                    logger.debug("Prepared system_stats_update message", correlation_id=str(uuid.uuid4()), cpu=data.get("cpu"), memory=data.get("memory"), temp=data.get("temperature"))
                     
                 elif channel == "log_update":
                     # Aggregate logs
