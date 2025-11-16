@@ -528,9 +528,12 @@ const App = () => {
   // Bootstrap initial state from REST APIs on app load
   useEffect(() => {
     const bootstrapState = async () => {
+      // Use dynamic API base URL from window.location for cross-IP/container access
+      const apiBaseUrl = `http://${window.location.hostname}:8000`
+      
       try {
         // Fetch initial device list
-        const devicesResponse = await fetch("http://localhost:5000/api/devices")
+        const devicesResponse = await fetch(`${apiBaseUrl}/api/devices`)
         if (devicesResponse.ok) {
           const devicesData = await devicesResponse.json()
           if (devicesData.devices) {
@@ -545,7 +548,7 @@ const App = () => {
 
       try {
         // Fetch available scenes
-        const scenesResponse = await fetch("http://localhost:5000/api/available_scenes")
+        const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
         if (scenesResponse.ok) {
           const scenesData = await scenesResponse.json()
           if (Array.isArray(scenesData.scenes)) {

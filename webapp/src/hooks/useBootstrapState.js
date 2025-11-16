@@ -5,13 +5,17 @@ import { useSystem } from "../contexts/SystemContext"
 /**
  * Custom hook to bootstrap initial state from REST APIs on app load.
  * Fetches devices, system state, and optionally logs before switching to live updates.
+ * Uses dynamic URL based on window.location for cross-IP and container access.
  */
-export const useBootstrapState = (apiBaseUrl = "http://localhost:5000") => {
+export const useBootstrapState = () => {
   const { updateDevices } = useDevices()
   const { updateSystemState } = useSystem()
 
   useEffect(() => {
     const bootstrapState = async () => {
+      // Use dynamic API base URL from window.location for cross-IP/container access
+      const apiBaseUrl = `http://${window.location.hostname}:8000`
+      
       try {
         // Fetch initial device list
         const devicesResponse = await fetch(`${apiBaseUrl}/api/devices`)
@@ -49,5 +53,5 @@ export const useBootstrapState = (apiBaseUrl = "http://localhost:5000") => {
     }
 
     bootstrapState()
-  }, [apiBaseUrl, updateDevices, updateSystemState])
+  }, [updateDevices, updateSystemState])
 }
