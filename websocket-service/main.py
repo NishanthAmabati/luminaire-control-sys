@@ -123,27 +123,36 @@ async def subscribe_to_updates():
                 ws_message = None
                 
                 if channel == "device_update":
-                    # Update aggregated device state
+                    # Update aggregated device state (delta updates only contain changed fields)
                     ip = data.get("ip")
                     if ip:
-                        devices_state[ip] = {
-                            "cw": data.get("cw"),
-                            "ww": data.get("ww"),
-                            "connected": data.get("connected"),
-                            "last_seen": data.get("last_seen")
-                        }
-                        # Send device update to webapp
+                        # Initialize device state if not exists
+                        if ip not in devices_state:
+                            devices_state[ip] = {}
+                        
+                        # Merge delta update into existing state (only update fields that are present)
+                        if "cw" in data:
+                            devices_state[ip]["cw"] = data["cw"]
+                        if "ww" in data:
+                            devices_state[ip]["ww"] = data["ww"]
+                        if "connected" in data:
+                            devices_state[ip]["connected"] = data["connected"]
+                        if "last_seen" in data:
+                            devices_state[ip]["last_seen"] = data["last_seen"]
+                        
+                        # Send device update to webapp with full device state
                         ws_message = json.dumps({
                             "type": "device_update",
                             "data": {
                                 "ip": ip,
-                                "cw": data.get("cw"),
-                                "ww": data.get("ww"),
-                                "connected": data.get("connected"),
+                                "cw": devices_state[ip].get("cw"),
+                                "ww": devices_state[ip].get("ww"),
+                                "connected": devices_state[ip].get("connected"),
+                                "last_seen": devices_state[ip].get("last_seen"),
                                 "devices": devices_state  # Include full device list for convenience
                             }
                         })
-                        logger.debug("Prepared device_update message", correlation_id=str(uuid.uuid4()), ip=ip)
+                        logger.debug("Prepared device_update message", correlation_id=str(uuid.uuid4()), ip=ip, cw=devices_state[ip].get("cw"), ww=devices_state[ip].get("ww"))
                         
                 elif channel == "system_update":
                     # Forward system state updates
@@ -155,15 +164,16 @@ async def subscribe_to_updates():
                     
                 elif channel == "system_stats_update":
                     # Forward system stats (CPU, memory, temperature) to webapp
+                    # Monitoring service publishes with field names: cpu_percent, mem_percent, temperature
                     ws_message = json.dumps({
                         "type": "system_stats_update",
                         "data": {
-                            "cpu": data.get("cpu"),
-                            "memory": data.get("memory"),
+                            "cpu_percent": data.get("cpu_percent"),
+                            "mem_percent": data.get("mem_percent"),
                             "temperature": data.get("temperature")
                         }
                     })
-                    logger.debug("Prepared system_stats_update message", correlation_id=str(uuid.uuid4()), cpu=data.get("cpu"), memory=data.get("memory"), temp=data.get("temperature"))
+                    logger.debug("Prepared system_stats_update message", correlation_id=str(uuid.uuid4()), cpu_percent=data.get("cpu_percent"), mem_percent=data.get("mem_percent"), temp=data.get("temperature"))
                     
                 elif channel == "log_update":
                     # Aggregate logs
