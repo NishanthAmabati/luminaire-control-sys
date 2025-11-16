@@ -194,17 +194,25 @@ class LuminaireOperations:
                     # Publish device update (delta: only changed fields)
                     delta_update = {"ip": ip}
                     prev = self.last_published.get(ip, {})
+                    
+                    # Track if there are actual changes to device values
+                    has_changes = False
+                    
                     if prev.get("cw") != cw:
                         delta_update["cw"] = cw
+                        has_changes = True
                     if prev.get("ww") != ww:
                         delta_update["ww"] = ww
+                        has_changes = True
                     if prev.get("connected") != True:
                         delta_update["connected"] = True
-                    # Always update last_seen timestamp
+                        has_changes = True
+                    
+                    # Always include last_seen timestamp
                     delta_update["last_seen"] = device_state["last_seen"]
                     
-                    # Only publish if there are changes (beyond just last_seen)
-                    if len(delta_update) > 2:  # More than just ip and last_seen
+                    # Publish if there are actual value changes (not just last_seen updates)
+                    if has_changes:
                         redis_client.publish("device_update", json.dumps(delta_update))
                         self.last_published[ip] = device_state.copy()
                     
