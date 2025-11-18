@@ -23,8 +23,8 @@ from fastapi.responses import Response
 import redis.asyncio as aioredis
 import uuid
 
-from models import SetTimerData, ToggleTimerData, TimersResponse, TimerStatusResponse
-from timer_operations import TimerOperations
+from timer_service.models import SetTimerData, ToggleTimerData, TimersResponse, TimerStatusResponse
+from timer_service.timer_operations import TimerOperations
 
 # Load configuration from config.yaml
 with open("config.yaml", "r") as f:

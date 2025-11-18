@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import redis.asyncio as aioredis
 
-from models import Timer, SetTimerData
+from timer_service.models import Timer, SetTimerData
 
 logger = structlog.get_logger(service="timer-service")
 
