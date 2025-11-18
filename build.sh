@@ -123,6 +123,15 @@ docker build \
     --build-arg APP_USER="$APP_USER" \
     ./scheduler-service
 
+timer service:
+docker build \
+    -t nishanthambati/timer-service:latest \
+    --build-arg APP_NAME="$TIMER_APP" \
+    --build-arg APP_PORT="$TIMER_PORT" \
+    --build-arg MAIN_MODULE="timer_service/main.py" \
+    --build-arg APP_USER="$APP_USER" \
+    ./timer-service
+
 monitoring service:
 docker build \
     -t nishanthambati/monitoring-service:latest \
@@ -140,4 +149,18 @@ docker build \
     --build-arg MAIN_MODULE="websocket_service/main.py" \
     --build-arg APP_USER="$APP_USER" \
     ./websocket-service
+
+webapp:
+docker build \                                                                                                                                                                                                                   ─╯
+    -t nishanthambati/nginx-webapp:latest \
+    ./webapp
+
+docker push nishanthambati/api-service:latest                                                                                                                                            ─╯                                      ─╯
+docker push nishanthambati/luminaire-service:latest
+docker push nishanthambati/scheduler-service:latest
+docker push nishanthambati/timer-service:latest
+docker push nishanthambati/monitoring-service:latest
+docker push nishanthambati/websocket-service:latest
+docker push nishanthambati/nginx-webapp:latest
+
 COMMENT
