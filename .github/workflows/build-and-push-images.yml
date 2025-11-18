@@ -1,4 +1,6 @@
-name: Build and Push Docker Images
+name: Docker CI - dev
+
+# Build and Push Docker Image
 
 on:
   push:
@@ -24,15 +26,15 @@ jobs:
           - name: scheduler-service
             context: ./scheduler-service
             image: scheduler-service
+          - name: timer-service
+            context: ./timer-service
+            image: timer-service
           - name: monitoring-service
             context: ./monitoring-service
             image: monitoring-service
           - name: websocket-service
             context: ./websocket-service
             image: websocket-service
-          - name: timer-service
-            context: ./timer-service
-            image: timer-service
           - name: webapp
             context: ./webapp
             image: webapp
