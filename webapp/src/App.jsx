@@ -601,8 +601,8 @@ const App = () => {
           } else if (data.type === "system_stats" || data.type === "system_stats_update") {
             // Handle system stats (CPU, memory, temperature) from monitoring service
             updateSystemState({
-              cpu_percent: (data.data.cpu_percent !== undefined ? data.data.cpu_percent : data.data.cpu) || systemState.cpu_percent,
-              mem_percent: (data.data.mem_percent !== undefined ? data.data.mem_percent : data.data.memory) || systemState.mem_percent,
+              cpu_percent: data.data.cpu_percent !== undefined ? data.data.cpu_percent : (data.data.cpu !== undefined ? data.data.cpu : systemState.cpu_percent),
+              mem_percent: data.data.mem_percent !== undefined ? data.data.mem_percent : (data.data.memory !== undefined ? data.data.memory : systemState.mem_percent),
               temperature: (data.data.temperature !== undefined && data.data.temperature !== null) ? data.data.temperature : systemState.temperature,
             });
           } else if (data.type === "device_update") {
