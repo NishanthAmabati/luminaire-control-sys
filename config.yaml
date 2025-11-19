@@ -51,6 +51,7 @@ microservices:
     host: "timer-service"
     port: 8000
     log_level: "info"
+    structlog_log_level: "INFO"
 
 redis:
   host: "redis"

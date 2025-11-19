@@ -34,7 +34,7 @@ with open("config.yaml", "r") as f:
 # Get timer service config
 timer_config = config["microservices"]["timer_service"]
 SERVICE_PORT = timer_config["port"]
-LOG_LEVEL = timer_config["log_level"]
+LOG_LEVEL = timer_config["structlog_log_level"]
 
 # Configure structured logging
 structlog.configure(
