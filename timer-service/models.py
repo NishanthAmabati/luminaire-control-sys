@@ -14,7 +14,7 @@ class Timer(BaseModel):
     def validate_time_format(cls, v: str) -> str:
         """Validate time format is HH:MM"""
         try:
-            datetime.strptime(v, "%H:MM")
+            datetime.strptime(v, "%H:%M")
             return v
         except ValueError:
             raise ValueError(f"Time must be in HH:MM format, got: {v}")
