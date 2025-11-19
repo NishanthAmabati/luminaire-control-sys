@@ -151,11 +151,11 @@ docker build \
     ./websocket-service
 
 webapp:
-docker build \                                                                                                                                                                                                                   ─╯
+docker build \
     -t nishanthambati/nginx-webapp:latest \
     ./webapp
 
-docker push nishanthambati/api-service:latest                                                                                                                                            ─╯                                      ─╯
+docker push nishanthambati/api-service:latest
 docker push nishanthambati/luminaire-service:latest
 docker push nishanthambati/scheduler-service:latest
 docker push nishanthambati/timer-service:latest

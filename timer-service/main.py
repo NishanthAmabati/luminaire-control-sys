@@ -22,6 +22,7 @@ from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTEN
 from fastapi.responses import Response
 import redis.asyncio as aioredis
 import uuid
+import uvicorn
 
 from timer_service.models import SetTimerData, ToggleTimerData, TimersResponse, TimerStatusResponse
 from timer_service.timer_operations import TimerOperations

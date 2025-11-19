@@ -30,15 +30,15 @@ microservices:
   luminaire_service:
     host: "luminaire-service"
     port: 8000
-    log_level: "INFO"
+    log_level: "info"
   scheduler_service:
     host: "scheduler-service"
     port: 8000
-    log_level: "INFO"
+    log_level: "info"
   monitoring_service:
     host: "monitoring-service"
     port: 8000
-    log_level: "INFO"
+    log_level: "info"
   api_service:
     host: "api-service"
     port: 8000
@@ -46,11 +46,11 @@ microservices:
   websocket_service:
     host: "websocket-service"
     port: 5001
-    log_level: "INFO"
+    log_level: "info"
   timer_service:
     host: "timer-service"
     port: 8000
-    log_level: "INFO"
+    log_level: "info"
 
 redis:
   host: "redis"
