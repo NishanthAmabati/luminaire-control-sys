@@ -185,7 +185,7 @@ class TimerOperations:
         """
         try:
             # Get system state from Redis (maintained by scheduler-service)
-            state_data = await self.redis_client.get("system:state")
+            state_data = await self.redis_client.get("system_state")
             if state_data:
                 state = json.loads(state_data)
                 # System is ON if cw or ww > 0
