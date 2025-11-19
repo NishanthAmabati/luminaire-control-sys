@@ -212,8 +212,13 @@ class TimerOperations:
             True if successful or already in desired state, False otherwise
         """
         try:
-            # Get current system state
+            # Get current system state (retry once if fails)
             current_state = await self._get_system_state()
+            
+            # If unable to determine state, retry once after short delay
+            if current_state is None:
+                await asyncio.sleep(0.5)
+                current_state = await self._get_system_state()
             
             # Check if state change is needed
             if current_state is not None:
@@ -233,8 +238,15 @@ class TimerOperations:
                         current_state="OFF"
                     )
                     return True
+            else:
+                # Unable to determine state - log warning but proceed
+                logger.warning(
+                    "Unable to determine system state - proceeding with timer trigger",
+                    timer_id=timer_id,
+                    action="ON" if turn_on else "OFF"
+                )
             
-            # State change needed, trigger the system
+            # State change needed (or unknown), trigger the system
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     f"{self.api_url}/api/toggle_system",
