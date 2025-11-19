@@ -176,18 +176,65 @@ class TimerOperations:
             logger.error("Failed to reset timers", error=str(e))
             return {"status": "error", "error": str(e)}
             
+    async def _get_system_state(self) -> Optional[bool]:
+        """
+        Get current system state (ON/OFF)
+        
+        Returns:
+            True if system is ON, False if OFF, None if unable to determine
+        """
+        try:
+            # Get system state from Redis (maintained by scheduler-service)
+            state_data = await self.redis_client.get("system:state")
+            if state_data:
+                state = json.loads(state_data)
+                # System is ON if cw or ww > 0
+                is_on = state.get("cw", 0.0) > 0 or state.get("ww", 0.0) > 0
+                return is_on
+            return None
+        except Exception as e:
+            logger.warning("Failed to get system state", error=str(e))
+            return None
+    
     async def _trigger_system(self, turn_on: bool, timer_id: str) -> bool:
         """
-        Trigger system ON or OFF
+        Trigger system ON or OFF (state-aware)
+        
+        Only changes state when necessary:
+        - ON timer: Only turns ON if system is currently OFF
+        - OFF timer: Only turns OFF if system is currently ON
         
         Args:
             turn_on: True to turn on, False to turn off
             timer_id: Identifier for this trigger (for logging/tracking)
             
         Returns:
-            True if successful, False otherwise
+            True if successful or already in desired state, False otherwise
         """
         try:
+            # Get current system state
+            current_state = await self._get_system_state()
+            
+            # Check if state change is needed
+            if current_state is not None:
+                if turn_on and current_state:
+                    # Already ON, no need to trigger
+                    logger.info(
+                        "Timer ON trigger skipped - system already ON", 
+                        timer_id=timer_id,
+                        current_state="ON"
+                    )
+                    return True
+                elif not turn_on and not current_state:
+                    # Already OFF, no need to trigger
+                    logger.info(
+                        "Timer OFF trigger skipped - system already OFF", 
+                        timer_id=timer_id,
+                        current_state="OFF"
+                    )
+                    return True
+            
+            # State change needed, trigger the system
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     f"{self.api_url}/api/toggle_system",
@@ -196,7 +243,11 @@ class TimerOperations:
                 
                 if response.status_code == 200:
                     action = "ON" if turn_on else "OFF"
-                    logger.info(f"Timer triggered: System turned {action}", timer_id=timer_id)
+                    logger.info(
+                        f"Timer triggered: System turned {action}", 
+                        timer_id=timer_id,
+                        previous_state="ON" if current_state else "OFF" if current_state is not None else "UNKNOWN"
+                    )
                     return True
                 else:
                     logger.error(f"Timer trigger failed", timer_id=timer_id, status=response.status_code, response=response.text)
