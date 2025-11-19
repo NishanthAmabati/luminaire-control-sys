@@ -263,7 +263,8 @@ if __name__ == "__main__":
     config_uvicorn = uvicorn.Config(
         app=app,
         host=config['microservices']['scheduler_service']['host'],
-        port=config['microservices']['scheduler_service']['port']
+        port=config['microservices']['scheduler_service']['port'],
+        log_level=config['microservices']['scheduler_service']['log_level']
     )
     server = uvicorn.Server(config_uvicorn)
     async def run_all():

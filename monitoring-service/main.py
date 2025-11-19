@@ -138,8 +138,9 @@ if __name__ == "__main__":
         resource.setrlimit(resource.RLIMIT_NOFILE, (1024, hard_limit))
     config_uvicorn = uvicorn.Config(
         app=app,
-        host="0.0.0.0",
+        host=config["microservices"]["monitoring_service"]["host"],
         port=config["microservices"]["monitoring_service"]["port"],
+        log_level=config['microservices']['monitoring_service']['log_level']
     )
     server = uvicorn.Server(config_uvicorn)
     async def run_all():

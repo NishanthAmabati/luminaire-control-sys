@@ -274,11 +274,11 @@ async def reset_timers():
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=SERVICE_PORT,
-        log_level="info",
-        access_log=True
+    config_uvicorn = uvicorn.Config(
+        app=app,
+        host=config['microservices']['timer_service']['host'],
+        port=config['microservices']['timer_service']['port'],
+        log_level=config['microservices']['timer_service']['log_level']
     )
+    server = uvicorn.Server(config_uvicorn)
+    asyncio.run(server.serve())
