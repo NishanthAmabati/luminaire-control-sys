@@ -271,8 +271,8 @@ class TimerOperations:
                     on_trigger_id = f"timer_{idx}_on_{today_str}"
                     off_trigger_id = f"timer_{idx}_off_{today_str}"
                     
-                    # Check if ON time has been reached
-                    if current_time_str >= on_time:
+                    # Check if ON time has been reached and not yet triggered today
+                    if current_time_str >= on_time and not triggers["triggered"].get(on_trigger_id):
                         logger.info(
                             "Timer ON trigger activated", 
                             timer_index=idx, 
@@ -286,8 +286,8 @@ class TimerOperations:
                             await self.redis_client.set("timer:triggers", json.dumps(triggers))
                             triggered_count += 1
                             
-                    # Check if OFF time has been reached
-                    if current_time_str >= off_time:
+                    # Check if OFF time has been reached and not yet triggered today
+                    if current_time_str >= off_time and not triggers["triggered"].get(off_trigger_id):
                         logger.info(
                             "Timer OFF trigger activated", 
                             timer_index=idx, 
