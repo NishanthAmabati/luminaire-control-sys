@@ -57,8 +57,6 @@ class TimerOperations:
             logger.info("Timer state loaded from Redis", timers=len(self.timers), enabled=self.is_enabled)
         except Exception as e:
             logger.error("Failed to load timer state from Redis", error=str(e))
-            self.timers = []
-            self.is_enabled = False
             
     async def set_timers(self, data: SetTimerData) -> Dict:
         """
