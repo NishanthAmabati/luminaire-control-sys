@@ -211,149 +211,149 @@ class TimerOperations:
             logger.error("Timer trigger error", timer_id=timer_id, error=str(e))
             return False
             
-async def run_timer_loop(self):
-    """
-    Main timer loop - checks every 60 seconds for timers to trigger
-    
-    This loop:
-    1. Runs every 60 seconds for efficiency
-    2. Checks all enabled timers continuously every day
-    3. Triggers immediately if current time >= scheduled time
-    4. Prevents duplicate triggers on the same day
-    5. Automatically resets trigger state at midnight for next day
-    6. Timers remain active daily until manually disabled
-    """
-    self._running = True
-    logger.info("Timer loop started - checking every 60 seconds")
-    
-    last_check_date = None
-    
-    while self._running:
-        try:
-            # Check if timer system is enabled
-            if not self.is_enabled or not self.timers:
-                await asyncio.sleep(60)
-                continue
-                
-            # Get current time
-            now = datetime.now()
-            today_str = now.strftime("%Y-%m-%d")
-            current_time_str = now.strftime("%H:%M")
-            
-            # Load trigger state from Redis
-            triggers_data = await self.redis_client.get("timer:triggers")
-            if triggers_data:
-                triggers = json.loads(triggers_data)
-            else:
-                triggers = {}
-                
-            # Reset triggers if it's a new day (automatic daily recurrence)
-            if triggers.get("date") != today_str:
-                triggers = {"date": today_str, "triggered": {}}
-                await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                logger.info("New day detected - timer triggers reset for daily recurrence", date=today_str)
-                last_check_date = today_str
-                
-            triggered_count = 0
-                
-            # Check each timer
-            for idx, timer in enumerate(self.timers):
-                # Skip disabled timers
-                if not timer.get("enabled", True):
+    async def run_timer_loop(self):
+        """
+        Main timer loop - checks every 60 seconds for timers to trigger
+        
+        This loop:
+        1. Runs every 60 seconds for efficiency
+        2. Checks all enabled timers continuously every day
+        3. Triggers immediately if current time >= scheduled time
+        4. Prevents duplicate triggers on the same day
+        5. Automatically resets trigger state at midnight for next day
+        6. Timers remain active daily until manually disabled
+        """
+        self._running = True
+        logger.info("Timer loop started - checking every 60 seconds")
+        
+        last_check_date = None
+        
+        while self._running:
+            try:
+                # Check if timer system is enabled
+                if not self.is_enabled or not self.timers:
+                    await asyncio.sleep(60)
                     continue
                     
-                on_time = timer["on"]
-                off_time = timer["off"]
+                # Get current time
+                now = datetime.now()
+                today_str = now.strftime("%Y-%m-%d")
+                current_time_str = now.strftime("%H:%M")
                 
-                # Create unique identifiers for this timer's triggers
-                on_trigger_id = f"timer_{idx}_on_{today_str}"
-                off_trigger_id = f"timer_{idx}_off_{today_str}"
-                
-                # Check which triggers are pending
-                on_pending = current_time_str >= on_time and not triggers["triggered"].get(on_trigger_id)
-                off_pending = current_time_str >= off_time and not triggers["triggered"].get(off_trigger_id)
-                
-                # --- PATCH START: Handle 'both pending' scenario correctly ---
-                if on_pending and off_pending:
-                    # Both events are in the past and untriggered.
-                    # Determine which event occurred LAST to set the correct final state.
+                # Load trigger state from Redis
+                triggers_data = await self.redis_client.get("timer:triggers")
+                if triggers_data:
+                    triggers = json.loads(triggers_data)
+                else:
+                    triggers = {}
                     
-                    # Use string comparison (HH:MM) to find the later time
-                    if on_time > off_time:
-                        # ON occurred last (e.g., ON=10:00, OFF=09:00). Final state should be ON.
-                        trigger_state = True
-                        action_time = on_time
-                    else:
-                        # OFF occurred last (e.g., ON=09:00, OFF=10:00). Final state should be OFF.
-                        trigger_state = False
-                        action_time = off_time
-
-                    # Log and trigger the single required final action
-                    logger.info(
-                        "Timer immediate trigger required",
-                        timer_index=idx,
-                        action="ON" if trigger_state else "OFF",
-                        latest_scheduled_time=action_time,
-                        current_time=current_time_str
-                    )
-                    
-                    # Trigger the system to the final, correct state
-                    if await self._trigger_system(trigger_state, f"timer_{idx}_immediate_{action_time}"):
-                        # Mark BOTH ON and OFF as triggered to prevent race conditions on next loop iteration
-                        triggers["triggered"][on_trigger_id] = now.isoformat()
-                        triggers["triggered"][off_trigger_id] = now.isoformat()
-                        triggered_count += 1
-                        
+                # Reset triggers if it's a new day (automatic daily recurrence)
+                if triggers.get("date") != today_str:
+                    triggers = {"date": today_str, "triggered": {}}
                     await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                    continue # Skip to the next timer in the list
-                # --- PATCH END ---
-
-                # Only ON is pending
-                if on_pending:
-                    logger.info(
-                        "Timer ON trigger activated", 
-                        timer_index=idx, 
-                        scheduled_time=on_time, 
-                        current_time=current_time_str,
-                        date=today_str
-                    )
+                    logger.info("New day detected - timer triggers reset for daily recurrence", date=today_str)
+                    last_check_date = today_str
                     
-                    if await self._trigger_system(True, on_trigger_id):
-                        triggers["triggered"][on_trigger_id] = now.isoformat()
-                        await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                        triggered_count += 1
+                triggered_count = 0
                     
-                # Only OFF is pending
-                if off_pending:
-                    logger.info(
-                        "Timer OFF trigger activated", 
-                        timer_index=idx, 
-                        scheduled_time=off_time, 
-                        current_time=current_time_str,
-                        date=today_str
-                    )
-                    
-                    if await self._trigger_system(False, off_trigger_id):
-                        triggers["triggered"][off_trigger_id] = now.isoformat()
-                        await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                        triggered_count += 1
+                # Check each timer
+                for idx, timer in enumerate(self.timers):
+                    # Skip disabled timers
+                    if not timer.get("enabled", True):
+                        continue
                         
-            # Log daily status if we triggered something
-            if triggered_count > 0:
-                logger.info(
-                    "Timer triggers executed - will recur daily", 
-                    triggered_today=triggered_count,
-                    total_triggered=len(triggers["triggered"]),
-                    date=today_str
-                )
+                    on_time = timer["on"]
+                    off_time = timer["off"]
+                    
+                    # Create unique identifiers for this timer's triggers
+                    on_trigger_id = f"timer_{idx}_on_{today_str}"
+                    off_trigger_id = f"timer_{idx}_off_{today_str}"
+                    
+                    # Check which triggers are pending
+                    on_pending = current_time_str >= on_time and not triggers["triggered"].get(on_trigger_id)
+                    off_pending = current_time_str >= off_time and not triggers["triggered"].get(off_trigger_id)
+                    
+                    # --- PATCH START: Handle 'both pending' scenario correctly ---
+                    if on_pending and off_pending:
+                        # Both events are in the past and untriggered.
+                        # Determine which event occurred LAST to set the correct final state.
+                        
+                        # Use string comparison (HH:MM) to find the later time
+                        if on_time > off_time:
+                            # ON occurred last (e.g., ON=10:00, OFF=09:00). Final state should be ON.
+                            trigger_state = True
+                            action_time = on_time
+                        else:
+                            # OFF occurred last (e.g., ON=09:00, OFF=10:00). Final state should be OFF.
+                            trigger_state = False
+                            action_time = off_time
+    
+                        # Log and trigger the single required final action
+                        logger.info(
+                            "Timer immediate trigger required",
+                            timer_index=idx,
+                            action="ON" if trigger_state else "OFF",
+                            latest_scheduled_time=action_time,
+                            current_time=current_time_str
+                        )
+                        
+                        # Trigger the system to the final, correct state
+                        if await self._trigger_system(trigger_state, f"timer_{idx}_immediate_{action_time}"):
+                            # Mark BOTH ON and OFF as triggered to prevent race conditions on next loop iteration
+                            triggers["triggered"][on_trigger_id] = now.isoformat()
+                            triggers["triggered"][off_trigger_id] = now.isoformat()
+                            triggered_count += 1
+                            
+                        await self.redis_client.set("timer:triggers", json.dumps(triggers))
+                        continue # Skip to the next timer in the list
+                    # --- PATCH END ---
+    
+                    # Only ON is pending
+                    if on_pending:
+                        logger.info(
+                            "Timer ON trigger activated", 
+                            timer_index=idx, 
+                            scheduled_time=on_time, 
+                            current_time=current_time_str,
+                            date=today_str
+                        )
+                        
+                        if await self._trigger_system(True, on_trigger_id):
+                            triggers["triggered"][on_trigger_id] = now.isoformat()
+                            await self.redis_client.set("timer:triggers", json.dumps(triggers))
+                            triggered_count += 1
+                        
+                    # Only OFF is pending
+                    if off_pending:
+                        logger.info(
+                            "Timer OFF trigger activated", 
+                            timer_index=idx, 
+                            scheduled_time=off_time, 
+                            current_time=current_time_str,
+                            date=today_str
+                        )
+                        
+                        if await self._trigger_system(False, off_trigger_id):
+                            triggers["triggered"][off_trigger_id] = now.isoformat()
+                            await self.redis_client.set("timer:triggers", json.dumps(triggers))
+                            triggered_count += 1
+                            
+                # Log daily status if we triggered something
+                if triggered_count > 0:
+                    logger.info(
+                        "Timer triggers executed - will recur daily", 
+                        triggered_today=triggered_count,
+                        total_triggered=len(triggers["triggered"]),
+                        date=today_str
+                    )
+                    
+            except Exception as e:
+                logger.error("Error in timer loop", error=str(e))
                 
-        except Exception as e:
-            logger.error("Error in timer loop", error=str(e))
+            # Wait 60 seconds before next check
+            await asyncio.sleep(60)
             
-        # Wait 60 seconds before next check
-        await asyncio.sleep(60)
-        
-    logger.info("Timer loop stopped")
+        logger.info("Timer loop stopped")
     
     async def stop(self):
         """Stop the timer loop"""
