@@ -269,47 +269,53 @@ class TimerOperations:
                     on_trigger_id = f"timer_{idx}_on_{today_str}"
                     off_trigger_id = f"timer_{idx}_off_{today_str}"
                     
-                    # Check which triggers are pending
-                    on_pending = current_time_str >= on_time and not triggers["triggered"].get(on_trigger_id)
-                    off_pending = current_time_str >= off_time and not triggers["triggered"].get(off_trigger_id)
+                    # Determine what action should be taken based on current time
+                    # Strategy: Only trigger the LATEST event that should have occurred
                     
-                    # --- PATCH START: Handle 'both pending' scenario correctly ---
-                    if on_pending and off_pending:
-                        # Both events are in the past and untriggered.
-                        # Determine which event occurred LAST to set the correct final state.
-                        
-                        # Use string comparison (HH:MM) to find the later time
+                    on_should_be_triggered = current_time_str >= on_time
+                    off_should_be_triggered = current_time_str >= off_time
+                    
+                    # Check if already triggered today
+                    on_already_triggered = triggers["triggered"].get(on_trigger_id)
+                    off_already_triggered = triggers["triggered"].get(off_trigger_id)
+                    
+                    # Determine the correct current state based on which event is most recent
+                    # If both times have passed, use the latest one to determine state
+                    if on_should_be_triggered and off_should_be_triggered:
+                        # Both times passed - which is more recent?
                         if on_time > off_time:
-                            # ON occurred last (e.g., ON=10:00, OFF=09:00). Final state should be ON.
-                            trigger_state = True
-                            action_time = on_time
+                            # ON is later -> System should be ON
+                            desired_state = True
+                            latest_trigger_id = on_trigger_id
+                            latest_time = on_time
                         else:
-                            # OFF occurred last (e.g., ON=09:00, OFF=10:00). Final state should be OFF.
-                            trigger_state = False
-                            action_time = off_time
-    
-                        # Log and trigger the single required final action
-                        logger.info(
-                            "Timer immediate trigger required",
-                            timer_index=idx,
-                            action="ON" if trigger_state else "OFF",
-                            latest_scheduled_time=action_time,
-                            current_time=current_time_str
-                        )
-                        
-                        # Trigger the system to the final, correct state
-                        if await self._trigger_system(trigger_state, f"timer_{idx}_immediate_{action_time}"):
-                            # Mark BOTH ON and OFF as triggered to prevent race conditions on next loop iteration
-                            triggers["triggered"][on_trigger_id] = now.isoformat()
-                            triggers["triggered"][off_trigger_id] = now.isoformat()
-                            triggered_count += 1
+                            # OFF is later (or same) -> System should be OFF
+                            desired_state = False
+                            latest_trigger_id = off_trigger_id
+                            latest_time = off_time
                             
-                        await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                        continue # Skip to the next timer in the list
-                    # --- PATCH END ---
-    
-                    # Only ON is pending
-                    if on_pending:
+                        # Only trigger if we haven't already triggered this state today
+                        if not triggers["triggered"].get(latest_trigger_id):
+                            logger.info(
+                                "Timer final state trigger",
+                                timer_index=idx,
+                                action="ON" if desired_state else "OFF",
+                                scheduled_time=latest_time,
+                                current_time=current_time_str,
+                                date=today_str
+                            )
+                            
+                            if await self._trigger_system(desired_state, latest_trigger_id):
+                                # Mark both as triggered to prevent any further triggers today
+                                triggers["triggered"][on_trigger_id] = now.isoformat()
+                                triggers["triggered"][off_trigger_id] = now.isoformat()
+                                await self.redis_client.set("timer:triggers", json.dumps(triggers))
+                                triggered_count += 1
+                        
+                        continue  # Move to next timer
+                    
+                    # Only ON time has passed and not yet triggered
+                    if on_should_be_triggered and not on_already_triggered:
                         logger.info(
                             "Timer ON trigger activated", 
                             timer_index=idx, 
@@ -322,9 +328,9 @@ class TimerOperations:
                             triggers["triggered"][on_trigger_id] = now.isoformat()
                             await self.redis_client.set("timer:triggers", json.dumps(triggers))
                             triggered_count += 1
-                        
-                    # Only OFF is pending
-                    if off_pending:
+                    
+                    # Only OFF time has passed and not yet triggered
+                    elif off_should_be_triggered and not off_already_triggered:
                         logger.info(
                             "Timer OFF trigger activated", 
                             timer_index=idx, 
