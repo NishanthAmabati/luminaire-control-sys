@@ -270,6 +270,24 @@ class SchedulerOperations:
                 calc_cct = round(calc_cct, 2)
                 calc_intensity = round(calc_intensity, 2)
                 
+                # CRITICAL FIX: Clamp rate of change to prevent large oscillations
+                # Max change per second: 10K CCT, 5 lux intensity
+                # This prevents sudden jumps during scene transitions or system restarts
+                max_cct_change_per_second = 10.0
+                max_intensity_change_per_second = 5.0
+                
+                if last_cct is not None:
+                    cct_delta = calc_cct - last_cct
+                    if abs(cct_delta) > max_cct_change_per_second:
+                        calc_cct = last_cct + (max_cct_change_per_second if cct_delta > 0 else -max_cct_change_per_second)
+                        calc_cct = round(calc_cct, 2)
+                
+                if last_intensity is not None:
+                    intensity_delta = calc_intensity - last_intensity
+                    if abs(intensity_delta) > max_intensity_change_per_second:
+                        calc_intensity = last_intensity + (max_intensity_change_per_second if intensity_delta > 0 else -max_intensity_change_per_second)
+                        calc_intensity = round(calc_intensity, 2)
+                
                 self.state["current_cct"] = calc_cct
                 self.state["current_intensity"] = calc_intensity
                 cw, ww = self.calculate_cw_ww_from_cct_intensity(calc_cct, calc_intensity)
