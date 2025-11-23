@@ -41,6 +41,18 @@ class TimerOperations:
         self.is_enabled: bool = False
         self._running: bool = False
         
+    async def _broadcast_timer_status(self):
+        """Broadcast current timer status via Redis pub/sub to update UI"""
+        try:
+            timer_status = {
+                "system_timers": self.timers,
+                "isTimerEnabled": self.is_enabled,
+            }
+            await self.redis_client.publish("system_update", json.dumps(timer_status))
+            logger.debug("Broadcasted timer status", timer_count=len(self.timers), enabled=self.is_enabled)
+        except Exception as e:
+            logger.error("Failed to broadcast timer status", error=str(e))
+        
     async def initialize(self):
         """Load timer state from Redis on startup"""
         try:
@@ -55,6 +67,9 @@ class TimerOperations:
                 self.is_enabled = json.loads(enabled_data)
                 
             logger.info("Timer state loaded from Redis", timers=len(self.timers), enabled=self.is_enabled)
+            
+            # Broadcast initial timer status to UI
+            await self._broadcast_timer_status()
         except Exception as e:
             logger.error("Failed to load timer state from Redis", error=str(e))
             
@@ -89,6 +104,9 @@ class TimerOperations:
             
             # Clear all trigger state (allows immediate triggering)
             await self.redis_client.delete("timer:triggers")
+            
+            # Broadcast timer status to UI
+            await self._broadcast_timer_status()
             
             logger.info("Timers set successfully", timer_count=len(self.timers), enabled=self.is_enabled)
             
@@ -133,6 +151,9 @@ class TimerOperations:
             # If disabling, clear trigger state
             if not enable:
                 await self.redis_client.delete("timer:triggers")
+                
+            # Broadcast timer status to UI
+            await self._broadcast_timer_status()
                 
             logger.info("Timer system toggled", enabled=enable)
             
@@ -352,6 +373,8 @@ class TimerOperations:
                         total_triggered=len(triggers["triggered"]),
                         date=today_str
                     )
+                    # Broadcast timer status after triggers to keep UI in sync
+                    await self._broadcast_timer_status()
                     
             except Exception as e:
                 logger.error("Error in timer loop", error=str(e))
