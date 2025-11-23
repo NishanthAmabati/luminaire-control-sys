@@ -188,6 +188,24 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
 
+  watchdog-service:
+    image: nishanthambati/watchdog-service
+    container_name: watchdog-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./watchdog-service/config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - scheduler-service
+      - luminaire-service
+      - timer-service
+      - monitoring-service
+      - websocket-service
+
 volumes:
    redis-data:
    prometheus-data:

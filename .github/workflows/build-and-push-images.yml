@@ -35,6 +35,9 @@ jobs:
           - name: websocket-service
             context: ./websocket-service
             image: websocket-service
+          - name: watchdog-service
+            context: ./watchdog-service
+            image: watchdog-service
           - name: webapp
             context: ./webapp
             image: webapp

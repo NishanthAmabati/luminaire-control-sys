@@ -262,18 +262,42 @@ class SchedulerOperations:
                 cct_diff = end_cct - start_cct
                 intensity_diff = end_intensity - start_intensity
 
-                self.state["current_cct"] = start_cct + (cct_diff * interval_progress)
-                self.state["current_intensity"] = start_intensity + (intensity_diff * interval_progress)
-                cw, ww = self.calculate_cw_ww_from_cct_intensity(self.state["current_cct"], self.state["current_intensity"])
+                # Calculate new values with stabilization
+                calc_cct = start_cct + (cct_diff * interval_progress)
+                calc_intensity = start_intensity + (intensity_diff * interval_progress)
+                
+                # Round to 2 decimal places to prevent floating point drift
+                calc_cct = round(calc_cct, 2)
+                calc_intensity = round(calc_intensity, 2)
+                
+                self.state["current_cct"] = calc_cct
+                self.state["current_intensity"] = calc_intensity
+                cw, ww = self.calculate_cw_ww_from_cct_intensity(calc_cct, calc_intensity)
+                
+                # Round cw/ww to 2 decimal places for stability
+                cw = round(cw, 2)
+                ww = round(ww, 2)
+                
                 self.state["cw"], self.state["ww"] = cw, ww
                 self.state["scheduler"]["interval_progress"] = (current_idx / 86400) * 100
                 self.state["scheduler"]["current_interval"] = current_idx // 10
                 self._set_state(self.state)
 
+                # Determine if values changed significantly (>0.1% threshold to prevent oscillation)
+                cw_threshold = 0.1  # 0.1% change threshold
+                ww_threshold = 0.1
+                cct_threshold = 1.0  # 1K change threshold
+                intensity_threshold = 1.0  # 1 lux change threshold
+                
+                cw_changed = abs(cw - last_cw) >= cw_threshold
+                ww_changed = abs(ww - last_ww) >= ww_threshold
+                cct_changed = abs(calc_cct - last_cct) >= cct_threshold
+                intensity_changed = abs(calc_intensity - last_intensity) >= intensity_threshold
+                
+                should_send_update = cw_changed or ww_changed
                 should_log_info = (
-                    cw != last_cw or ww != last_ww or
-                    self.state["current_cct"] != last_cct or
-                    self.state["current_intensity"] != last_intensity or
+                    should_send_update or
+                    cct_changed or intensity_changed or
                     current_idx // 10 != last_interval_update // 10
                 )
 
@@ -284,22 +308,27 @@ class SchedulerOperations:
                         index=current_idx,
                         interval=current_interval,
                         progress=interval_progress,
-                        cct=self.state["current_cct"],
-                        intensity=self.state["current_intensity"],
+                        cct=calc_cct,
+                        intensity=calc_intensity,
                         cw=cw,
-                        ww=ww
+                        ww=ww,
+                        sent_to_devices=should_send_update
                     )
                     last_interval_update = current_idx
-                    last_cw, last_ww, last_cct, last_intensity = cw, ww, self.state["current_cct"], self.state["current_intensity"]
-
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
-                        json={"cw": cw, "ww": ww}
-                    )
-                    if resp.status_code != 200:
-                        self.log_advanced(f"SendAll failed: {resp.text}")
-                        logger.warning("SendAll failed", correlation_id=correlation_id, error=resp.text)
+                
+                # Only send to devices if values changed significantly
+                if should_send_update:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                            json={"cw": cw, "ww": ww}
+                        )
+                        if resp.status_code != 200:
+                            self.log_advanced(f"SendAll failed: {resp.text}")
+                            logger.warning("SendAll failed", correlation_id=correlation_id, error=resp.text)
+                        else:
+                            # Update last sent values only on successful send
+                            last_cw, last_ww, last_cct, last_intensity = cw, ww, calc_cct, calc_intensity
 
                 logger.debug(
                     "Scheduler tick",

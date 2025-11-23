@@ -1,0 +1,9 @@
+# Watchdog Service Configuration
+watchdog:
+  restart_interval_hours: 6  # Restart critical services every 6 hours
+  monitored_services:
+    - scheduler-service
+    - luminaire-service
+    - timer-service
+    - monitoring-service
+    - websocket-service
