@@ -331,6 +331,7 @@ async def api_set_timer(data: SetTimerData):
             logger.error("HTTP error in set_timer", correlation_id=correlation_id, error=str(e))
             return {"error": f"HTTP error: {str(e)}"}
 
+@app.get("/api/timers")
 @app.get("/api/get_timers")
 async def api_get_timers():
     correlation_id = str(uuid.uuid4())
@@ -377,6 +378,22 @@ async def api_reset_timers():
             return {"error": f"Failed to reset timers: {resp.text}"}
         except httpx.HTTPError as e:
             logger.error("HTTP error in reset_timers", correlation_id=correlation_id, error=str(e))
+            return {"error": f"HTTP error: {str(e)}"}
+
+@app.post("/api/clear_timers")
+async def api_clear_timers():
+    correlation_id = str(uuid.uuid4())
+    logger.info("Clearing timers", correlation_id=correlation_id)
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(f"{timer_url}/clear_timers")
+            if resp.status_code == 200:
+                logger.info("Timers cleared", correlation_id=correlation_id)
+                return resp.json()
+            logger.error("Failed to clear timers", correlation_id=correlation_id, status_code=resp.status_code, response=resp.text)
+            return {"error": f"Failed to clear timers: {resp.text}"}
+        except httpx.HTTPError as e:
+            logger.error("HTTP error in clear_timers", correlation_id=correlation_id, error=str(e))
             return {"error": f"HTTP error: {str(e)}"}
 
 @app.get("/api/devices")

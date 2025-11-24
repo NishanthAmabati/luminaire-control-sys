@@ -206,43 +206,6 @@ async def api_available_scenes():
     logger.info("Available scenes listed", correlation_id=correlation_id, scenes=state["available_scenes"])
     return {"available_scenes": state["available_scenes"]}
 
-@app.post("/set_timer")
-async def api_set_timer(data: SetTimerData):
-    correlation_id = str(uuid.uuid4())
-    logger.info("Setting timers", correlation_id=correlation_id, timers=[timer.dict() for timer in data.timers])
-    state = await ops.set_timer(data)
-    if "error" in state:
-        logger.error("Failed to set timers", correlation_id=correlation_id, error=state["error"])
-        return {"error": state["error"]}
-    logger.info("Timers set", correlation_id=correlation_id, timers=state["system_timers"])
-    return {"status": "success", "state": state}
-
-@app.get("/get_timers")
-async def api_get_timers():
-    correlation_id = str(uuid.uuid4())
-    logger.info("Getting timers", correlation_id=correlation_id)
-    state = ops._get_state()
-    logger.info("Timers retrieved", correlation_id=correlation_id, timers=state.get("system_timers", []))
-    return {"timers": state.get("system_timers", []), "isTimerEnabled": state.get("isTimerEnabled", False)}
-
-@app.post("/toggle_timer")
-async def api_toggle_timer(data: ToggleTimerData):
-    correlation_id = str(uuid.uuid4())
-    logger.info("Toggling timers", correlation_id=correlation_id, enable=data.enable)
-    state = ops._get_state()
-    state["isTimerEnabled"] = data.enable
-    ops._set_state(state)
-    logger.info("Timers toggled", correlation_id=correlation_id, enable=data.enable)
-    return {"status": "success", "isTimerEnabled": state["isTimerEnabled"], "timers": state["system_timers"]}
-
-@app.post("/reset_timers")
-async def api_reset_timers():
-    correlation_id = str(uuid.uuid4())
-    logger.info("Resetting timers", correlation_id=correlation_id)
-    state = ops.reset_timers()
-    logger.info("Timers reset", correlation_id=correlation_id)
-    return {"status": "success", "state": state}
-
 async def start_background_tasks():
     correlation_id = str(uuid.uuid4())
     logger.info("Starting background tasks", correlation_id=correlation_id)
@@ -252,9 +215,8 @@ async def start_background_tasks():
     state["available_scenes"] = available_scenes
     ops._set_state(state)
     logger.info("Updated state with available scenes", correlation_id=correlation_id, scene_count=len(available_scenes))
-    logger.info("Starting timer scheduler...", correlation_id=correlation_id)
-    task = asyncio.create_task(ops.run_timer_scheduler())
-    return [task]
+    # Timer scheduler removed - now handled by timer-service
+    return []
 
 if __name__ == "__main__":
     soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)

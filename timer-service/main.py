@@ -274,6 +274,35 @@ async def reset_timers():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/clear_timers", response_model=TimerStatusResponse)
+async def clear_timers():
+    """Clear all timers and disable the system (alias for reset_timers)"""
+    correlation_id = str(uuid.uuid4())
+    logger.info("Clearing timers", correlation_id=correlation_id)
+    
+    try:
+        with REQUEST_DURATION.labels(method='POST', endpoint='/clear_timers').time():
+            result = await timer_ops.reset_timers()
+            
+            if result.get("status") == "error":
+                REQUEST_COUNT.labels(method='POST', endpoint='/clear_timers', status='error').inc()
+                TIMER_ERRORS.labels(type='clear_timers').inc()
+                raise HTTPException(status_code=400, detail=result.get("error", "Unknown error"))
+                
+            REQUEST_COUNT.labels(method='POST', endpoint='/clear_timers', status='success').inc()
+            ACTIVE_TIMERS.set(0)
+            
+            logger.info("Timers cleared", correlation_id=correlation_id)
+            return result
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to clear timers", correlation_id=correlation_id, error=str(e))
+        TIMER_ERRORS.labels(type='clear_timers').inc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     config_uvicorn = uvicorn.Config(
         app=app,

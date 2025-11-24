@@ -35,6 +35,7 @@ export const SystemProvider = ({ children }) => {
     temperature: null,
     wsLatency: null,
     system_timers: [],
+    isTimerEnabled: false,
   })
 
   const updateSystemState = useCallback((updates) => {
@@ -79,6 +80,7 @@ export const SystemProvider = ({ children }) => {
       temperature: null,
       wsLatency: null,
       system_timers: [],
+      isTimerEnabled: false,
     })
   }, [])
 
