@@ -120,9 +120,28 @@ class SchedulerOperations:
         """
         Scheduler service owns system state and publishes to system_update channel.
         All data is JSON format.
+        
+        Timer data is sourced from timer-service to avoid stale data issues.
         """
         correlation_id = str(uuid.uuid4())
         with self._state_lock:
+            # Fetch fresh timer data from timer-service via Redis
+            # Timer service owns timer state - scheduler should not overwrite it
+            try:
+                timers_data = redis_client.get("timer:timers")
+                enabled_data = redis_client.get("timer:enabled")
+                
+                if timers_data:
+                    state["system_timers"] = json.loads(timers_data)
+                if enabled_data:
+                    state["isTimerEnabled"] = json.loads(enabled_data)
+                    
+                logger.debug("Fetched fresh timer data from timer-service", 
+                            timer_count=len(state.get("system_timers", [])),
+                            enabled=state.get("isTimerEnabled", False))
+            except Exception as e:
+                logger.warning("Failed to fetch timer data, keeping existing state", error=str(e))
+            
             # Write to new system_state key (JSON)
             redis_client.set("system_state", json.dumps(state))
             # Maintain legacy "state" key for backward compatibility
