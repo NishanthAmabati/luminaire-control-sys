@@ -23,6 +23,9 @@ from timer_service.models import Timer, SetTimerData
 
 logger = structlog.get_logger(service="timer-service")
 
+# Timer check interval in seconds - how often to check for timers to trigger
+TIMER_CHECK_INTERVAL = 30
+
 
 class TimerOperations:
     """Production-grade timer operations with immediate triggering support"""
@@ -234,10 +237,10 @@ class TimerOperations:
             
     async def run_timer_loop(self):
         """
-        Main timer loop - checks every 30 seconds for timers to trigger
+        Main timer loop - checks for timers to trigger at configurable intervals
         
         This loop:
-        1. Runs every 30 seconds for better responsiveness
+        1. Runs at intervals defined by TIMER_CHECK_INTERVAL for responsiveness
         2. Checks all enabled timers continuously every day
         3. Triggers immediately if current time >= scheduled time
         4. Prevents duplicate triggers on the same day
@@ -245,7 +248,7 @@ class TimerOperations:
         6. Timers remain active daily until manually disabled
         """
         self._running = True
-        logger.info("Timer loop started - checking every 30 seconds")
+        logger.info(f"Timer loop started - checking every {TIMER_CHECK_INTERVAL} seconds")
         
         last_check_date = None
         
@@ -253,7 +256,7 @@ class TimerOperations:
             try:
                 # Check if timer system is enabled
                 if not self.is_enabled or not self.timers:
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(TIMER_CHECK_INTERVAL)
                     continue
                     
                 # Get current time
@@ -379,8 +382,8 @@ class TimerOperations:
             except Exception as e:
                 logger.error("Error in timer loop", error=str(e))
                 
-            # Wait 30 seconds before next check
-            await asyncio.sleep(30)
+            # Wait before next check
+            await asyncio.sleep(TIMER_CHECK_INTERVAL)
             
         logger.info("Timer loop stopped")
     
