@@ -12,6 +12,7 @@
 /scheduler-service/webapp
 /scheduler-service/__pycache__
 /websocket-service/__pycache__
+/timer-service/__pycache__
 /utils/__pycache__
 
 webapp/node_modules/
