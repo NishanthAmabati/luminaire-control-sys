@@ -78,8 +78,7 @@ echo "  Image: $REPO/webapp:$TAG"
 echo "  Port: ${WEBAPP_PORT:-80}"
 echo "----------------------------------------------"
 
-docker buildx build \
-    --platform "$PLATFORMS" \
+docker build \
     -t "$REPO/webapp:$TAG" \
     -t "$REPO/webapp:latest" \
     --push \
