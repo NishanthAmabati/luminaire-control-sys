@@ -2,6 +2,7 @@ import asyncio
 import asyncio
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 import yaml
 import resource
 import logging
@@ -52,6 +53,16 @@ logging.basicConfig(
 logger = structlog.get_logger(service="api-service")
 
 app = FastAPI(title="API Service", version="1.0.0")
+
+# Add CORS middleware to allow cross-origin requests from webapp
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
+
 scheduler_url = f"http://{config['microservices']['scheduler_service']['host']}:{config['microservices']['scheduler_service']['port']}"
 timer_url = f"http://{config['microservices']['timer_service']['host']}:{config['microservices']['timer_service']['port']}"
 monitoring_url = f"http://{config['microservices']['monitoring_service']['host']}:{config['microservices']['monitoring_service']['port']}"
