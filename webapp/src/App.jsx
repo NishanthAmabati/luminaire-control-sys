@@ -151,8 +151,8 @@ const App = () => {
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [isAdjusting, setIsAdjusting] = useState(false)
   const [isTimerEnabled, setIsTimerEnabled] = useState(() => JSON.parse(localStorage.getItem("isTimerEnabled") || "false"))
-  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "00:00")
-  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "23:59")
+  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "")
+  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "")
   const [runningScene, setRunningScene] = useState(null)
   const [lastCompletionLog, setLastCompletionLog] = useState(null)
 
@@ -547,18 +547,76 @@ const App = () => {
       }
 
       try {
-        // Fetch available scenes
+        // Fetch full system state to restore CCT, intensity, mode, etc.
+        const stateResponse = await fetch(`${apiBaseUrl}/api/system_state`)
+        if (stateResponse.ok) {
+          const stateData = await stateResponse.json()
+          // Update all relevant system state fields
+          const systemUpdates = {}
+          if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
+          if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
+          if (stateData.auto_mode !== undefined) systemUpdates.auto_mode = stateData.auto_mode
+          if (stateData.isSystemOn !== undefined) systemUpdates.isSystemOn = stateData.isSystemOn
+          if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
+          if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
+          if (stateData.current_scene) systemUpdates.current_scene = stateData.current_scene
+          if (stateData.loaded_scene) systemUpdates.loaded_scene = stateData.loaded_scene
+          if (Array.isArray(stateData.available_scenes)) systemUpdates.available_scenes = stateData.available_scenes
+          
+          updateSystemState(systemUpdates)
+          
+          // Update local CCT and intensity values for sliders
+          if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
+          if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)
+          
+          // Update scheduler state if available
+          if (stateData.scheduler) {
+            updateScheduler(stateData.scheduler)
+          }
+        } else {
+          console.warn("Failed to fetch system state:", stateResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping system state:", error)
+      }
+
+      try {
+        // Fetch available scenes (as backup if not included in system_state)
         const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
         if (scenesResponse.ok) {
           const scenesData = await scenesResponse.json()
-          if (Array.isArray(scenesData.scenes)) {
-            updateSystemState({ available_scenes: scenesData.scenes })
+          if (Array.isArray(scenesData.available_scenes)) {
+            updateSystemState({ available_scenes: scenesData.available_scenes })
           }
         } else {
           console.warn("Failed to fetch available scenes:", scenesResponse.status)
         }
       } catch (error) {
         console.error("Error bootstrapping scenes:", error)
+      }
+
+      try {
+        // Fetch timers from backend
+        const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
+        if (timersResponse.ok) {
+          const timersData = await timersResponse.json()
+          if (Array.isArray(timersData.timers)) {
+            updateSystemState({ 
+              system_timers: timersData.timers,
+              isTimerEnabled: timersData.isTimerEnabled 
+            })
+            // Update local timer state if timers exist
+            if (timersData.timers.length > 0 && timersData.timers[0]) {
+              setOnTime(timersData.timers[0].on || "")
+              setOffTime(timersData.timers[0].off || "")
+            }
+            setIsTimerEnabled(timersData.isTimerEnabled || false)
+          }
+        } else {
+          console.warn("Failed to fetch timers:", timersResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping timers:", error)
       }
 
     }

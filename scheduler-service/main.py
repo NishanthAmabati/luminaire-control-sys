@@ -206,6 +206,14 @@ async def api_available_scenes():
     logger.info("Available scenes listed", correlation_id=correlation_id, scenes=state["available_scenes"])
     return {"available_scenes": state["available_scenes"]}
 
+@app.get("/system_state")
+async def api_system_state():
+    correlation_id = str(uuid.uuid4())
+    logger.info("Getting system state", correlation_id=correlation_id)
+    state = ops._get_state()
+    logger.info("System state retrieved", correlation_id=correlation_id)
+    return state
+
 async def start_background_tasks():
     correlation_id = str(uuid.uuid4())
     logger.info("Starting background tasks", correlation_id=correlation_id)

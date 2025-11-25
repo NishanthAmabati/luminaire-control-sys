@@ -299,6 +299,22 @@ async def api_available_scenes():
             logger.error("HTTP error in available_scenes", correlation_id=correlation_id, error=str(e))
             return {"error": f"HTTP error: {str(e)}"}
 
+@app.get("/api/system_state")
+async def api_system_state():
+    correlation_id = str(uuid.uuid4())
+    logger.info("Fetching system state", correlation_id=correlation_id)
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"{scheduler_url}/system_state")
+            if resp.status_code == 200:
+                logger.info("System state fetched", correlation_id=correlation_id)
+                return resp.json()
+            logger.error("Failed to get system state", correlation_id=correlation_id, status_code=resp.status_code, response=resp.text)
+            return {"error": f"Failed to get system state: {resp.text}"}
+        except httpx.HTTPError as e:
+            logger.error("HTTP error in system_state", correlation_id=correlation_id, error=str(e))
+            return {"error": f"HTTP error: {str(e)}"}
+
 @app.get("/api/system_stats")
 async def api_system_stats():
     correlation_id = str(uuid.uuid4())

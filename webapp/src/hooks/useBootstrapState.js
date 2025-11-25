@@ -37,9 +37,9 @@ export const useBootstrapState = () => {
         const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
         if (scenesResponse.ok) {
           const scenesData = await scenesResponse.json()
-          if (Array.isArray(scenesData.scenes)) {
-            console.log("Bootstrapped available scenes:", scenesData.scenes)
-            updateSystemState({ available_scenes: scenesData.scenes })
+          if (Array.isArray(scenesData.available_scenes)) {
+            console.log("Bootstrapped available scenes:", scenesData.available_scenes)
+            updateSystemState({ available_scenes: scenesData.available_scenes })
           }
         } else {
           console.warn("Failed to fetch available scenes:", scenesResponse.status)
