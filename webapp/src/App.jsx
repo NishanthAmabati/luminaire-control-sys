@@ -581,21 +581,6 @@ const App = () => {
       }
 
       try {
-        // Fetch available scenes (as backup if not included in system_state)
-        const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
-        if (scenesResponse.ok) {
-          const scenesData = await scenesResponse.json()
-          if (Array.isArray(scenesData.available_scenes)) {
-            updateSystemState({ available_scenes: scenesData.available_scenes })
-          }
-        } else {
-          console.warn("Failed to fetch available scenes:", scenesResponse.status)
-        }
-      } catch (error) {
-        console.error("Error bootstrapping scenes:", error)
-      }
-
-      try {
         // Fetch timers from backend
         const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
         if (timersResponse.ok) {
@@ -606,7 +591,7 @@ const App = () => {
               isTimerEnabled: timersData.isTimerEnabled 
             })
             // Update local timer state if timers exist
-            if (timersData.timers.length > 0 && timersData.timers[0]) {
+            if (timersData.timers.length > 0) {
               setOnTime(timersData.timers[0].on || "")
               setOffTime(timersData.timers[0].off || "")
             }
