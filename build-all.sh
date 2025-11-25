@@ -35,6 +35,7 @@ SERVICES["api-service"]="api_service:${API_PORT:-8000}"
 SERVICES["luminaire-service"]="luminaire_service:${LUMINAIRE_PORT:-8000}"
 SERVICES["scheduler-service"]="scheduler_service:${SCHEDULER_PORT:-8000}"
 SERVICES["timer-service"]="timer_service:${TIMER_PORT:-8000}"
+SERVICES["monitoring-service"]="monitoring_service:${MONITORING_PORT:-8000}"
 SERVICES["websocket-service"]="websocket_service:${WEBSOCKET_PORT:-5001}"
 
 # --- Build Loop ---
