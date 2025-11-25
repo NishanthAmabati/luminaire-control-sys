@@ -24,7 +24,7 @@ from timer_service.models import Timer, SetTimerData
 logger = structlog.get_logger(service="timer-service")
 
 # Timer check interval in seconds - how often to check for timers to trigger
-TIMER_CHECK_INTERVAL = 30
+TIMER_CHECK_INTERVAL = 15
 
 
 class TimerOperations:
