@@ -445,10 +445,10 @@ const App = () => {
       localStorage.removeItem("onTime");
       localStorage.removeItem("offTime");
       // Clear system_timers from context to sync with backend
+      // Note: isTimerEnabled is managed by local state, so we only clear related data here
       updateSystemState({ 
         is_manual_override: false,
-        system_timers: [],
-        isTimerEnabled: false
+        system_timers: []
       });
       logBasic("Cleared all timer data from local storage and state");
     }
