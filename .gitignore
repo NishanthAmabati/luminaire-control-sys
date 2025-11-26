@@ -15,6 +15,13 @@
 /timer-service/__pycache__
 /utils/__pycache__
 
+# Test artifacts
+timer_service
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+
 webapp/node_modules/
 
 # Logs
