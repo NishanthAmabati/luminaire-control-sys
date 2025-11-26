@@ -27,7 +27,7 @@ class MockRedisClient:
         self._data: Dict[str, str] = {}
         self._published: List[tuple] = []
         
-    async def get(self, key: str) -> str:
+    async def get(self, key: str) -> Any:
         return self._data.get(key)
     
     async def set(self, key: str, value: str) -> bool:

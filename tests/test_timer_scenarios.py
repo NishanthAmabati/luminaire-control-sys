@@ -73,9 +73,18 @@ class TestTimerEnableDisableCycles:
         
         ops = TimerOperations(mock_redis, "http://api:8000")
         
-        for i in range(5):
+        # Use different but valid times for each cycle
+        test_times = [
+            ("06:00", "18:00"),
+            ("07:00", "19:00"),
+            ("08:00", "20:00"),
+            ("09:00", "21:00"),
+            ("10:00", "22:00"),
+        ]
+        
+        for on_time, off_time in test_times:
             # Set timer
-            data = SetTimerData(timers=[Timer(on=f"0{i}:00", off=f"1{i}:00")])
+            data = SetTimerData(timers=[Timer(on=on_time, off=off_time)])
             await ops.set_timers(data)
             assert len(ops.timers) == 1
             
