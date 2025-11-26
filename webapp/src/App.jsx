@@ -166,20 +166,6 @@ const App = () => {
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
 
-  const debouncedUpdateState = useRef(
-    debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
-      setState((prev) => ({ ...prev, ...newState }));
-      setSceneData(newSceneData);
-      if (!isEditingTimer.onTime) setOnTime(newOnTime);
-      if (!isEditingTimer.offTime) setOffTime(newOffTime);
-      setLocalCct(newLocalCct);
-      setLocalIntensity(newLocalIntensity);
-      if (newVerticalLinePosition !== undefined) {
-        setVerticalLinePosition(newVerticalLinePosition);
-      }
-    }, 100)
-  ).current
-
   const getCurrentSecondOfDay = () => {
     const now = new Date()
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
@@ -451,16 +437,24 @@ const App = () => {
     sendCommand({ type: "toggle_timer", enable: newIsEnabled });
     toast.success(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
     logBasic(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
-    if (newIsEnabled && systemState.system_timers.length > 0) {
-      setOnTime(systemState.system_timers[0].on || "");
-      setOffTime(systemState.system_timers[0].off || "");
-      logBasic(`Timers populated from local copy: On ${systemState.system_timers[0].on}, Off ${systemState.system_timers[0].off}`);
-    } else if (!newIsEnabled) {
+    if (!newIsEnabled) {
+      // Clear all timer state when disabling to prevent stale timer data
       setOnTime("");
       setOffTime("");
-      updateSystemState({ is_manual_override: false });
+      // Clear localStorage timer values to prevent repopulation on re-enable
+      localStorage.removeItem("onTime");
+      localStorage.removeItem("offTime");
+      // Clear system_timers from context to sync with backend
+      updateSystemState({ 
+        is_manual_override: false,
+        system_timers: [],
+        isTimerEnabled: false
+      });
+      logBasic("Cleared all timer data from local storage and state");
     }
-  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers]);
+    // Note: When enabling, timers should be set fresh via handleSetTimer
+    // Do NOT repopulate from old system_timers as they should have been cleared
+  }, [isTimerEnabled, sendCommand, logBasic, updateSystemState]);
 
   const handleTimeChange = useCallback(
     (e, type) => {

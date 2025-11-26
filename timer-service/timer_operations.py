@@ -151,9 +151,13 @@ class TimerOperations:
             # Persist to Redis
             await self.redis_client.set("timer:enabled", json.dumps(self.is_enabled))
             
-            # If disabling, clear trigger state
+            # If disabling, clear all timer state including timers and triggers
+            # This prevents old timers from being repopulated when re-enabling
             if not enable:
+                self.timers = []
+                await self.redis_client.delete("timer:timers")
                 await self.redis_client.delete("timer:triggers")
+                logger.info("Timer system disabled - cleared all timer data from Redis")
                 
             # Broadcast timer status to UI
             await self._broadcast_timer_status()
