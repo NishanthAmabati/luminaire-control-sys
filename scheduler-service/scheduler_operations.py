@@ -296,7 +296,7 @@ class SchedulerOperations:
                 self.state["scheduler"]["current_interval"] = current_idx // 10
                 self._set_state(self.state)
 
-                # Determine if values changed significantly (>0.1% threshold to prevent oscillation)
+                # Determine if values changed significantly (for logging purposes)
                 cw_threshold = 0.1  # 0.1% change threshold
                 ww_threshold = 0.1
                 cct_threshold = 1.0  # 1K change threshold
@@ -307,9 +307,9 @@ class SchedulerOperations:
                 cct_changed = abs(calc_cct - last_cct) >= cct_threshold
                 intensity_changed = abs(calc_intensity - last_intensity) >= intensity_threshold
                 
-                should_send_update = cw_changed or ww_changed
+                values_changed = cw_changed or ww_changed
                 should_log_info = (
-                    should_send_update or
+                    values_changed or
                     cct_changed or intensity_changed or
                     current_idx // 10 != last_interval_update // 10
                 )
@@ -325,12 +325,12 @@ class SchedulerOperations:
                         intensity=calc_intensity,
                         cw=cw,
                         ww=ww,
-                        sent_to_devices=should_send_update
+                        sent_to_devices=True
                     )
                     last_interval_update = current_idx
                 
-                # Only send to devices if values changed significantly
-                if should_send_update:
+                # Send to devices every update cycle (no threshold check)
+                if True:
                     async with httpx.AsyncClient() as client:
                         resp = await client.post(
                             f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
