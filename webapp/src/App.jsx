@@ -704,8 +704,8 @@ const App = () => {
               const systemUpdates = {};
               if (data.data.current_cct) systemUpdates.current_cct = data.data.current_cct;
               if (data.data.current_intensity) systemUpdates.current_intensity = data.data.current_intensity;
-              if (!isAdjusting && data.data.cw) systemUpdates.cw = data.data.cw;
-              if (!isAdjusting && data.data.ww) systemUpdates.ww = data.data.ww;
+              if (data.data.cw) systemUpdates.cw = data.data.cw;
+              if (data.data.ww) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
                 systemUpdates.isSystemOn = data.data.isSystemOn;
               }

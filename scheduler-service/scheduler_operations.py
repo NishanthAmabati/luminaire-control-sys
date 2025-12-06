@@ -124,6 +124,14 @@ class SchedulerOperations:
         """
         correlation_id = str(uuid.uuid4())
         with self._state_lock:
+            # Ensure scene_data, cw, and ww are always present in the state
+            if "scene_data" not in state:
+                state["scene_data"] = {"cct": [], "intensity": []}
+            if "cw" not in state:
+                state["cw"] = 50.0
+            if "ww" not in state:
+                state["ww"] = 50.0
+            
             # Write to new system_state key (JSON)
             redis_client.set("system_state", json.dumps(state))
             # Maintain legacy "state" key for backward compatibility
@@ -476,9 +484,17 @@ class SchedulerOperations:
         self.state["current_scene"] = data.scene
         self.state["loaded_scene"] = data.scene
         
+        # Load scene_data BEFORE broadcasting state
+        # Add validation and fallback handling for missing scene_data
+        if data.scene in scene_data:
+            self.state["scene_data"] = scene_data[data.scene]
+        else:
+            # Fallback to empty scene_data if scene not found
+            self.state["scene_data"] = {"cct": [], "intensity": []}
+            logger.warning("Scene not found, using empty scene_data", correlation_id=correlation_id, scene=data.scene)
+        
         # Activate scene if in auto mode and scene exists
         if self.state["auto_mode"] and data.scene in scene_data:
-            self.state["scene_data"] = scene_data[data.scene]
             self.state["activationTime"] = time.strftime("%H:%M:%S")
             self.state["scheduler"]["status"] = "running"
             
