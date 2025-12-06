@@ -35,8 +35,13 @@ import {
   Clock,
 } from "lucide-react"
 import { toast, Toaster } from "react-hot-toast"
-import { debounce } from "lodash";
+import { debounce } from "lodash"
 import logo from "./SSS.png"
+import { useDevices } from "./contexts/DeviceContext"
+import { useSystem } from "./contexts/SystemContext"
+import DeviceItem from "./components/DeviceItem"
+// Log UI removed for performance - LogContext kept for potential future use
+// import { useLogs } from "./contexts/LogContext"
 
 // Define custom plugin for chart labels
 const currentValueLabelPlugin = {
@@ -120,34 +125,18 @@ const plotAreaBackgroundPlugin = {
 }
 
 const App = () => {
+  // Use context hooks for decoupled state management
+  const { devices, updateDevices } = useDevices()
+  const { systemState, updateSystemState, updateScheduler } = useSystem()
+  // Log UI removed for performance optimization
+  // const { basicLogs, advancedLogs, addBasicLog, addAdvancedLog, clearBasicLogs, clearAdvancedLogs} = useLogs()
+
+  // Local UI-only state
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark")
   const [state, setState] = useState({
-    auto_mode: false,
-    available_scenes: [],
-    current_scene: null,
-    loaded_scene: null,
-    cw: 50.0,
-    ww: 50.0,
-    scheduler: { current_cct: 3500, current_interval: 0, total_intervals: 8640, interval_seconds: 1.0, status: "idle" },
-    connected_devices: {},
-    acklog: [],
-    scene_data: { cct: [], intensity: [] },
+    // Keep only UI-related state here; devices/system/logs are in contexts
     wsLatency: null,
-    lastCompletionLog: null,
-    isSystemOn: true,
-    is_manual_override: false,
-    current_cct: 3500,
-    current_intensity: 250,
-    cpu_percent: 0.0,
-    mem_percent: 0.0,
-    temperature: null,
     error: null,
-    activationTime: null,
-    basicLogs: [],
-    advancedLogs: [],
-    runningScene: null,
-    system_timers: [],
-    localSystemTimers: [],
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   const [localCct, setLocalCct] = useState(null)
@@ -155,14 +144,17 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [verticalLinePosition, setVerticalLinePosition] = useState(0)
   const [manualSystemOff, setManualSystemOff] = useState(false)
-  const [activeLogTab, setActiveLogTab] = useState("basic")
-  const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(false)
+  // Log panel state removed for performance (logs UI completely removed)
+  // const [activeLogTab, setActiveLogTab] = useState("basic")
+  // const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(false)
   const [deviceSearchQuery, setDeviceSearchQuery] = useState("")
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [isAdjusting, setIsAdjusting] = useState(false)
   const [isTimerEnabled, setIsTimerEnabled] = useState(() => JSON.parse(localStorage.getItem("isTimerEnabled") || "false"))
-  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "00:00")
-  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "23:59")
+  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "")
+  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "")
+  const [runningScene, setRunningScene] = useState(null)
+  const [lastCompletionLog, setLastCompletionLog] = useState(null)
 
   const ws = useRef(null)
   const debounceTimeout = useRef(null)
@@ -172,7 +164,6 @@ const App = () => {
   const lastIntervalUpdateTime = useRef(Date.now())
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
-  const lastLogEntry = useRef({ basic: null, advanced: null })
   const previewTimeout = useRef(null)
 
   const debouncedUpdateState = useRef(
@@ -194,28 +185,13 @@ const App = () => {
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
   }
 
+  // Log functions converted to no-ops since logs UI was removed for performance
   const logBasic = useCallback((message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    if (lastLogEntry.current.basic !== logMessage) {
-      setState((prev) => ({
-        ...prev,
-        basicLogs: [logMessage, ...prev.basicLogs].slice(0, 50),
-      }));
-      lastLogEntry.current.basic = logMessage;
-    }
+    // No-op: logs UI removed for performance optimization
   }, []);
 
   const logAdvanced = useCallback((message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    if (lastLogEntry.current.advanced !== logMessage) {
-      setState((prev) => ({
-        ...prev,
-        advancedLogs: [logMessage, ...prev.advancedLogs].slice(0, 100),
-      }));
-      lastLogEntry.current.advanced = logMessage;
-    }
+    // No-op: logs UI removed for performance optimization
   }, []);
 
   const toggleTheme = () => {
@@ -232,7 +208,6 @@ const App = () => {
       const commandString = JSON.stringify(command)
       if (ws.current?.readyState === WebSocket.OPEN && lastCommandSent.current !== commandString) {
         ws.current.send(commandString)
-        console.log("Sent command:", command)
         logAdvanced(
           `Sent [${command.type}]: ${Object.entries(command)
             .filter(([k]) => k !== "type")
@@ -247,97 +222,18 @@ const App = () => {
     [logAdvanced]
   )
 
-  const setMode = useCallback(
-    (auto) => {
-      setIsLoading(true)
-      console.log("Sending set_mode command: auto=", auto)
-      sendCommand({ type: "set_mode", auto })
-      if (auto) {
-        toast.success("Switched to Auto Mode")
-        if (state.current_scene) {
-          console.log("Reactivating scene:", state.current_scene)
-          setState((prev) => ({
-            ...prev,
-            loaded_scene: state.current_scene,
-            auto_mode: true,
-          }))
-          setTimeout(() => {
-            sendCommand({ type: "load_scene", scene: state.current_scene })
-            logBasic(`Loading scene for charts: ${state.current_scene}`)
-            activateScene()
-          }, 1000)
-        } else {
-          console.warn("No current scene to reactivate")
-          setState((prev) => ({ ...prev, auto_mode: true }))
-          setSceneData({ cct: [], intensity: [] })
-        }
-      } else {
-        logBasic("Switched to Manual mode")
-        toast.success("Switched to Manual Mode")
-        setSceneData({ cct: [], intensity: [] })
-        setState((prev) => ({
-          ...prev,
-          auto_mode: false,
-          loaded_scene: null,
-          scheduler: { ...prev.scheduler, status: "idle" },
-        }))
-        setVerticalLinePosition(0)
-      }
-      setTimeout(() => setIsLoading(false), 500)
-    },
-    [sendCommand, logBasic, state.current_scene]
-  )
-
-  const loadScene = useCallback(
-    (scene) => {
-      setIsLoading(true)
-      if (state.scheduler.status === "running" && state.current_scene) {
-        setState((prev) => ({
-          ...prev,
-          runningScene: state.current_scene,
-        }))
-        if (previewTimeout.current) {
-          clearTimeout(previewTimeout.current)
-        }
-        previewTimeout.current = setTimeout(() => {
-          if (state.scheduler.status === "running" && state.current_scene === state.runningScene) {
-            sendCommand({ type: "load_scene", scene: state.current_scene })
-            toast.success(`Reverted to running scene: ${state.current_scene}`)
-            logBasic(`Reverted to running scene: ${state.current_scene}`)
-            setState((prev) => ({
-              ...prev,
-              loaded_scene: state.current_scene,
-              scheduler: { ...prev.scheduler, status: "running" },
-            }))
-          }
-        }, 5000)
-      }
-      sendCommand({ type: "load_scene", scene })
-      toast.success(`Scene Loaded: ${scene}`)
-      logBasic(`Loaded scene: ${scene}`)
-      setState((prev) => ({
-        ...prev,
-        loaded_scene: scene,
-        scheduler: { ...prev.scheduler, status: "pending" },
-      }))
-      setTimeout(() => setIsLoading(false), 800)
-    },
-    [sendCommand, logBasic, state.current_scene, state.scheduler.status]
-  )
-
   const activateScene = useCallback(() => {
-    if (state.loaded_scene) {
+    if (systemState.loaded_scene) {
       setIsLoading(true)
-      sendCommand({ type: "activate_scene", scene: state.loaded_scene })
+      sendCommand({ type: "activate_scene", scene: systemState.loaded_scene })
       toast.success(`Scene Activated`)
-      logBasic(`Activated scene: ${state.loaded_scene}`)
-      setState((prev) => ({
-        ...prev,
-        current_scene: state.loaded_scene,
+      logBasic(`Activated scene: ${systemState.loaded_scene}`)
+      updateSystemState({
+        current_scene: systemState.loaded_scene,
         auto_mode: true,
-        scheduler: { ...prev.scheduler, status: "running" },
-        runningScene: state.loaded_scene,
-      }))
+      })
+      updateScheduler({ status: "running" })
+      setRunningScene(systemState.loaded_scene)
       const currentSecond = getCurrentSecondOfDay()
       setVerticalLinePosition(Math.floor(currentSecond / 10))
       lastIntervalUpdateTime.current = Date.now()
@@ -348,24 +244,88 @@ const App = () => {
       }
       setTimeout(() => setIsLoading(false), 500)
     }
-  }, [state.loaded_scene, sendCommand, logBasic])
+  }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
+
+  const setMode = useCallback(
+    (auto) => {
+      setIsLoading(true)
+      sendCommand({ type: "set_mode", auto })
+      if (auto) {
+        toast.success("Switched to Auto Mode")
+        if (systemState.current_scene) {
+          updateSystemState({
+            loaded_scene: systemState.current_scene,
+            auto_mode: true,
+          })
+          setTimeout(() => {
+            sendCommand({ type: "load_scene", scene: systemState.current_scene })
+            logBasic(`Loading scene for charts: ${systemState.current_scene}`)
+            activateScene()
+          }, 1000)
+        } else {
+          console.warn("No current scene to reactivate")
+          updateSystemState({ auto_mode: true })
+          setSceneData({ cct: [], intensity: [] })
+        }
+      } else {
+        logBasic("Switched to Manual mode")
+        toast.success("Switched to Manual Mode")
+        setSceneData({ cct: [], intensity: [] })
+        updateSystemState({
+          auto_mode: false,
+          loaded_scene: null,
+        })
+        updateScheduler({ status: "idle" })
+        setVerticalLinePosition(0)
+      }
+      setTimeout(() => setIsLoading(false), 500)
+    },
+    [sendCommand, logBasic, systemState.current_scene, updateSystemState, updateScheduler, activateScene]
+  )
+
+  const loadScene = useCallback(
+    (scene) => {
+      setIsLoading(true)
+      if (systemState.scheduler.status === "running" && systemState.current_scene) {
+        setRunningScene(systemState.current_scene)
+        if (previewTimeout.current) {
+          clearTimeout(previewTimeout.current)
+        }
+        previewTimeout.current = setTimeout(() => {
+          if (systemState.scheduler.status === "running" && systemState.current_scene === runningScene) {
+            sendCommand({ type: "load_scene", scene: systemState.current_scene })
+            toast.success(`Reverted to running scene: ${systemState.current_scene}`)
+            logBasic(`Reverted to running scene: ${systemState.current_scene}`)
+            updateSystemState({ loaded_scene: systemState.current_scene })
+            updateScheduler({ status: "running" })
+          }
+        }, 5000)
+      }
+      sendCommand({ type: "load_scene", scene })
+      toast.success(`Scene Loaded: ${scene}`)
+      logBasic(`Loaded scene: ${scene}`)
+      updateSystemState({ loaded_scene: scene })
+      updateScheduler({ status: "pending" })
+      setTimeout(() => setIsLoading(false), 800)
+    },
+    [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler]
+  )
 
   const stopScheduler = useCallback(() => {
     sendCommand({ type: "stop_scheduler" })
     toast.success("Scene Stopped")
     logBasic("Scheduler stopped")
-    setState((prev) => ({
-      ...prev,
-      scheduler: { ...prev.scheduler, status: "idle", total_intervals: 0, current_interval: 0 },
+    updateScheduler({ status: "idle", total_intervals: 0, current_interval: 0 })
+    updateSystemState({
       scene_data: { cct: [], intensity: [] },
       current_scene: null,
       loaded_scene: null,
-      runningScene: null,
       current_cct: 3500,
       current_intensity: 250,
       cw: 50.0,
       ww: 50.0,
-    }))
+    })
+    setRunningScene(null)
     setSceneData({ cct: [], intensity: [] })
     setVerticalLinePosition(0)
     if (animationFrameId.current) {
@@ -375,44 +335,40 @@ const App = () => {
       clearTimeout(previewTimeout.current)
       previewTimeout.current = null
     }
-  }, [sendCommand, logBasic])
+  }, [sendCommand, logBasic, updateScheduler, updateSystemState])
 
   const adjustLight = useCallback(
     (light_type, value) => {
       setIsAdjusting(true)
-      setState((prev) => {
-        let newCw = prev.cw
-        let newWw = prev.ww
-        if (light_type === "cw") {
-          newCw = Math.min(100, Math.max(0, value))
-          newWw = 100 - newCw
-        } else if (light_type === "ww") {
-          newWw = Math.min(100, Math.max(0, value))
-          newCw = 100 - newWw
-        }
-        sendCommand({ type: "sendAll", cw: newCw, ww: newWw, intensity: prev.current_intensity })
-        logBasic(`Adjusted ${light_type.toUpperCase()} to ${light_type === "cw" ? newCw : newWw}%`)
-        setTimeout(() => setIsAdjusting(false), 500)
-        return { ...prev, cw: newCw, ww: newWw }
-      })
+      let newCw = systemState.cw
+      let newWw = systemState.ww
+      if (light_type === "cw") {
+        newCw = Math.min(100, Math.max(0, value))
+        newWw = 100 - newCw
+      } else if (light_type === "ww") {
+        newWw = Math.min(100, Math.max(0, value))
+        newCw = 100 - newWw
+      }
+      sendCommand({ type: "sendAll", cw: newCw, ww: newWw, intensity: systemState.current_intensity })
+      logBasic(`Adjusted ${light_type.toUpperCase()} to ${light_type === "cw" ? newCw : newWw}%`)
+      setTimeout(() => setIsAdjusting(false), 500)
+      updateSystemState({ cw: newCw, ww: newWw })
     },
-    [sendCommand, logBasic]
+    [sendCommand, logBasic, updateSystemState, systemState.cw, systemState.ww, systemState.current_intensity]
   )
 
   const adjustIntensity = useCallback(
     (value) => {
-      setState((prev) => {
-        const newIntensity = Math.max(0, Math.min(500, value))
-        const intensityPercent = newIntensity / 500.0
-        const cwBase = (prev.current_cct - 3500) / ((6500 - 3500) / 100.0)
-        const wwBase = 100.0 - cwBase
-        const newCw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
-        const newWw = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
-        sendCommand({ type: "sendAll", cw: newCw, ww: newWw, intensity: newIntensity })
-        return { ...prev, current_intensity: newIntensity, cw: newCw, ww: newWw }
-      })
+      const newIntensity = Math.max(0, Math.min(500, value))
+      const intensityPercent = newIntensity / 500.0
+      const cwBase = (systemState.current_cct - 3500) / ((6500 - 3500) / 100.0)
+      const wwBase = 100.0 - cwBase
+      const newCw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
+      const newWw = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
+      sendCommand({ type: "sendAll", cw: newCw, ww: newWw, intensity: newIntensity })
+      updateSystemState({ current_intensity: newIntensity, cw: newCw, ww: newWw })
     },
-    [sendCommand]
+    [sendCommand, updateSystemState, systemState.current_cct]
   )
 
   const setCct = useCallback(
@@ -420,17 +376,14 @@ const App = () => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
       debounceTimeout.current = setTimeout(() => {
         const validatedCct = Math.max(3500, Math.min(6500, Number(cct) || 3500))
-        if (validatedCct !== state.current_cct) {
+        if (validatedCct !== systemState.current_cct) {
           sendCommand({ type: "set_cct", cct: validatedCct })
           logBasic(`Set CCT to ${validatedCct}K`)
-          setState((prev) => ({
-            ...prev,
-            current_cct: validatedCct,
-          }))
+          updateSystemState({ current_cct: validatedCct })
         }
-      }, 300)
+      }, 500)
     },
-    [sendCommand, state.current_cct, logBasic]
+    [sendCommand, systemState.current_cct, logBasic, updateSystemState]
   )
 
   const setIntensity = useCallback(
@@ -438,14 +391,14 @@ const App = () => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
       debounceTimeout.current = setTimeout(() => {
         const validatedIntensity = Math.max(0, Math.min(500, Number(intensity) || 0))
-        if (validatedIntensity !== state.current_intensity) {
+        if (validatedIntensity !== systemState.current_intensity) {
           adjustIntensity(validatedIntensity)
           logBasic(`Set Intensity to ${validatedIntensity} lux`)
           setLocalIntensity(validatedIntensity)
         }
-      }, 300)
+      }, 500)
     },
-    [adjustIntensity, state.current_intensity, logBasic]
+    [adjustIntensity, systemState.current_intensity, logBasic]
   )
 
   const handleCctChange = useCallback(
@@ -475,23 +428,22 @@ const App = () => {
   )
 
   const toggleSystem = useCallback(() => {
-    setState((prev) => {
-      const newSystemState = !prev.isSystemOn;
-      sendCommand({ type: "toggle_system", isSystemOn: newSystemState });
-      if (newSystemState) {
-        sendCommand({ type: "set_manual_override", override: true });
-      }
-      logBasic(`System turned ${newSystemState ? "ON" : "OFF"}`);
-      setManualSystemOff(!newSystemState);
-      if (newSystemState && prev.current_scene) {
-        setTimeout(() => {
-          activateScene();
-        }, 500);
-      }
-      return { ...prev, isSystemOn: newSystemState, is_manual_override: newSystemState, error: null };
-    });
+    const newSystemState = !systemState.isSystemOn;
+    sendCommand({ type: "toggle_system", isSystemOn: newSystemState });
+    if (newSystemState) {
+      sendCommand({ type: "set_manual_override", override: true });
+    }
+    logBasic(`System turned ${newSystemState ? "ON" : "OFF"}`);
+    setManualSystemOff(!newSystemState);
+    updateSystemState({ isSystemOn: newSystemState, is_manual_override: newSystemState });
+    setState((prev) => ({ ...prev, error: null }));
+    if (newSystemState && systemState.current_scene) {
+      setTimeout(() => {
+        activateScene();
+      }, 500);
+    }
     setVerticalLinePosition(0);
-  }, [sendCommand, logBasic, activateScene]);
+  }, [sendCommand, logBasic, activateScene, systemState.isSystemOn, systemState.current_scene, updateSystemState]);
 
   const handleTimerToggle = useCallback(() => {
     const newIsEnabled = !isTimerEnabled;
@@ -499,16 +451,16 @@ const App = () => {
     sendCommand({ type: "toggle_timer", enable: newIsEnabled });
     toast.success(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
     logBasic(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
-    if (newIsEnabled && state.localSystemTimers.length > 0) {
-      setOnTime(state.localSystemTimers[0].on || "");
-      setOffTime(state.localSystemTimers[0].off || "");
-      logBasic(`Timers populated from local copy: On ${state.localSystemTimers[0].on}, Off ${state.localSystemTimers[0].off}`);
+    if (newIsEnabled && systemState.system_timers.length > 0) {
+      setOnTime(systemState.system_timers[0].on || "");
+      setOffTime(systemState.system_timers[0].off || "");
+      logBasic(`Timers populated from local copy: On ${systemState.system_timers[0].on}, Off ${systemState.system_timers[0].off}`);
     } else if (!newIsEnabled) {
       setOnTime("");
       setOffTime("");
-      setState((prev) => ({ ...prev, is_manual_override: false }));
+      updateSystemState({ is_manual_override: false });
     }
-  }, [isTimerEnabled, sendCommand, logBasic, state.localSystemTimers]);
+  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers]);
 
   const handleTimeChange = useCallback(
     (e, type) => {
@@ -545,7 +497,7 @@ const App = () => {
   }, [])
 
   const animateVerticalLine = useCallback(() => {
-    if (state.isSystemOn) {
+    if (systemState.isSystemOn) {
       const now = Date.now()
       if (now - lastIntervalUpdateTime.current >= 1000) {
         const currentSecond = getCurrentSecondOfDay()
@@ -560,7 +512,7 @@ const App = () => {
       }
       animationFrameId.current = requestAnimationFrame(animateVerticalLine)
     }
-  }, [state.isSystemOn])
+  }, [systemState.isSystemOn])
 
   useEffect(() => {
     localStorage.setItem("isTimerEnabled", JSON.stringify(isTimerEnabled))
@@ -573,6 +525,90 @@ const App = () => {
     document.body.className = theme
   }, [theme])
 
+  // Bootstrap initial state from REST APIs on app load
+  useEffect(() => {
+    const bootstrapState = async () => {
+      // Use dynamic API base URL from window.location for cross-IP/container access
+      const apiBaseUrl = `http://${window.location.hostname}:8000`
+      
+      try {
+        // Fetch initial device list
+        const devicesResponse = await fetch(`${apiBaseUrl}/api/devices`)
+        if (devicesResponse.ok) {
+          const devicesData = await devicesResponse.json()
+          if (devicesData.devices) {
+            updateDevices(devicesData.devices)
+          }
+        } else {
+          console.warn("Failed to fetch initial devices:", devicesResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping devices:", error)
+      }
+
+      try {
+        // Fetch full system state to restore CCT, intensity, mode, etc.
+        const stateResponse = await fetch(`${apiBaseUrl}/api/system_state`)
+        if (stateResponse.ok) {
+          const stateData = await stateResponse.json()
+          // Update all relevant system state fields
+          const systemUpdates = {}
+          if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
+          if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
+          if (stateData.auto_mode !== undefined) systemUpdates.auto_mode = stateData.auto_mode
+          if (stateData.isSystemOn !== undefined) systemUpdates.isSystemOn = stateData.isSystemOn
+          if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
+          if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
+          if (stateData.current_scene) systemUpdates.current_scene = stateData.current_scene
+          if (stateData.loaded_scene) systemUpdates.loaded_scene = stateData.loaded_scene
+          if (Array.isArray(stateData.available_scenes)) systemUpdates.available_scenes = stateData.available_scenes
+          
+          updateSystemState(systemUpdates)
+          
+          // Update local CCT and intensity values for sliders
+          if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
+          if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)
+          
+          // Update scheduler state if available
+          if (stateData.scheduler) {
+            updateScheduler(stateData.scheduler)
+          }
+        } else {
+          console.warn("Failed to fetch system state:", stateResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping system state:", error)
+      }
+
+      try {
+        // Fetch timers from backend
+        const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
+        if (timersResponse.ok) {
+          const timersData = await timersResponse.json()
+          if (Array.isArray(timersData.timers)) {
+            updateSystemState({ 
+              system_timers: timersData.timers,
+              isTimerEnabled: timersData.isTimerEnabled 
+            })
+            // Update local timer state if timers exist
+            if (timersData.timers.length > 0) {
+              setOnTime(timersData.timers[0].on || "")
+              setOffTime(timersData.timers[0].off || "")
+            }
+            setIsTimerEnabled(timersData.isTimerEnabled || false)
+          }
+        } else {
+          console.warn("Failed to fetch timers:", timersResponse.status)
+        }
+      } catch (error) {
+        console.error("Error bootstrapping timers:", error)
+      }
+
+    }
+
+    bootstrapState()
+  }, [])
+
   useEffect(() => {
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
@@ -581,9 +617,8 @@ const App = () => {
 
     const connectWebSocket = () => {
       setIsLoading(true);
-      ws.current = new WebSocket("ws://localhost:9999");
+      ws.current = new WebSocket(`ws://${window.location.hostname}:5001`);
       ws.current.onopen = () => {
-        console.log("WebSocket Connected");
         logAdvanced("WebSocket connected");
         setState((prev) => ({ ...prev, error: null }));
         reconnectAttempts = 0;
@@ -597,10 +632,8 @@ const App = () => {
         ws.current.pingInterval = pingInterval;
       };
       ws.current.onmessage = (event) => {
-        console.log("Raw WebSocket message received:", event.data);
         try {
           const data = JSON.parse(event.data);
-          console.log("Parsed message from backend:", data);
           if (data.type === "pong") {
             lastPongTime.current = Date.now();
             const latency = lastPongTime.current - lastPingTime.current;
@@ -608,28 +641,34 @@ const App = () => {
               setManualSystemOff(false);
             }
             setState((prev) => ({ ...prev, wsLatency: latency, error: null }));
-          } else if (data.type === "system_stats") {
-            console.log("Processing system_stats:", data.data);
-            setState((prev) => ({
-              ...prev,
-              cpu_percent: data.data.cpu_percent || prev.cpu_percent,
-              mem_percent: data.data.mem_percent || prev.mem_percent,
-              temperature: data.data.temperature !== null ? data.data.temperature : prev.temperature,
-              error: null,
-            }));
-} else if (data.type === "log_update") {
-  console.log("Processing log_update:", data.data);
-  setState((prev) => ({
-    ...prev,
-    basicLogs: Array.isArray(data.data.basicLogs)
-      ? [...prev.basicLogs, ...data.data.basicLogs].slice(-50)
-      : prev.basicLogs,
-    advancedLogs: Array.isArray(data.data.advancedLogs)
-      ? [...prev.advancedLogs, ...data.data.advancedLogs].slice(-100)
-      : prev.advancedLogs,
-  }));
-            } else if (data.type === "live_update") {
-              console.log("Processing live_update:", data.data);
+          } else if (data.type === "system_stats" || data.type === "system_stats_update") {
+            // Handle system stats (CPU, memory, temperature) from monitoring service
+            updateSystemState({
+              cpu_percent: data.data.cpu_percent !== undefined ? data.data.cpu_percent : (data.data.cpu !== undefined ? data.data.cpu : systemState.cpu_percent),
+              mem_percent: data.data.mem_percent !== undefined ? data.data.mem_percent : (data.data.memory !== undefined ? data.data.memory : systemState.mem_percent),
+              temperature: (data.data.temperature !== undefined && data.data.temperature !== null) ? data.data.temperature : systemState.temperature,
+            });
+          } else if (data.type === "device_update") {
+            // Handle granular device updates from the refactored backend
+            if (data.data.devices) {
+              // Full devices list provided
+              updateDevices(data.data.devices);
+            } else if (data.data.ip) {
+              // Individual device update
+              updateDevices({
+                ...devices,
+                [data.data.ip]: {
+                  cw: data.data.cw,
+                  ww: data.data.ww,
+                  connected: data.data.connected,
+                  last_seen: data.data.last_seen,
+                },
+              });
+            }
+          } else if (data.type === "log_update") {
+            // Logs UI removed for performance - ignoring log updates
+            // Log functionality can be re-enabled by uncommenting LogContext usage
+          } else if (data.type === "live_update") {
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
                   logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");
@@ -640,48 +679,58 @@ const App = () => {
                 cct: Array.isArray(data.data.scene_data?.cct) ? data.data.scene_data.cct : sceneData.cct,
                 intensity: Array.isArray(data.data.scene_data?.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
               });
-              setState((prev) => {
-                const newState = {
-                  ...prev,
-                  current_cct: data.data.current_cct || prev.current_cct,
-                  current_intensity: data.data.current_intensity || prev.current_intensity,
-                  cw: isAdjusting ? prev.cw : (data.data.cw || prev.cw),
-                  ww: isAdjusting ? prev.ww : (data.data.ww || prev.ww),
-                  isSystemOn: prev.is_manual_override ? prev.isSystemOn : data.data.isSystemOn !== undefined ? data.data.isSystemOn : prev.isSystemOn,
-                  auto_mode: data.data.auto_mode !== undefined ? data.data.auto_mode : prev.auto_mode,
-                  current_scene: data.data.current_scene || prev.current_scene,
-                  loaded_scene: data.data.loaded_scene || prev.loaded_scene,
-                  available_scenes: Array.isArray(data.data.available_scenes) ? data.data.available_scenes : prev.available_scenes,
-                  connected_devices: data.data.connected_devices || prev.connected_devices,
-                  system_timers: Array.isArray(data.data.system_timers) ? data.data.system_timers : prev.system_timers,
-                  localSystemTimers: Array.isArray(data.data.system_timers) ? data.data.system_timers : prev.localSystemTimers,
-                  scheduler: {
-                    ...prev.scheduler,
-                    status: data.data.scheduler?.status || prev.scheduler.status,
-                    current_interval: data.data.scheduler?.current_interval || prev.scheduler.current_interval,
-                    total_intervals: data.data.scheduler?.total_intervals || prev.scheduler.total_intervals,
-                    current_cct: data.data.scheduler?.current_cct || prev.scheduler.current_cct,
-                  },
-                  error: null,
-                };
+              
+              // Update system state via context
+              const systemUpdates = {};
+              if (data.data.current_cct) systemUpdates.current_cct = data.data.current_cct;
+              if (data.data.current_intensity) systemUpdates.current_intensity = data.data.current_intensity;
+              if (!isAdjusting && data.data.cw) systemUpdates.cw = data.data.cw;
+              if (!isAdjusting && data.data.ww) systemUpdates.ww = data.data.ww;
+              if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
+                systemUpdates.isSystemOn = data.data.isSystemOn;
+              }
+              if (data.data.auto_mode !== undefined) systemUpdates.auto_mode = data.data.auto_mode;
+              if (data.data.current_scene) systemUpdates.current_scene = data.data.current_scene;
+              if (data.data.loaded_scene) systemUpdates.loaded_scene = data.data.loaded_scene;
+              if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
+              if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
+              
+              updateSystemState(systemUpdates);
+              
+              // Update scheduler via context
+              if (data.data.scheduler) {
+                const schedulerUpdates = {};
+                if (data.data.scheduler.status) schedulerUpdates.status = data.data.scheduler.status;
+                if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
+                if (data.data.scheduler.total_intervals) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
+                if (data.data.scheduler.current_cct) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+                updateScheduler(schedulerUpdates);
+                
+                // Check for scene completion
                 if (
-                  data.data.scheduler?.current_interval === data.data.scheduler?.total_intervals - 1 &&
-                  prev.lastCompletionLog !== data.data.scheduler?.current_interval
+                  data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
+                  lastCompletionLog !== data.data.scheduler.current_interval
                 ) {
                   logBasic("Scene completed");
-                  newState.lastCompletionLog = data.data.scheduler.current_interval;
-                  if (newState.scheduler.status === "completed") {
-                    newState.scheduler.status = "idle";
+                  setLastCompletionLog(data.data.scheduler.current_interval);
+                  if (data.data.scheduler.status === "completed") {
+                    updateScheduler({ status: "idle" });
                   }
                 }
-                // Clear is_manual_override if the timer triggers a system state change
-                if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== prev.isSystemOn && isTimerEnabled) {
-                  newState.is_manual_override = false;
-                }
-                return newState;
-              });
-              setLocalCct(data.data.current_cct || state.current_cct);
-              setLocalIntensity(data.data.current_intensity || state.current_intensity);
+              }
+              
+              // Update devices if provided
+              if (data.data.connected_devices) {
+                updateDevices(data.data.connected_devices);
+              }
+              
+              // Clear is_manual_override if the timer triggers a system state change
+              if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== systemState.isSystemOn && isTimerEnabled) {
+                updateSystemState({ is_manual_override: false });
+              }
+              
+              setLocalCct(data.data.current_cct || systemState.current_cct);
+              setLocalIntensity(data.data.current_intensity || systemState.current_intensity);
               if (data.data.isSystemOn && data.data.scheduler?.status === "running") {
                 const currentSecond = getCurrentSecondOfDay();
                 setVerticalLinePosition(Math.floor(currentSecond / 10));
@@ -689,7 +738,7 @@ const App = () => {
                 sceneStartTime.current = Date.now();
               }
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
-          } 
+          }
         } catch (err) {
           console.error("WebSocket parsing error:", err, "Raw message:", event.data);
           logAdvanced(`WebSocket parsing error: ${err}`);
@@ -699,7 +748,6 @@ const App = () => {
         }
       };
       ws.current.onclose = () => {
-        console.log("WebSocket Disconnected");
         logAdvanced("WebSocket disconnected");
         setState((prev) => ({ ...prev, wsLatency: null, error: "WebSocket connection lost" }));
         setIsLoading(false);
@@ -744,7 +792,7 @@ const App = () => {
   }, [logAdvanced, logBasic]);
 
   useEffect(() => {
-    if (state.isSystemOn) {
+    if (systemState.isSystemOn) {
       const currentSecond = getCurrentSecondOfDay()
       setVerticalLinePosition(Math.floor(currentSecond / 10) % 8640)
       animationFrameId.current = requestAnimationFrame(animateVerticalLine)
@@ -759,18 +807,18 @@ const App = () => {
         cancelAnimationFrame(animationFrameId.current)
       }
     }
-  }, [state.isSystemOn, state.auto_mode, animateVerticalLine])
+  }, [systemState.isSystemOn, systemState.auto_mode, animateVerticalLine])
 
   const filteredDevices = useMemo(() => {
-    if (!deviceSearchQuery) return Object.entries(state.connected_devices)
-    return Object.entries(state.connected_devices).filter(([ip]) => {
+    if (!deviceSearchQuery) return Object.entries(devices)
+    return Object.entries(devices).filter(([ip]) => {
       const searchLower = deviceSearchQuery.toLowerCase()
       return ip.toLowerCase().includes(searchLower)
     })
-  }, [state.connected_devices, deviceSearchQuery])
+  }, [devices, deviceSearchQuery])
 
   const chartData = useMemo(() => {
-    const centerPosition = state.auto_mode ? verticalLinePosition : 4320
+    const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
     return {
       datasets: [
@@ -796,35 +844,35 @@ const App = () => {
           pointRadius: 0,
           pointHoverRadius: 0,
         },
-        ...(state.isSystemOn
+        ...(systemState.isSystemOn
           ? [
               {
                 label: "current CCT",
-                data: state.current_cct
-                  ? state.auto_mode
-                    ? [{ x: centerPosition, y: state.current_cct }]
+                data: systemState.current_cct
+                  ? systemState.auto_mode
+                    ? [{ x: centerPosition, y: systemState.current_cct }]
                     : [
-                        { x: 0, y: state.current_cct },
-                        { x: 8640, y: state.current_cct },
+                        { x: 0, y: systemState.current_cct },
+                        { x: 8640, y: systemState.current_cct },
                       ]
                   : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
-                pointStyle: state.auto_mode ? "circle" : false,
-                pointRadius: state.auto_mode ? 7 : 0,
-                pointHoverRadius: state.auto_mode ? 9 : 0,
-                showLine: !state.auto_mode,
-                borderWidth: state.auto_mode ? 0 : 2,
+                pointStyle: systemState.auto_mode ? "circle" : false,
+                pointRadius: systemState.auto_mode ? 7 : 0,
+                pointHoverRadius: systemState.auto_mode ? 9 : 0,
+                showLine: !systemState.auto_mode,
+                borderWidth: systemState.auto_mode ? 0 : 2,
                 tension: 0,
               },
             ]
           : []),
       ],
     }
-  }, [sceneData.cct, state.isSystemOn, state.current_cct, theme, verticalLinePosition, state.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
-    const centerPosition = state.auto_mode ? verticalLinePosition : 4320
+    const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
     return {
       datasets: [
@@ -850,32 +898,32 @@ const App = () => {
           pointRadius: 0,
           pointHoverRadius: 0,
         },
-        ...(state.isSystemOn
+        ...(systemState.isSystemOn
           ? [
               {
                 label: "current intensity",
-                data: state.current_intensity
-                  ? state.auto_mode
-                    ? [{ x: centerPosition, y: state.current_intensity }]
+                data: systemState.current_intensity
+                  ? systemState.auto_mode
+                    ? [{ x: centerPosition, y: systemState.current_intensity }]
                     : [
-                        { x: 0, y: state.current_intensity },
-                        { x: 8640, y: state.current_intensity },
+                        { x: 0, y: systemState.current_intensity },
+                        { x: 8640, y: systemState.current_intensity },
                       ]
                   : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
-                pointStyle: state.auto_mode ? "circle" : false,
-                pointRadius: state.auto_mode ? 7 : 0,
-                pointHoverRadius: state.auto_mode ? 9 : 0,
-                showLine: !state.auto_mode,
-                borderWidth: state.auto_mode ? 0 : 2,
+                pointStyle: systemState.auto_mode ? "circle" : false,
+                pointRadius: systemState.auto_mode ? 7 : 0,
+                pointHoverRadius: systemState.auto_mode ? 9 : 0,
+                showLine: !systemState.auto_mode,
+                borderWidth: systemState.auto_mode ? 0 : 2,
                 tension: 0,
               },
             ]
           : []),
       ],
     }
-  }, [sceneData.intensity, state.isSystemOn, state.current_intensity, theme, verticalLinePosition, state.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -884,7 +932,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current CCT: ${state.current_cct.toFixed(1)}K`,
+          text: `Current CCT: ${systemState.current_cct.toFixed(1)}K`,
         },
         title: {
           display: true,
@@ -994,7 +1042,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, state.auto_mode, state.isSystemOn, state.current_cct]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct]
   )
 
   const intensityChartOptions = useMemo(
@@ -1004,7 +1052,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current Intensity: ${state.current_intensity.toFixed(1)} lux`,
+          text: `Current Intensity: ${systemState.current_intensity.toFixed(1)} lux`,
         },
         title: {
           display: true,
@@ -1114,21 +1162,21 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, state.auto_mode, state.isSystemOn, state.current_intensity]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
   )
 
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString()
-    return `CCT: ${state.current_cct.toFixed(0)}K, Intensity: ${state.current_intensity.toFixed(0)}lux, ${timestamp}`
-  }, [state.current_cct, state.current_intensity])
+    return `CCT: ${systemState.current_cct.toFixed(0)}K, Intensity: ${systemState.current_intensity.toFixed(0)}lux, ${timestamp}`
+  }, [systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
-    if (state.scheduler.total_intervals === 0) return 0
-    return (((state.scheduler.current_interval + 1) / state.scheduler.total_intervals) * 100).toFixed(1)
-  }, [state.scheduler.current_interval, state.scheduler.total_intervals])
+    if (systemState.scheduler.total_intervals === 0) return 0
+    return (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1)
+  }, [systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
 
-  const scenecurrent = state.current_scene ? state.current_scene.slice(0, -4) : "None"
-  const sceneload = state.loaded_scene ? state.loaded_scene.slice(0, -4) : "None"
+  const scenecurrent = systemState.current_scene ? systemState.current_scene.slice(0, -4) : "None"
+  const sceneload = systemState.loaded_scene ? systemState.loaded_scene.slice(0, -4) : "None"
 
   return (
     <div className={`luminaire-dashboard ${theme}-theme`}>
@@ -1172,7 +1220,7 @@ const App = () => {
           <div className="system-toggle">
             <span className="toggle-label">System</span>
             <label className="switch">
-              <input type="checkbox" checked={state.isSystemOn} onChange={toggleSystem} aria-label="Toggle System" />
+              <input type="checkbox" checked={systemState.isSystemOn} onChange={toggleSystem} aria-label="Toggle System" />
               <span className="slider round"></span>
             </label>
           </div>
@@ -1210,41 +1258,41 @@ const App = () => {
             </div>
             <div className="card-content">
               <div className="control-row">
-                <div className={`mode-toggle-container ${!state.isSystemOn ? "disabled" : ""}`}>
+                <div className={`mode-toggle-container ${!systemState.isSystemOn ? "disabled" : ""}`}>
                   <label
-                    className={`mode-label ${!state.auto_mode ? "active-mode" : ""}`}
-                    onClick={() => state.isSystemOn && setMode(false)}
+                    className={`mode-label ${!systemState.auto_mode ? "active-mode" : ""}`}
+                    onClick={() => systemState.isSystemOn && setMode(false)}
                   >
                     Manual
                   </label>
                   <label className="switch">
                     <input
                       type="checkbox"
-                      checked={state.auto_mode}
+                      checked={systemState.auto_mode}
                       onChange={(e) => setMode(e.target.checked)}
-                      disabled={!state.isSystemOn}
+                      disabled={!systemState.isSystemOn}
                     />
                   </label>
                   <label
-                    className={`mode-label ${state.auto_mode ? "active-mode" : ""}`}
-                    onClick={() => state.isSystemOn && setMode(true)}
+                    className={`mode-label ${systemState.auto_mode ? "active-mode" : ""}`}
+                    onClick={() => systemState.isSystemOn && setMode(true)}
                   >
                     Auto
                   </label>
                 </div>
               </div>
-              {state.auto_mode && (
+              {systemState.auto_mode && (
                 <div className="control-row">
                   <div className="control-group">
                     <div className="control-label">Scene Selection</div>
                     <select
-                      value={state.loaded_scene || ""}
+                      value={systemState.loaded_scene || ""}
                       onChange={(e) => loadScene(e.target.value)}
-                      disabled={!state.isSystemOn || !state.auto_mode}
+                      disabled={!systemState.isSystemOn || !systemState.auto_mode}
                       className="select-input"
                     >
                       <option value="">Select Scene</option>
-                      {state.available_scenes.map((scene) => (
+                      {systemState.available_scenes.map((scene) => (
                         <option key={scene} value={scene}>
                           {scene}
                         </option>
@@ -1254,38 +1302,38 @@ const App = () => {
                   <div className="scene-status-container">
                     <div className="status-label">Loaded {sceneload}, Running {scenecurrent}</div>
                     <div className="status-badges">
-                      {state.scheduler.status === "idle" && (
+                      {systemState.scheduler.status === "idle" && (
                         <div className="status-badge idle">
                           <FaExclamationTriangle size={25} />
                           <span>Idle</span>
                         </div>
                       )}
-                      {state.scheduler.status === "pending" && (
+                      {systemState.scheduler.status === "pending" && (
                         <div className="status-badge pending">
                           <FaExclamationTriangle size={25} />
                           <span>Pending</span>
                         </div>
                       )}
-                      {state.scheduler.status === "running" && (
+                      {systemState.scheduler.status === "running" && (
                         <div className="status-badge running">
                           <FaCheckCircle size={28} />
                           <span>Running {scenecurrent} - {intervalProgressPercent}%</span>
                         </div>
                       )}
-                      {state.scheduler.status === "completed" && (
+                      {systemState.scheduler.status === "completed" && (
                         <div className="status-badge completed">
                           <FaExclamationTriangle size={25} />
                           <span>Completed</span>
                         </div>
                       )}
-                      {state.scheduler.status === "stopped" && (
+                      {systemState.scheduler.status === "stopped" && (
                         <div className="status-badge stopped">
                           <FaStop size={25} />
                           <span>Stopped</span>
                         </div>
                       )}
                     </div>
-                    {state.scheduler.status === "running" && state.scheduler.total_intervals > 0 && (
+                    {systemState.scheduler.status === "running" && systemState.scheduler.total_intervals > 0 && (
                       <div className="progress-container">
                         <div
                           className="progress-bar"
@@ -1301,7 +1349,7 @@ const App = () => {
                   <div className="scene-actions">
                     <button
                       onClick={activateScene}
-                      disabled={!state.isSystemOn || !state.auto_mode || !state.loaded_scene}
+                      disabled={!systemState.isSystemOn || !systemState.auto_mode || !systemState.loaded_scene}
                       className="control-button primary"
                     >
                       <FaPlay size={30} />
@@ -1310,10 +1358,10 @@ const App = () => {
                     <button
                       onClick={stopScheduler}
                       disabled={
-                        !state.isSystemOn ||
-                        !state.auto_mode ||
-                        !state.current_scene ||
-                        state.scheduler.status === "idle"
+                        !systemState.isSystemOn ||
+                        !systemState.auto_mode ||
+                        !systemState.current_scene ||
+                        systemState.scheduler.status === "idle"
                       }
                       className="control-button secondary"
                     >
@@ -1323,7 +1371,7 @@ const App = () => {
                   </div>
                 </div>
               )}
-              {!state.auto_mode && (
+              {!systemState.auto_mode && (
                 <>
                   <div className="control-row">
                     <div className="control-group">
@@ -1337,14 +1385,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={localCct !== null ? localCct : state.current_cct}
+                          value={localCct !== null ? localCct : systemState.current_cct}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
-                          disabled={state.auto_mode || !state.isSystemOn}
+                          disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {localCct !== null ? localCct.toFixed(0) : state.current_cct.toFixed(0)} K
+                          {localCct !== null ? localCct.toFixed(0) : systemState.current_cct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1361,14 +1409,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={localIntensity !== null ? localIntensity : state.current_intensity}
+                          value={localIntensity !== null ? localIntensity : systemState.current_intensity}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
-                          disabled={state.auto_mode || !state.isSystemOn}
+                          disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {localIntensity !== null ? localIntensity.toFixed(0) : state.current_intensity.toFixed(0)} lux
+                          {localIntensity !== null ? localIntensity.toFixed(0) : systemState.current_intensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
@@ -1377,18 +1425,18 @@ const App = () => {
                     <div className="balance-container">
                       <div className="balance-item">
                         <span className="balance-label">Cool White</span>
-                        <div className="balance-value">{state.cw.toFixed(1)}%</div>
+                        <div className="balance-value">{systemState.cw.toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
-                            onClick={() => adjustLight("cw", state.cw - 1)}
-                            disabled={state.auto_mode || !state.isSystemOn}
+                            onClick={() => adjustLight("cw", systemState.cw - 1)}
+                            disabled={systemState.auto_mode || !systemState.isSystemOn}
                             className="control-button medium"
                           >
                             -
                           </button>
                           <button
-                            onClick={() => adjustLight("cw", state.cw + 1)}
-                            disabled={state.auto_mode || !state.isSystemOn}
+                            onClick={() => adjustLight("cw", systemState.cw + 1)}
+                            disabled={systemState.auto_mode || !systemState.isSystemOn}
                             className="control-button medium"
                           >
                             +
@@ -1397,18 +1445,18 @@ const App = () => {
                       </div>
                       <div className="balance-item">
                         <span className="balance-label">Warm White</span>
-                        <div className="balance-value">{state.ww.toFixed(1)}%</div>
+                        <div className="balance-value">{systemState.ww.toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
-                            onClick={() => adjustLight("ww", state.ww - 1)}
-                            disabled={state.auto_mode || !state.isSystemOn}
+                            onClick={() => adjustLight("ww", systemState.ww - 1)}
+                            disabled={systemState.auto_mode || !systemState.isSystemOn}
                             className="control-button medium"
                           >
                             -
                           </button>
                           <button
-                            onClick={() => adjustLight("ww", state.ww + 1)}
-                            disabled={state.auto_mode || !state.isSystemOn}
+                            onClick={() => adjustLight("ww", systemState.ww + 1)}
+                            disabled={systemState.auto_mode || !systemState.isSystemOn}
                             className="control-button medium"
                           >
                             +
@@ -1441,27 +1489,27 @@ const App = () => {
                   <Cpu size={32} />
                   <div className="metric-details">
                     <div className="metric-label">CPU</div>
-                    <div className="metric-value">{state.cpu_percent.toFixed(1)}%</div>
+                    <div className="metric-value">{systemState.cpu_percent.toFixed(1)}%</div>
                   </div>
                 </div>
                 <div className="performance-metric">
                   <Memory size={32} />
                   <div className="metric-details">
                     <div className="metric-label">Memory</div>
-                    <div className="metric-value">{state.mem_percent.toFixed(1)}%</div>
+                    <div className="metric-value">{systemState.mem_percent.toFixed(1)}%</div>
                   </div>
                 </div>
                 <div className="performance-metric">
                   <Thermometer size={32} />
                   <div className="metric-details">
                     <div className="metric-label">Temperature</div>
-                    <div className="metric-value">{state.temperature !== null ? `${state.temperature.toFixed(1)}°C` : "N/A"}</div>
+                    <div className="metric-value">{systemState.temperature !== null ? `${systemState.temperature.toFixed(1)}°C` : "N/A"}</div>
                   </div>
                 </div>
               </div>
               <div className="status-display">
                 <div className="status-icon">
-                  {state.isSystemOn ? (
+                  {systemState.isSystemOn ? (
                     <div className="status-icon-active">
                       <Zap size={30} />
                     </div>
@@ -1472,7 +1520,7 @@ const App = () => {
                   )}
                 </div>
                 <div className="status-info">
-                  <div className="status-primary">{state.isSystemOn ? "System Active" : "System Inactive"}</div>
+                  <div className="status-primary">{systemState.isSystemOn ? "System Active" : "System Inactive"}</div>
                   <div className="status-secondary">{monitoringDisplay}</div>
                 </div>
               </div>
@@ -1487,7 +1535,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(true)}
-                        disabled={!state.isSystemOn}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={isTimerEnabled}
                         aria-label="Enable timer"
@@ -1497,7 +1545,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${!isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(false)}
-                        disabled={!state.isSystemOn}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={!isTimerEnabled}
                         aria-label="Disable timer"
@@ -1515,9 +1563,9 @@ const App = () => {
                         type="time"
                         value={onTime}
                         onChange={(e) => handleTimeChange(e, "on")}
-                        disabled={!isTimerEnabled || !state.isSystemOn}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled || !state.isSystemOn}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="time-input-group">
@@ -1527,9 +1575,9 @@ const App = () => {
                         type="time"
                         value={offTime}
                         onChange={(e) => handleTimeChange(e, "off")}
-                        disabled={!isTimerEnabled || !state.isSystemOn}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled || !state.isSystemOn}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="set-button-group">
@@ -1537,7 +1585,7 @@ const App = () => {
                       <button
                         className="set-timer-button"
                         onClick={handleSetTimer}
-                        disabled={!isTimerEnabled || !state.isSystemOn}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         aria-label="Set timer"
                       >
                         Set
@@ -1554,12 +1602,7 @@ const App = () => {
                     </div>
                   )}
             </div>
-              <div className="logs-button-container">
-                <button className="logs-button" onClick={() => setIsLogsPanelOpen(!isLogsPanelOpen)}>
-                  <FileText size={22} />
-                  <span>{isLogsPanelOpen ? "Hide" : "View"} System Logs</span>
-                </button>
-              </div>
+              {/* Logs button removed for performance - UI completely eliminated */}
             </div>
           <div className="card devices-card">
             <div className="card-header">
@@ -1590,15 +1633,7 @@ const App = () => {
               <ul className="device-list">
                 {filteredDevices.length > 0 ? (
                   filteredDevices.map(([ip, data]) => (
-                    <li key={ip} className="device-item">
-                      <div className={`device-status ${data.cw !== null ? "connected" : "disconnected"}`}></div>
-                      <div className="device-info">
-                        <div className="device-ip">{ip}</div>
-                        <div className="device-details">
-                          CW: {data.cw !== null ? data.cw.toFixed(1) : "N/A"}%, WW: {data.ww !== null ? data.ww.toFixed(1) : "N/A"}%
-                        </div>
-                      </div>
-                    </li>
+                    <DeviceItem key={ip} ip={ip} data={data} />
                   ))
                 ) : (
                   <li className="no-devices">No luminaires found</li>
@@ -1606,63 +1641,15 @@ const App = () => {
               </ul>
               <div className="device-summary">
                 {deviceSearchQuery
-                  ? `Showing ${filteredDevices.length} of ${Object.keys(state.connected_devices).length} luminaires`
-                  : `Total Luminaires: ${Object.keys(state.connected_devices).length}`}
+                  ? `Showing ${filteredDevices.length} of ${Object.keys(devices).length} luminaires`
+                  : `Total Luminaires: ${Object.keys(devices).length}`}
               </div>
             </div>
           </div>
         </section>
       </main>
-      <div className={`logs-panel ${isLogsPanelOpen ? "open" : ""}`}>
-  <div className="logs-header">
-    <h3 className="logs-title">
-      <FileText size={18} className="logs-icon" />
-      System Logs
-    </h3>
-    <button className="close-logs" onClick={() => setIsLogsPanelOpen(false)}>
-      &times;
-    </button>
-  </div>
-  <div className="logs-tabs">
-    <button
-      className={`log-tab ${activeLogTab === "basic" ? "active" : ""}`}
-      onClick={() => setActiveLogTab("basic")}
-    >
-      Basic Logs
-    </button>
-    <button
-      className={`log-tab ${activeLogTab === "advanced" ? "active" : ""}`}
-      onClick={() => setActiveLogTab("advanced")}
-    >
-      Advanced Logs
-    </button>
-  </div>
-  <div className="logs-content">
-    <div className="log-entries">
-      {activeLogTab === "basic" ? (
-        state.basicLogs.length > 0 ? (
-          state.basicLogs.map((log, index) => (
-            <div key={index} className="log-entry">
-              {log}
-            </div>
-          ))
-        ) : (
-          <div className="no-logs">No basic logs available</div>
-        )
-      ) : (
-        state.advancedLogs.length > 0 ? (
-          state.advancedLogs.map((log, index) => (
-            <div key={index} className="log-entry">
-              {log}
-            </div>
-          ))
-        ) : (
-          <div className="no-logs">No advanced logs available</div>
-        )
-      )}
-    </div>
-  </div>
-</div>
+      {/* Logs panel completely removed for performance optimization */}
+      {/* Log functionality can be re-enabled by uncommenting LogContext and restoring logs UI */}
     </div>
   )
 }

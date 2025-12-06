@@ -12,8 +12,11 @@
 /scheduler-service/webapp
 /scheduler-service/__pycache__
 /websocket-service/__pycache__
+/timer-service/__pycache__
+/utils/__pycache__
 
-#webapp
+webapp/node_modules/
+
 # Logs
 logs
 *.log
@@ -38,3 +41,34 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Node modules (global)
+node_modules/
+
+# Vite-specific build output and cache (global)
+/webapp/.vite/
+/webapp/dist/
+
+# Backend (if applicable, adjust as necessary)
+backend/node_modules/
+
+# Environment variables (global, don't commit these)
+.env
+.env.*.local
+
+# Logs (global)
+*.log
+
+# IDE/editor specific files
+.idea/
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/build/
+
+# Miscellaneous files (optional)
+*.tmpconfig copy.yaml

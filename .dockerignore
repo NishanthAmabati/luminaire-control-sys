@@ -1,0 +1,31 @@
+# Node modules (global)
+node_modules/
+
+# Vite build output and cache (frontend specific)
+/webapp/.vite/
+/webapp/dist/
+
+# Environment files
+.env
+.env.local
+
+# Git-related files
+.git/
+
+# Logs
+*.log
+
+# IDE/editor specific files
+.idea/
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Docker-related artifacts
+Dockerfile
+.dockerignore
+
+# Temporary or intermediate files
+*.tmp

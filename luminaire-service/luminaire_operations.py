@@ -5,31 +5,38 @@ import time
 import re
 import socket
 import yaml
-import pickle
+import json
+import pickle  # Temporary for backward compatibility during transition
 import redis
+import uuid
 from collections import deque
 from functools import lru_cache
 import psutil
+import structlog
 from .models import SendData, SendAllData, AdjustData
 
 # Load config
-with open("config.yaml", "r") as f:
+with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
-# Logging setup
-timestamp = time.strftime(config["logging"]["filename_template"])
-from logging.handlers import TimedRotatingFileHandler
-handler = TimedRotatingFileHandler(
-    timestamp,
-    when=config["logging"]["rotation_when"],
-    interval=config["logging"]["rotation_interval"],
-    backupCount=config["logging"]["rotation_backup_count"]
+# Structured logging setup (to STDOUT ONLY)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso", utc=False),
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
 logging.basicConfig(
     level=getattr(logging, config["logging"]["level"]),
-    format="%(asctime)s [%(levelname)s] - %(message)s",
-    handlers=[handler]
+    format="%(message)s",
+    handlers=[logging.StreamHandler()]
 )
+logger = structlog.get_logger(service="luminaire-operations")
 
 redis_client = redis.Redis(
     host=config["redis"]["host"],
@@ -43,7 +50,7 @@ class LuminaireOperations:
         '_devices_lock', '_state_lock', '_send_lock', 'min_cct', 'max_cct',
         'min_intensity', 'max_intensity', 'INACTIVITY_THRESHOLD', 'devices',
         'current_interval_index', 'total_intervals', 'start_time', 'stop_event',
-        'paused', 'current_scheduler_task'
+        'paused', 'current_scheduler_task', 'last_sent', 'last_published'
     )
 
     def __init__(self):
@@ -62,7 +69,9 @@ class LuminaireOperations:
         self.stop_event = threading.Event()
         self.paused = False
         self.current_scheduler_task = None
-        logging.debug("LuminaireOperations initialized")
+        self.last_sent = {}  # Track last sent cw/ww per device
+        self.last_published = {}  # Track last published device state for delta detection
+        logger.debug("LuminaireOperations initialized")
 
     def stop_scheduler(self):
         """Stop the current scheduler task and reset state."""
@@ -70,7 +79,7 @@ class LuminaireOperations:
         if self.current_scheduler_task is not None:
             self.current_scheduler_task.cancel()
             self.current_scheduler_task = None
-            logging.debug("Current scheduler task canceled")
+            logger.debug("Current scheduler task canceled")
         with self._state_lock:
             state = self._get_state()
             state["scene_data"] = {"cct": [], "intensity": []}
@@ -79,40 +88,46 @@ class LuminaireOperations:
             state["scheduler"]["status"] = "idle"
             self._set_state(state)
         self.log_basic("Scheduler stopped")
-        logging.debug("Scheduler stopped and state reset")
+        logger.debug("Scheduler stopped and state reset")
 
     def get_system_stats(self):
-        logging.debug("Fetching system stats")
+        logger.debug("Fetching system stats")
         cpu_percent, mem_percent = psutil.cpu_percent(interval=None), psutil.virtual_memory().percent
-        # Fetch temperature data
         temperature = None
         try:
             temps = psutil.sensors_temperatures()
-            # Look for common temperature sensors (e.g., 'coretemp' for Intel CPUs, 'k10temp' for AMD)
             for sensor in ['coretemp', 'k10temp', 'cpu_thermal']:
                 if sensor in temps and temps[sensor]:
-                    # Use the first available reading (highest priority)
                     temperature = temps[sensor][0].current
                     break
             if temperature is None:
-                logging.debug("No temperature sensor data available")
+                logger.debug("No temperature sensor data available")
             else:
-                logging.debug(f"Temperature: {temperature}°C")
+                logger.debug(f"Temperature: {temperature}°C")
         except (AttributeError, NotImplementedError):
-            logging.warning("Temperature monitoring not supported on this platform")
-        logging.debug(f"System stats - CPU: {cpu_percent}%, Mem: {mem_percent}%, Temp: {temperature}°C")
+            logger.warning("Temperature monitoring not supported on this platform")
+        logger.debug(f"System stats - CPU: {cpu_percent}%, Mem: {mem_percent}%, Temp: {temperature}°C")
         return cpu_percent, mem_percent, temperature
 
     def add(self, ip: str, writer):
         with self._devices_lock:
             self.devices[ip] = {"writer": writer, "last_seen": time.time(), "cw": 50.0, "ww": 50.0}
-            state = self._get_state()
-            if ip not in state["connected_devices"]:
-                state["connected_devices"][ip] = {"cw": 50.0, "ww": 50.0}
-            self._set_state(state)
-            self.log_advanced(f"Luminaire connected: {ip}")
-            logging.info(f"Added luminaire {ip}")
-            logging.debug(f"Device list updated: {list(self.devices.keys())}")
+            # Write per-device state in JSON
+            device_state = {
+                "ip": ip,
+                "cw": 50.0,
+                "ww": 50.0,
+                "last_seen": time.time(),
+                "connected": True
+            }
+            redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+            # Publish device update (delta: only changed fields)
+            # For new devices, publish full state
+            delta_update = device_state.copy()
+            self.last_published[ip] = device_state.copy()
+            redis_client.publish("device_update", json.dumps(delta_update))
+            self.log_basic(f"Luminaire connected: {ip}")
+            logger.info("Added luminaire", device_id=ip)
 
     def disconnect(self, ip: str):
         with self._devices_lock:
@@ -120,94 +135,155 @@ class LuminaireOperations:
                 writer = self.devices[ip].get("writer")
                 if writer:
                     writer.close()
+                # Get current device state before deletion
+                current_cw = self.devices[ip].get("cw", 50.0)
+                current_ww = self.devices[ip].get("ww", 50.0)
                 del self.devices[ip]
-                state = self._get_state()
-                if ip in state["connected_devices"]:
-                    del state["connected_devices"][ip]
-                self._set_state(state)
-                self.log_advanced(f"Luminaire disconnected: {ip}")
-            logging.info(f"Disconnected {ip}")
-            logging.debug(f"Device list after disconnect: {list(self.devices.keys())}")
+                if ip in self.last_sent:
+                    del self.last_sent[ip]
+                if ip in self.last_published:
+                    del self.last_published[ip]
+                # Update per-device state to disconnected
+                device_state = {
+                    "ip": ip,
+                    "cw": current_cw,
+                    "ww": current_ww,
+                    "last_seen": time.time(),
+                    "connected": False
+                }
+                redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                # Publish device update (delta: only changed fields)
+                # For disconnect, publish full state with connected=False
+                delta_update = device_state.copy()
+                redis_client.publish("device_update", json.dumps(delta_update))
+                self.log_basic(f"Luminaire disconnected: {ip}")
+            logger.info("Disconnected", device_id=ip)
 
     def clearALL(self):
         with self._devices_lock:
             for ip in list(self.devices.keys()):
                 self.disconnect(ip)
-            state = self._get_state()
-            state["connected_devices"] = {}
-            self._set_state(state)
-        self.log_advanced("All luminaires disconnected.")
-        logging.info("All luminaires disconnected.")
-        logging.debug("Device list cleared")
+        self.log_basic("All luminaires disconnected.")
+        logger.info("All luminaires disconnected.")
 
     def processACK(self, ip: str, response: str) -> bool:
-        logging.debug(f"Processing ACK from {ip}: {response}")
+        logger.debug(f"Processing ACK from {ip}", response=response)
         try:
             if isinstance(response, bytes):
                 response = response.decode('utf-8', errors='ignore')
             match = re.match(r"\*001(\d{3})(\d{3})ACK(\d{3})(\d{3})#", response)
             if not match:
-                logging.warning(f"Invalid ACK format from {ip}: {response}")
+                logger.warning(f"Invalid ACK format from {ip}", response=response)
                 return False
             cw_raw, ww_raw = match.group(3), match.group(4)
             cw, ww = int(cw_raw) / 10, int(ww_raw) / 10
             with self._devices_lock:
                 if ip in self.devices:
-                    self.update_cw_ww_intensity(ip, cw, ww)  # Updates devices[ip] and state["connected_devices"]
-                    self.log_advanced(f"Received [{ip}]: {response}")
-                    logging.debug(f"Updated device {ip} - CW: {cw}%, WW: {ww}%")
+                    # Update internal state
+                    self.devices[ip].update({"cw": cw, "ww": ww, "last_seen": time.time()})
+                    # Write per-device state in JSON
+                    device_state = {
+                        "ip": ip,
+                        "cw": cw,
+                        "ww": ww,
+                        "last_seen": time.time(),
+                        "connected": True
+                    }
+                    redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                    
+                    # Publish device update (delta: only changed fields)
+                    delta_update = {"ip": ip}
+                    prev = self.last_published.get(ip, {})
+                    
+                    # Track if there are actual changes to device values
+                    has_changes = False
+                    
+                    if prev.get("cw") != cw:
+                        delta_update["cw"] = cw
+                        has_changes = True
+                    if prev.get("ww") != ww:
+                        delta_update["ww"] = ww
+                        has_changes = True
+                    if prev.get("connected") != True:
+                        delta_update["connected"] = True
+                        has_changes = True
+                    
+                    # Always include last_seen timestamp
+                    delta_update["last_seen"] = device_state["last_seen"]
+                    
+                    # Publish if there are actual value changes (not just last_seen updates)
+                    if has_changes:
+                        redis_client.publish("device_update", json.dumps(delta_update))
+                        self.last_published[ip] = device_state.copy()
+                    
+                    self.log_basic(f"Received [{ip}]: {response}")
+                    logger.debug(f"Updated device {ip}", cw=cw, ww=ww)
                     return True
             return False
         except Exception as e:
-            self.log_advanced(f"Error processing ACK for {ip}: {e}")
-            logging.error(f"Error processing ACK for {ip}: {e}", exc_info=True)
+            self.log_basic(f"Error processing ACK for {ip}: {e}")
+            logger.error(f"Error processing ACK for {ip}", error=str(e))
             return False
 
     def log_basic(self, message: str):
+        correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        state = self._get_state()
-        state["basicLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(state["basicLogs"]),
-            "advancedLogs": list(state["advancedLogs"])
-        }))  # Publish log update
-        logging.info(f"Basic Log: {message}")
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON
+        log_event = {
+            "type": "basic",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
+        logger.info("Basic Log", correlation_id=correlation_id, message=message)
 
     def log_advanced(self, message: str):
+        correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
-        state = self._get_state()
-        state["advancedLogs"].append(f"[{timestamp}] {message}")
-        self._set_state(state)
-        redis_client.publish("log_update", pickle.dumps({
-            "basicLogs": list(state["basicLogs"]),
-            "advancedLogs": list(state["advancedLogs"])
-        }))  # Publish log update
-        logging.debug(f"Advanced Log: {message}")
+        formatted_message = f"[{timestamp}] {message}"
+        # Publish log event in JSON
+        log_event = {
+            "type": "advanced",
+            "timestamp": timestamp,
+            "message": message,
+            "formatted": formatted_message
+        }
+        redis_client.publish("log_update", json.dumps(log_event))
+        logger.debug("Advanced Log", correlation_id=correlation_id, message=message)
 
     def list(self) -> dict:
-        logging.debug("Listing connected devices")
+        logger.debug("Listing connected devices")
         with self._devices_lock:
             now = time.time()
             devices = {ip: {"cw": data.get("cw"), "ww": data.get("ww")} for ip, data in self.devices.items() if now - data["last_seen"] < self.INACTIVITY_THRESHOLD}
-            logging.debug(f"Active devices: {list(devices.keys())}")
+            logger.debug("Active devices", devices=list(devices.keys()))
             return devices
 
     def update_cw_ww_intensity(self, ip: str, cw: float, ww: float):
         with self._devices_lock:
             if ip in self.devices:
                 self.devices[ip].update({"cw": cw, "ww": ww, "last_seen": time.time()})
-                state = self._get_state()
-                state["connected_devices"][ip] = {"cw": cw, "ww": ww}
-                self._set_state(state)
-                logging.debug(f"Updated {ip} - CW: {cw}%, WW: {ww}%")
+                # Write per-device state in JSON
+                device_state = {
+                    "ip": ip,
+                    "cw": cw,
+                    "ww": ww,
+                    "last_seen": time.time(),
+                    "connected": True
+                }
+                redis_client.set(f"device_state:{ip}", json.dumps(device_state))
+                # Note: Don't publish here, only on ACK or explicit events
+                logger.debug(f"Updated {ip}", cw=cw, ww=ww)
 
     async def send(self, ip: str, cw: float, ww: float) -> bool:
-        logging.debug(f"Sending to {ip} - CW: {cw}%, WW: {ww}%")
+        correlation_id = str(uuid.uuid4())
+        logger.debug(f"Sending to {ip}", correlation_id=correlation_id, cw=cw, ww=ww)
         retries = 0
         with self._devices_lock:
             if ip not in self.devices:
-                logging.warning(f"Device {ip} not found for sending")
+                logger.warning(f"Device {ip} not found for sending", correlation_id=correlation_id)
                 return False
             writer = self.devices[ip]["writer"]
         while retries < config["luminaire_operations"]["max_retries"]:
@@ -215,65 +291,77 @@ class LuminaireOperations:
                 command = self.buildCommand(ip, cw, ww)
                 writer.write(command.encode())
                 await writer.drain()
-                self.log_advanced(f"Sent [{ip}]: {command}")
-                logging.debug(f"Successfully sent to {ip}")
+                # Log INFO only if cw/ww changed
+                if ip not in self.last_sent or self.last_sent[ip] != (cw, ww):
+                    self.log_basic(f"Sent [{ip}]: {command}")
+                    logger.info(f"Sent to {ip}", correlation_id=correlation_id, command=command)
+                    self.last_sent[ip] = (cw, ww)
+                else:
+                    logger.debug(f"Sent to {ip}", correlation_id=correlation_id, command=command)
                 return True
             except (ConnectionError, OSError) as e:
                 retries += 1
-                self.log_advanced(f"Error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
-                logging.warning(f"Error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
+                self.log_basic(f"Error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
+                logger.warning(f"Error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']})", correlation_id=correlation_id, error=str(e))
                 if retries >= config["luminaire_operations"]["max_retries"]:
                     self.disconnect(ip)
             except Exception as e:
                 retries += 1
-                self.log_advanced(f"Unexpected error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
-                logging.warning(f"Unexpected error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
+                self.log_basic(f"Unexpected error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']}): {e}")
+                logger.warning(f"Unexpected error sending to {ip} (retry {retries}/{config['luminaire_operations']['max_retries']})", correlation_id=correlation_id, error=str(e))
                 if retries >= config["luminaire_operations"]["max_retries"]:
                     self.disconnect(ip)
             await asyncio.sleep(0.5)
-        logging.error(f"Failed to send to {ip} after {config['luminaire_operations']['max_retries']} retries")
+        logger.error(f"Failed to send to {ip} after {config['luminaire_operations']['max_retries']} retries", correlation_id=correlation_id)
         return False
 
     async def sendAll(self, cw: float, ww: float) -> tuple[bool, list]:
-        logging.debug(f"Sending to all devices - CW: {cw}%, WW: {ww}%")
+        correlation_id = str(uuid.uuid4())
+        logger.debug(f"Sending to all devices", correlation_id=correlation_id, cw=cw, ww=ww)
         failed_ips = []
         tasks = []
         with self._devices_lock:
             if not self.devices:
-                logging.warning("No devices available to send to")
+                logger.warning("No devices available to send to", correlation_id=correlation_id)
                 return False, []
             for ip, device in list(self.devices.items()):
-                command = self.buildCommand(ip, cw, ww)
-                tasks.append(self.async_send(ip, device["writer"], command))
+                tasks.append(self.async_send(ip, device["writer"], cw, ww))
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for ip, result in zip(list(self.devices.keys()), results):
             if isinstance(result, Exception):
                 failed_ips.append(ip)
-                self.log_advanced(f"Error sending to {ip}: {result}")
-                logging.warning(f"Error sending to {ip}: {result}")
+                self.log_basic(f"Error sending to {ip}: {result}")
+                logger.warning(f"Error sending to {ip}", correlation_id=correlation_id, error=str(result))
         success = len(failed_ips) == 0
         if not success:
-            self.log_advanced(f"Failed to send to luminaires: {', '.join(failed_ips)}")
+            self.log_basic(f"Failed to send to luminaires: {', '.join(failed_ips)}")
         state = self._get_state()
         state["current_cct"] = self.calculate_cct_from_cw_ww(cw, ww)
         self._set_state(state)
-        logging.debug(f"SendAll completed - Success: {success}, Failed IPs: {failed_ips}")
+        logger.debug("SendAll completed", correlation_id=correlation_id, success=success, failed_ips=failed_ips)
         return success, failed_ips
 
-    async def async_send(self, ip: str, writer, command: str) -> None:
+    async def async_send(self, ip: str, writer, cw: float, ww: float) -> None:
+        correlation_id = str(uuid.uuid4())
         try:
+            command = self.buildCommand(ip, cw, ww)
             writer.write(command.encode())
             await writer.drain()
-            self.log_advanced(f"Sent [{ip}]: {command}")
-            logging.debug(f"Successfully sent to {ip}")
+            # Log INFO only if cw/ww changed
+            if ip not in self.last_sent or self.last_sent[ip] != (cw, ww):
+                self.log_basic(f"Sent [{ip}]: {command}")
+                logger.info(f"Sent to {ip}", correlation_id=correlation_id, command=command)
+                self.last_sent[ip] = (cw, ww)
+            else:
+                logger.debug(f"Sent to {ip}", correlation_id=correlation_id, command=command)
         except Exception as e:
-            self.log_advanced(f"Error sending to {ip}: {e}")
-            logging.warning(f"Error sending to {ip}: {e}")
+            self.log_basic(f"Error sending to {ip}: {e}")
+            logger.warning(f"Error sending to {ip}", correlation_id=correlation_id, error=str(e))
             raise
 
     @lru_cache(maxsize=1024)
     def calculate_cw_ww_from_cct_intensity(self, cct: float, intensity: float) -> tuple[float, float]:
-        logging.debug(f"Calculating CW/WW from CCT: {cct}, Intensity: {intensity}")
+        logger.debug(f"Calculating CW/WW from CCT: {cct}, Intensity: {intensity}")
         cct = max(self.min_cct, min(self.max_cct, cct))
         intensity = max(self.min_intensity, min(self.max_intensity, intensity))
         intensity_percent = intensity / self.max_intensity
@@ -281,35 +369,46 @@ class LuminaireOperations:
         ww_base = 100.0 - cw_base
         cw = max(0.0, min(99.99, cw_base * intensity_percent))
         ww = max(0.0, min(99.99, ww_base * intensity_percent))
-        logging.debug(f"Calculated - CW: {cw}%, WW: {ww}%")
+        logger.debug(f"Calculated", cw=cw, ww=ww)
         return cw, ww
 
     @lru_cache(maxsize=1024)
     def calculate_cct_from_cw_ww(self, cw: float, ww: float) -> float:
-        logging.debug(f"Calculating CCT from CW: {cw}%, WW: {ww}%")
+        logger.debug(f"Calculating CCT from CW: {cw}%, WW: {ww}%")
         total = cw + ww
         cct = 3500 if total == 0 else self.min_cct + ((cw / total) * 100 * ((self.max_cct - self.min_cct) / 100.0))
-        logging.debug(f"Calculated CCT: {cct}K")
+        logger.debug(f"Calculated CCT: {cct}K")
         return cct
 
     def buildCommand(self, ip: str, cw: float, ww: float) -> str:
-        logging.debug(f"Building command for {ip} - CW: {cw}%, WW: {ww}%")
+        logger.debug(f"Building command for {ip}", cw=cw, ww=ww)
         try:
             ip_parts = ip.split(".")
             ip3, ip4 = f"{int(ip_parts[2]):03}", f"{int(ip_parts[3]):03}"
             command = f"*{ip3}{ip4}{int(cw*10):03}{int(ww*10):03}##"
-            logging.debug(f"Built command: {command}")
+            logger.debug(f"Built command", command=command)
             return command
         except (ValueError, IndexError) as e:
-            self.log_advanced(f"Error building command for {ip}: {e}")
-            logging.error(f"Error building command for {ip}: {e}", exc_info=True)
+            self.log_basic(f"Error building command for {ip}: {e}")
+            logger.error(f"Error building command for {ip}", error=str(e))
             raise ValueError(f"Invalid IP: {ip}")
 
     def _get_state(self):
-        state_bytes = redis_client.get("state")
+        # Get system state from Redis (JSON format)
+        # This is primarily used for scheduler-related operations
+        # luminaire-service should minimize use of this global state
+        state_bytes = redis_client.get("system_state")
         if state_bytes:
-            return pickle.loads(state_bytes)
-        # Default state (from original)
+            try:
+                return json.loads(state_bytes)
+            except json.JSONDecodeError:
+                # Fallback for legacy pickle format during transition
+                try:
+                    state_bytes = redis_client.get("state")
+                    if state_bytes:
+                        return pickle.loads(state_bytes)
+                except:
+                    pass
         return {
             "auto_mode": False,
             "available_scenes": [],
@@ -324,30 +423,20 @@ class LuminaireOperations:
                 "status": "idle",
                 "interval_progress": 0
             },
-            "connected_devices": {},
-            "basicLogs": deque(maxlen=config["luminaire_operations"]["log_basic_max_entries"]),
-            "advancedLogs": deque(maxlen=config["luminaire_operations"]["log_advanced_max_entries"]),
             "scene_data": {"cct": [], "intensity": []},
             "current_cct": 3500,
             "current_intensity": 250,
             "is_manual_override": False,
-            "cpu_percent": 0.0,
-            "mem_percent": 0.0,
-            "temperature": None,
             "activationTime": None,
-            "isSystemOn": True,
-            "last_state": {
-                "auto_mode": False,
-                "current_scene": None,
-                "cw": 50.0,
-                "ww": 50.0,
-                "current_intensity": 250
-            }
+            "isSystemOn": True
         }
 
     def _set_state(self, state):
-        redis_client.set("state", pickle.dumps(state))
-        redis_client.publish("state_update", pickle.dumps(state))  # Publish state update
+        # Set system state (owned by scheduler, but luminaire-service needs to update for scheduler operations)
+        # Write in JSON format
+        redis_client.set("system_state", json.dumps(state))
+        # Also maintain legacy "state" key during transition
+        redis_client.set("state", json.dumps(state))
 
     async def cleanup_stale_devices(self):
         while True:
@@ -361,21 +450,22 @@ class LuminaireOperations:
     def pause_scheduler(self):
         self.paused = True
         self.log_basic("Scheduler paused")
-        logging.info("Scheduler paused")
+        logger.info("Scheduler paused")
 
     def resume_scheduler(self):
         self.paused = False
         self.start_time = time.time() - (self.current_interval_index * config["luminaire_operations"]["scheduler_update_interval"])
         self.log_basic("Scheduler resumed")
-        logging.info("Scheduler resumed")
-        logging.debug(f"Resumed at index: {self.current_interval_index}, start_time: {self.start_time}")
+        logger.info("Scheduler resumed")
+        logger.debug(f"Resumed at index: {self.current_interval_index}, start_time: {self.start_time}")
 
     async def adjust_cw(self, data: AdjustData) -> bool:
-        logging.debug(f"Adjusting CW by {data.delta} for IP: {data.ip}")
+        correlation_id = str(uuid.uuid4())
+        logger.debug(f"Adjusting CW by {data.delta} for IP: {data.ip}", correlation_id=correlation_id)
         if data.ip:
             with self._devices_lock:
                 if data.ip not in self.devices or self.devices[data.ip].get("cw") is None:
-                    logging.warning(f"Device {data.ip} not found or no CW data")
+                    logger.warning(f"Device {data.ip} not found or no CW data", correlation_id=correlation_id)
                     return False
                 current_cw = self.devices[data.ip]["cw"]
                 new_cw = max(0.0, min(100.0, current_cw + data.delta))
@@ -385,7 +475,7 @@ class LuminaireOperations:
             with self._devices_lock:
                 device_with_cw = next((ip for ip, data in self.devices.items() if data.get("cw") is not None), None)
                 if not device_with_cw:
-                    logging.warning("No device with CW data found")
+                    logger.warning("No device with CW data found", correlation_id=correlation_id)
                     return False
                 current_cw = self.devices[device_with_cw]["cw"]
             new_cw = max(0.0, min(100.0, current_cw + data.delta))

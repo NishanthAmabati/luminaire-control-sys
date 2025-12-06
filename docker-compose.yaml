@@ -1,0 +1,212 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    volumes:
+      - redis-data:/data
+    environment:
+      - TZ=Asia/Kolkata
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  api-service:
+    image: nishanthambati/api-service
+    container_name: $API_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "$API_PORT:$API_PORT"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://api-service:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      luminaire-service:
+        condition: service_healthy
+      scheduler-service:
+        condition: service_healthy
+      timer-service:
+        condition: service_healthy
+
+  luminaire-service:
+    image: nishanthambati/luminaire-service
+    container_name: $LUMINAIRE_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "5250:5250"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+
+  scheduler-service:
+    image: nishanthambati/scheduler-service
+    container_name: $SCHEDULER_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./scenes:/app/scenes:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://scheduler-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+
+  timer-service:
+    image: nishanthambati/timer-service
+    container_name: $TIMER_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://timer-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+
+  monitoring-service:
+    image: nishanthambati/monitoring-service
+    container_name: $MONITORING_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://monitoring-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+
+  websocket-service:
+    image: nishanthambati/websocket-service
+    container_name: $WEBSOCKET_APP
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "$WEBSOCKET_PORT:$WEBSOCKET_PORT"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+        redis:
+          condition: service_healthy
+
+  webapp:
+    image: nishanthambati/nginx-webapp
+    container_name: $WEBAPP
+    ports:
+      - "$WEBAPP_PORT:80"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://webapp/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      websocket-service:
+        condition: service_started
+  
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: prometheus
+    environment:
+      - TZ=Asia/Kolkata
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      luminaire-service:
+        condition: service_healthy
+      scheduler-service:
+        condition: service_healthy
+      timer-service:
+        condition: service_healthy
+      monitoring-service:
+        condition: service_healthy
+      websocket-service:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  watchdog-service:
+    image: nishanthambati/watchdog-service
+    container_name: watchdog-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./watchdog-service/config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - scheduler-service
+      - luminaire-service
+      - timer-service
+      - monitoring-service
+      - websocket-service
+
+volumes:
+   redis-data:
+   prometheus-data:
+   grafana-data:

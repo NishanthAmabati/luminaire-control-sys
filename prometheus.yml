@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-service'
+    static_configs:
+      - targets: ['api-service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'luminaire-service'
+    static_configs:
+      - targets: ['luminaire-service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'scheduler-service'
+    static_configs:
+      - targets: ['scheduler-service:8000']
+    metrics_path: /metrics  
+  
+  - job_name: 'timer-service'
+    static_configs:
+      - targets: ['timer-service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'monitoring-service'
+    static_configs:
+      - targets: ['monitoring-service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'websocket-service'
+    static_configs:
+      - targets: ['websocket-service:5001']
+    metrics_path: /metrics

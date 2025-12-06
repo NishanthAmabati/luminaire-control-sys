@@ -1,0 +1,6 @@
+dir-struct
+test-service
+__pycache__/
+*.pyc
+.git
+.gitignore

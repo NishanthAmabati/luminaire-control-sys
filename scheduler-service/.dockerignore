@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.git
+.gitignore
+dir-struct
+test-endpoints
+webapp
