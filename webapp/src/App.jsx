@@ -571,8 +571,8 @@ const App = () => {
           if (stateData.isSystemOn !== undefined) systemUpdates.isSystemOn = stateData.isSystemOn
           if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
           if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
-          if (stateData.current_scene) systemUpdates.current_scene = stateData.current_scene
-          if (stateData.loaded_scene) systemUpdates.loaded_scene = stateData.loaded_scene
+          if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
+          if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
           if (Array.isArray(stateData.available_scenes)) systemUpdates.available_scenes = stateData.available_scenes
           
           updateSystemState(systemUpdates)
@@ -702,16 +702,16 @@ const App = () => {
               
               // Update system state via context
               const systemUpdates = {};
-              if (data.data.current_cct) systemUpdates.current_cct = data.data.current_cct;
-              if (data.data.current_intensity) systemUpdates.current_intensity = data.data.current_intensity;
-              if (data.data.cw) systemUpdates.cw = data.data.cw;
-              if (data.data.ww) systemUpdates.ww = data.data.ww;
+              if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
+              if (data.data.current_intensity !== undefined) systemUpdates.current_intensity = data.data.current_intensity;
+              if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
+              if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
                 systemUpdates.isSystemOn = data.data.isSystemOn;
               }
               if (data.data.auto_mode !== undefined) systemUpdates.auto_mode = data.data.auto_mode;
-              if (data.data.current_scene) systemUpdates.current_scene = data.data.current_scene;
-              if (data.data.loaded_scene) systemUpdates.loaded_scene = data.data.loaded_scene;
+              if (data.data.current_scene !== undefined) systemUpdates.current_scene = data.data.current_scene;
+              if (data.data.loaded_scene !== undefined) systemUpdates.loaded_scene = data.data.loaded_scene;
               if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
               if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
               
@@ -720,10 +720,10 @@ const App = () => {
               // Update scheduler via context
               if (data.data.scheduler) {
                 const schedulerUpdates = {};
-                if (data.data.scheduler.status) schedulerUpdates.status = data.data.scheduler.status;
+                if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
-                if (data.data.scheduler.total_intervals) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-                if (data.data.scheduler.current_cct) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+                if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
+                if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
                 updateScheduler(schedulerUpdates);
                 
                 // Check for scene completion
