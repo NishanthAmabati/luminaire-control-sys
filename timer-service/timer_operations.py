@@ -88,6 +88,9 @@ class TimerOperations:
             today_str = now.strftime("%Y-%m-%d")
             current_time_str = now.strftime("%H:%M")
             
+            # Parse current time once for comparisons
+            current_time = datetime.strptime(current_time_str, "%H:%M")
+            
             # Initialize or load trigger state
             triggers_data = await self.redis_client.get("timer:triggers")
             if triggers_data:
@@ -106,7 +109,6 @@ class TimerOperations:
                 # Parse times for proper comparison
                 on_time = datetime.strptime(on_time_str, "%H:%M")
                 off_time = datetime.strptime(off_time_str, "%H:%M")
-                current_time = datetime.strptime(current_time_str, "%H:%M")
                 
                 on_trigger_id = f"timer_{idx}_on_{today_str}"
                 off_trigger_id = f"timer_{idx}_off_{today_str}"
