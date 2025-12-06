@@ -32,7 +32,7 @@ TIMER_CHECK_INTERVAL = 15
 MAX_API_RETRIES = 3
 
 # API call timeout
-API_TIMEOUT = 10. 0
+API_TIMEOUT = 10.0
 
 
 class TimerOperations:
