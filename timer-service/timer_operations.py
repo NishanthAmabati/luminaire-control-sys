@@ -43,6 +43,28 @@ class TimerOperations:
         self.timers: List[Dict] = []
         self.is_enabled: bool = False
         self._running: bool = False
+    
+    def _minutes_until(self, target_time: datetime, current_time: datetime) -> int:
+        """
+        Calculate minutes until target_time from current_time (forward only).
+        Handles day wrap-around correctly.
+        
+        Args:
+            target_time: Target time (datetime with hour/minute)
+            current_time: Current time (datetime with hour/minute)
+            
+        Returns:
+            Minutes until target time (0-1439)
+        """
+        target_mins = target_time.hour * 60 + target_time.minute
+        current_mins = current_time.hour * 60 + current_time.minute
+        
+        if target_mins >= current_mins:
+            # Same day
+            return target_mins - current_mins
+        else:
+            # Next day (wrap around)
+            return (1440 - current_mins) + target_mins
         
     async def _broadcast_timer_status(self):
         """Broadcast current timer status via Redis pub/sub to update UI"""
@@ -156,20 +178,8 @@ class TimerOperations:
                 current_datetime = datetime.strptime(current_time_str, "%H:%M")
                 
                 # Calculate time until each event (forward in time only)
-                def minutes_until(target_time, current_time):
-                    """Calculate minutes until target_time from current_time (forward only)"""
-                    target_mins = target_time.hour * 60 + target_time.minute
-                    current_mins = current_time.hour * 60 + current_time.minute
-                    
-                    if target_mins >= current_mins:
-                        # Same day
-                        return target_mins - current_mins
-                    else:
-                        # Next day (wrap around)
-                        return (1440 - current_mins) + target_mins
-                
-                on_minutes_until = minutes_until(on_time, current_datetime)
-                off_minutes_until = minutes_until(off_time, current_datetime)
+                on_minutes_until = self._minutes_until(on_time, current_datetime)
+                off_minutes_until = self._minutes_until(off_time, current_datetime)
                 
                 # Check if timer ON time is too soon (less than 2 minutes away)
                 if on_minutes_until < 2:

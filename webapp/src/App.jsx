@@ -445,8 +445,15 @@ const App = () => {
     setVerticalLinePosition(0);
   }, [sendCommand, logBasic, activateScene, systemState.isSystemOn, systemState.current_scene, updateSystemState]);
 
-  const handleTimerToggle = useCallback(() => {
-    const newIsEnabled = !isTimerEnabled;
+  const handleTimerToggle = useCallback((enable) => {
+    // If enable is not provided, toggle the current state
+    const newIsEnabled = enable !== undefined ? enable : !isTimerEnabled;
+    
+    // Don't do anything if already in the desired state
+    if (newIsEnabled === isTimerEnabled) {
+      return;
+    }
+    
     setIsTimerEnabled(newIsEnabled);
     sendCommand({ type: "toggle_timer", enable: newIsEnabled });
     toast.success(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
