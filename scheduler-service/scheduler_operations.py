@@ -102,8 +102,6 @@ class SchedulerOperations:
             "is_manual_override": False,
             "activationTime": None,
             "isSystemOn": True,
-            "system_timers": [],
-            "isTimerEnabled": False,
             "last_state": {
                 "auto_mode": False,
                 "current_scene": None,
@@ -121,36 +119,22 @@ class SchedulerOperations:
         Scheduler service owns system state and publishes to system_update channel.
         All data is JSON format.
         
-        Timer data is sourced from timer-service to avoid stale data issues.
+        Timer service independently manages and broadcasts timer state.
+        Scheduler service does not include timer data to avoid conflicts.
         """
         correlation_id = str(uuid.uuid4())
         with self._state_lock:
-            # Fetch fresh timer data from timer-service via Redis
-            # Timer service owns timer state - scheduler should not overwrite it
-            try:
-                timers_data = redis_client.get("timer:timers")
-                enabled_data = redis_client.get("timer:enabled")
-                
-                if timers_data:
-                    state["system_timers"] = json.loads(timers_data)
-                if enabled_data:
-                    state["isTimerEnabled"] = json.loads(enabled_data)
-                    
-                logger.debug("Fetched fresh timer data from timer-service", 
-                            timer_count=len(state.get("system_timers", [])),
-                            enabled=state.get("isTimerEnabled", False))
-            except Exception as e:
-                logger.warning("Failed to fetch timer data, keeping existing state", error=str(e))
-            
             # Write to new system_state key (JSON)
             redis_client.set("system_state", json.dumps(state))
             # Maintain legacy "state" key for backward compatibility
             redis_client.set("state", json.dumps(state))
             # Publish to system_update channel (JSON)
+            # Timer data is NOT included - timer service handles its own broadcasting
             redis_client.publish("system_update", json.dumps(state))
             self.state = state
             try:
                 # Also save to file as JSON
+                # Timer data is NOT saved to file - timer service manages its own persistence
                 with open(config["state"]["file"], "w") as f:
                     json.dump({
                         "auto_mode": state["auto_mode"],
@@ -159,9 +143,7 @@ class SchedulerOperations:
                         "ww": state["ww"],
                         "current_cct": state["current_cct"],
                         "current_intensity": state["current_intensity"],
-                        "isSystemOn": state["isSystemOn"],
-                        "system_timers": state.get("system_timers", []),
-                        "isTimerEnabled": state.get("isTimerEnabled", False)
+                        "isSystemOn": state["isSystemOn"]
                     }, f)
                 logger.debug("State saved to file", correlation_id=correlation_id, file=config["state"]["file"])
             except Exception as e:
