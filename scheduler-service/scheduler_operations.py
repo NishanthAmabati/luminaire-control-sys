@@ -102,6 +102,8 @@ class SchedulerOperations:
             "is_manual_override": False,
             "activationTime": None,
             "isSystemOn": True,
+            "system_timers": [],
+            "isTimerEnabled": False,
             "last_state": {
                 "auto_mode": False,
                 "current_scene": None,
@@ -158,8 +160,8 @@ class SchedulerOperations:
                         "current_cct": state["current_cct"],
                         "current_intensity": state["current_intensity"],
                         "isSystemOn": state["isSystemOn"],
-                        "system_timers": state["system_timers"],
-                        "isTimerEnabled": state["isTimerEnabled"]
+                        "system_timers": state.get("system_timers", []),
+                        "isTimerEnabled": state.get("isTimerEnabled", False)
                     }, f)
                 logger.debug("State saved to file", correlation_id=correlation_id, file=config["state"]["file"])
             except Exception as e:
