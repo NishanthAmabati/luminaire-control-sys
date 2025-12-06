@@ -433,27 +433,52 @@ class SchedulerOperations:
 
     async def set_mode(self, data: SetModeData):
         correlation_id = str(uuid.uuid4())
-        logger.info("Setting mode", correlation_id=correlation_id, auto=data.auto)
+        logger.info("Setting mode", correlation_id=correlation_id, auto=data.auto, current_scheduler_status=self.state["scheduler"]["status"])
+        
         self.state["auto_mode"] = data.auto
-        self.stop_event.set() if not data.auto else self.stop_event.clear()
-        self.log_basic(f"Switched to {'Auto' if data.auto else 'Manual'} mode")
+        
         if not data.auto:
+            # Switching to manual mode
+            self.log_basic(f"Switched to Manual mode")
+            
+            # Stop scheduler if it's running
+            if self.state["scheduler"]["status"] == "running":
+                self.stop_scheduler()
+                logger.info("Scheduler stopped for manual mode", correlation_id=correlation_id)
+            
+            # Clear scene data but keep the scene reference for potential reactivation
             self.state["scene_data"] = {"cct": [], "intensity": []}
             self.state["loaded_scene"] = None
             self.state["scheduler"]["status"] = "idle"
-        elif data.auto and self.state["current_scene"]:
-            if self.state["current_scene"] in scene_data:
-                self.state["scene_data"] = scene_data[self.state["current_scene"]]
-                self.state["activationTime"] = time.strftime("%H:%M:%S")
-                self.state["loaded_scene"] = self.state["current_scene"]
-                self.state["scheduler"]["status"] = "running"
-                asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
-                self.log_basic(f"Reactivated scene: {self.state['current_scene']}")
+            self.stop_event.set()
+            
+        else:
+            # Switching to auto mode
+            self.log_basic(f"Switched to Auto mode")
+            self.stop_event.clear()
+            
+            # If there's a current scene, reactivate it
+            if self.state["current_scene"]:
+                if self.state["current_scene"] in scene_data:
+                    self.state["scene_data"] = scene_data[self.state["current_scene"]]
+                    self.state["activationTime"] = time.strftime("%H:%M:%S")
+                    self.state["loaded_scene"] = self.state["current_scene"]
+                    self.state["scheduler"]["status"] = "running"
+                    
+                    # Start the scheduler task
+                    asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
+                    self.log_basic(f"Reactivated scene: {self.state['current_scene']}")
+                    logger.info("Scene reactivated for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
+                else:
+                    self.log_basic(f"Failed to reactivate scene {self.state['current_scene']}: not found")
+                    logger.warning("Failed to reactivate scene", correlation_id=correlation_id, scene=self.state["current_scene"])
+                    self.state["current_scene"] = None
+                    self.state["scene_data"] = {"cct": [], "intensity": []}
+                    self.state["scheduler"]["status"] = "idle"
             else:
-                self.log_basic(f"Failed to reactivate scene {self.state['current_scene']}: not found")
-                logger.warning("Failed to reactivate scene", correlation_id=correlation_id, scene=self.state["current_scene"])
-                self.state["current_scene"] = None
-                self.state["scene_data"] = {"cct": [], "intensity": []}
+                logger.info("No scene to activate in auto mode", correlation_id=correlation_id)
+                self.state["scheduler"]["status"] = "idle"
+        
         self._set_state(self.state)
         return self.state
 
@@ -469,19 +494,37 @@ class SchedulerOperations:
 
     async def activate_scene(self, data: ActivateSceneData):
         correlation_id = str(uuid.uuid4())
-        logger.info("Activating scene", correlation_id=correlation_id, scene=data.scene)
+        logger.info("Activating scene", correlation_id=correlation_id, scene=data.scene, current_auto_mode=self.state["auto_mode"])
+        
+        # Stop any currently running scheduler
         if self.state["scheduler"]["status"] == "running" and self.state["current_scene"]:
             self.stop_scheduler()
             await asyncio.sleep(0.1)
-            logger.debug("Stopped running scene", correlation_id=correlation_id, scene=self.state["current_scene"])
+            logger.info("Stopped running scene before activation", correlation_id=correlation_id, previous_scene=self.state["current_scene"])
+        
+        # Update scene references
         self.state["current_scene"] = data.scene
         self.state["loaded_scene"] = data.scene
+        
+        # Activate scene if in auto mode and scene exists
         if self.state["auto_mode"] and data.scene in scene_data:
             self.state["scene_data"] = scene_data[data.scene]
             self.state["activationTime"] = time.strftime("%H:%M:%S")
             self.state["scheduler"]["status"] = "running"
+            
+            # Start the scheduler
             asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], data.scene)))
-        self.log_basic(f"Activated scene: {data.scene}")
+            self.log_basic(f"Activated scene: {data.scene} in auto mode")
+            logger.info("Scene scheduler started", correlation_id=correlation_id, scene=data.scene)
+        else:
+            # Not in auto mode or scene not found
+            if not self.state["auto_mode"]:
+                logger.info("Scene loaded but not activated (manual mode)", correlation_id=correlation_id, scene=data.scene)
+                self.log_basic(f"Scene loaded: {data.scene} (switch to Auto mode to activate)")
+            else:
+                logger.warning("Scene not found in scene_data", correlation_id=correlation_id, scene=data.scene)
+                self.log_basic(f"Scene {data.scene} not found")
+        
         self._set_state(self.state)
         return self.state
 
