@@ -78,20 +78,26 @@ class TimerOperations:
             
             # Mark all past triggers as already processed
             for idx, timer in enumerate(self.timers):
-                on_time = timer["on"]
-                off_time = timer["off"]
+                on_time_str = timer["on"]
+                off_time_str = timer["off"]
+                
+                # Parse times for proper comparison
+                on_time = datetime.strptime(on_time_str, "%H:%M")
+                off_time = datetime.strptime(off_time_str, "%H:%M")
+                current_time = datetime.strptime(current_time_str, "%H:%M")
                 
                 on_trigger_id = f"timer_{idx}_on_{today_str}"
                 off_trigger_id = f"timer_{idx}_off_{today_str}"
                 
                 # Mark triggers that have already passed as processed
-                if current_time_str >= on_time:
+                # Compare times properly using datetime objects
+                if current_time >= on_time:
                     triggers["triggered"][on_trigger_id] = now.isoformat()
-                    logger.debug("Marked past ON trigger as processed", timer_index=idx, on_time=on_time)
+                    logger.debug("Marked past ON trigger as processed", timer_index=idx, on_time=on_time_str)
                 
-                if current_time_str >= off_time:
+                if current_time >= off_time:
                     triggers["triggered"][off_trigger_id] = now.isoformat()
-                    logger.debug("Marked past OFF trigger as processed", timer_index=idx, off_time=off_time)
+                    logger.debug("Marked past OFF trigger as processed", timer_index=idx, off_time=off_time_str)
             
             # Save updated trigger state
             await self.redis_client.set("timer:triggers", json.dumps(triggers))
@@ -145,29 +151,37 @@ class TimerOperations:
                     logger.error(error_msg, error=str(e))
                     return {"status": "error", "error": error_msg}
                 
-                # Validate timer times are not too close to current time (within 1 minute)
+                # Validate timer times are not too close to current time (within 2 minutes)
                 # This prevents immediate triggering and mode conflicts
                 current_datetime = datetime.strptime(current_time_str, "%H:%M")
                 
-                # Calculate time difference in minutes
-                def time_diff_minutes(t1, t2):
-                    """Calculate absolute time difference in minutes"""
-                    diff = abs((t1.hour * 60 + t1.minute) - (t2.hour * 60 + t2.minute))
-                    # Handle wrap-around (e.g., 23:59 to 00:01)
-                    return min(diff, 1440 - diff)
+                # Calculate time until each event (forward in time only)
+                def minutes_until(target_time, current_time):
+                    """Calculate minutes until target_time from current_time (forward only)"""
+                    target_mins = target_time.hour * 60 + target_time.minute
+                    current_mins = current_time.hour * 60 + current_time.minute
+                    
+                    if target_mins >= current_mins:
+                        # Same day
+                        return target_mins - current_mins
+                    else:
+                        # Next day (wrap around)
+                        return (1440 - current_mins) + target_mins
                 
-                on_diff = time_diff_minutes(on_time, current_datetime)
-                off_diff = time_diff_minutes(off_time, current_datetime)
+                on_minutes_until = minutes_until(on_time, current_datetime)
+                off_minutes_until = minutes_until(off_time, current_datetime)
                 
-                if on_diff < 2:
-                    logger.warning("Timer ON time too close to current time", on_time=timer.on, current_time=current_time_str, diff_minutes=on_diff)
+                # Check if timer ON time is too soon (less than 2 minutes away)
+                if on_minutes_until < 2:
+                    logger.warning("Timer ON time too close to current time", on_time=timer.on, current_time=current_time_str, minutes_until=on_minutes_until)
                     return {
                         "status": "error",
                         "error": f"Timer ON time ({timer.on}) is too close to current time ({current_time_str}). Please set at least 2 minutes in the future."
                     }
                 
-                if off_diff < 2:
-                    logger.warning("Timer OFF time too close to current time", off_time=timer.off, current_time=current_time_str, diff_minutes=off_diff)
+                # Check if timer OFF time is too soon (less than 2 minutes away)
+                if off_minutes_until < 2:
+                    logger.warning("Timer OFF time too close to current time", off_time=timer.off, current_time=current_time_str, minutes_until=off_minutes_until)
                     return {
                         "status": "error",
                         "error": f"Timer OFF time ({timer.off}) is too close to current time ({current_time_str}). Please set at least 2 minutes in the future."
