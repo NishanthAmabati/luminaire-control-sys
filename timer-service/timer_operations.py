@@ -306,6 +306,11 @@ class TimerOperations:
                     on_already_triggered = triggers["triggered"].get(on_trigger_id)
                     off_already_triggered = triggers["triggered"].get(off_trigger_id)
                     
+                    # Handle ON and OFF triggers independently
+                    # Each trigger executes only once per day when its scheduled time arrives
+                    # If both times have passed (e.g., system starts after both), both will
+                    # execute in sequence, with the final state determined by the last trigger
+                    
                     # Handle ON trigger independently
                     if current_time_str >= on_time and not on_already_triggered:
                         logger.info(
