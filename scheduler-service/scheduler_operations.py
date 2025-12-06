@@ -330,18 +330,17 @@ class SchedulerOperations:
                     last_interval_update = current_idx
                 
                 # Send to devices every update cycle (no threshold check)
-                if True:
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
-                            json={"cw": cw, "ww": ww}
-                        )
-                        if resp.status_code != 200:
-                            self.log_advanced(f"SendAll failed: {resp.text}")
-                            logger.warning("SendAll failed", correlation_id=correlation_id, error=resp.text)
-                        else:
-                            # Update last sent values only on successful send
-                            last_cw, last_ww, last_cct, last_intensity = cw, ww, calc_cct, calc_intensity
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                        json={"cw": cw, "ww": ww}
+                    )
+                    if resp.status_code != 200:
+                        self.log_advanced(f"SendAll failed: {resp.text}")
+                        logger.warning("SendAll failed", correlation_id=correlation_id, error=resp.text)
+                    else:
+                        # Update last sent values only on successful send
+                        last_cw, last_ww, last_cct, last_intensity = cw, ww, calc_cct, calc_intensity
 
                 logger.debug(
                     "Scheduler tick",

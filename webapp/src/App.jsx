@@ -284,7 +284,7 @@ const App = () => {
   )
 
   const loadScene = useCallback(
-    (scene) => {
+    async (scene) => {
       setIsLoading(true)
       if (systemState.scheduler.status === "running" && systemState.current_scene) {
         setRunningScene(systemState.current_scene)
@@ -306,6 +306,25 @@ const App = () => {
       logBasic(`Loaded scene: ${scene}`)
       updateSystemState({ loaded_scene: scene })
       updateScheduler({ status: "pending" })
+      
+      // Fetch scene data immediately to populate graphs
+      try {
+        const apiBaseUrl = `http://${window.location.hostname}:8000`
+        const response = await fetch(`${apiBaseUrl}/api/system_state`)
+        if (response.ok) {
+          const stateData = await response.json()
+          if (stateData.scene_data) {
+            setSceneData({
+              cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
+              intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
+            })
+            logBasic(`Loaded scene data for ${scene}: ${stateData.scene_data.cct?.length || 0} data points`)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching scene data after load:", error)
+      }
+      
       setTimeout(() => setIsLoading(false), 800)
     },
     [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler]
