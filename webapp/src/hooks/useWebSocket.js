@@ -226,7 +226,9 @@ export const useWebSocket = (url, options = {}) => {
         ws.current = null
       }
     }
-  }, [url]) // Intentionally minimal dependencies to avoid reconnection loops
+  }, [url]) // Intentionally minimal dependencies to avoid reconnection loops.
+  // Note: Callbacks from options may become stale if they change after initial mount.
+  // Use stable callbacks (wrap with useCallback) in the parent component if needed.
 
   return { 
     ws, 

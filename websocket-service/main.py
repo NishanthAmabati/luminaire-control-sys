@@ -245,13 +245,13 @@ async def subscribe_to_updates():
             if pubsub:
                 try:
                     pubsub.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Error closing pubsub", correlation_id=correlation_id, error=str(e))
             if redis_client:
                 try:
                     redis_client.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Error closing redis client", correlation_id=correlation_id, error=str(e))
         
         # Reconnection with exponential backoff
         if not shutdown_event.is_set():
@@ -261,7 +261,8 @@ async def subscribe_to_updates():
                 # Reset and try again
                 reconnect_attempts = 0
             
-            delay = min(REDIS_RECONNECT_DELAY * (2 ** min(reconnect_attempts - 1, 5)), 60)
+            # Calculate delay: first attempt (reconnect_attempts=1) gets base delay
+            delay = min(REDIS_RECONNECT_DELAY * (2 ** max(reconnect_attempts - 1, 0)), 60)
             logger.info("Reconnecting to Redis", correlation_id=correlation_id, delay=delay, attempt=reconnect_attempts)
             await asyncio.sleep(delay)
 
@@ -516,10 +517,13 @@ async def main():
     
     # Setup signal handlers for graceful shutdown
     loop = asyncio.get_event_loop()
+    shutdown_task = None
     
     def signal_handler():
+        nonlocal shutdown_task
         logger.info("Received shutdown signal", correlation_id=correlation_id)
-        asyncio.create_task(graceful_shutdown(ws_server, http_runner))
+        if shutdown_task is None:
+            shutdown_task = loop.create_task(graceful_shutdown(ws_server, http_runner))
     
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, signal_handler)
@@ -527,6 +531,9 @@ async def main():
     try:
         # Wait until shutdown is signaled
         await shutdown_event.wait()
+        # If shutdown was triggered by signal, wait for graceful shutdown to complete
+        if shutdown_task:
+            await shutdown_task
     except Exception as e:
         logger.error("Error in main loop", correlation_id=correlation_id, error=str(e))
     finally:
