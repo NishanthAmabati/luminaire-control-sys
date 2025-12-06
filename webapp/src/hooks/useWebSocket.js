@@ -1,52 +1,108 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useCallback } from "react"
 import { useDevices } from "../contexts/DeviceContext"
 import { useSystem } from "../contexts/SystemContext"
-import { useLogs } from "../contexts/LogContext"
 
 /**
  * Custom hook for WebSocket management with the refactored backend.
  * Subscribes to device_update, system_update, and log_update channels.
+ * 
+ * @param {string} url - WebSocket URL to connect to
+ * @param {object} options - Configuration options
+ * @param {function} options.onError - Error callback
+ * @param {function} options.onConnect - Connection established callback
+ * @param {function} options.onDisconnect - Disconnection callback
+ * @param {function} options.onSceneData - Scene data update callback
+ * @param {function} options.onTimerUpdate - Timer update callback
+ * @returns {object} - { ws, sendCommand, isConnected }
  */
-export const useWebSocket = (url, onError) => {
+export const useWebSocket = (url, options = {}) => {
   const ws = useRef(null)
   const { updateDevice, updateDevices } = useDevices()
-  const { updateSystemState, updateScheduler } = useSystem()
-  const { addBasicLog, addAdvancedLog } = useLogs()
+  const { systemState, updateSystemState, updateScheduler } = useSystem()
+  
   const lastPingTime = useRef(0)
   const reconnectAttempts = useRef(0)
+  const pingIntervalRef = useRef(null)
+  const reconnectTimeoutRef = useRef(null)
+  const isConnectedRef = useRef(false)
+  
   const maxReconnectAttempts = 10
   const maxBackoff = 32000
+  const pingInterval = 1000
+
+  const {
+    onError,
+    onConnect,
+    onDisconnect,
+    onSceneData,
+    onTimerUpdate,
+    onLatencyUpdate,
+    isAdjusting = false,
+  } = options
+
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current)
+      pingIntervalRef.current = null
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+  }, [])
+
+  // Send command function
+  const sendCommand = useCallback((command) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify(command))
+      return true
+    }
+    return false
+  }, [])
 
   useEffect(() => {
-    let reconnectTimeout = null
-    let pingInterval = null
-
     const connectWebSocket = () => {
       console.log("Connecting to WebSocket:", url)
-      ws.current = new WebSocket(url)
+      
+      try {
+        ws.current = new WebSocket(url)
+      } catch (error) {
+        console.error("Failed to create WebSocket:", error)
+        if (onError) {
+          onError("Failed to create WebSocket connection")
+        }
+        return
+      }
 
       ws.current.onopen = () => {
         console.log("WebSocket Connected")
-        addAdvancedLog("[WebSocket] Connected")
+        isConnectedRef.current = true
         reconnectAttempts.current = 0
 
+        if (onConnect) {
+          onConnect()
+        }
+
         // Start ping interval
-        pingInterval = setInterval(() => {
+        pingIntervalRef.current = setInterval(() => {
           if (ws.current?.readyState === WebSocket.OPEN) {
             lastPingTime.current = Date.now()
             ws.current.send(JSON.stringify({ type: "ping" }))
           }
-        }, 1000)
+        }, pingInterval)
       }
 
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
-          console.log("WebSocket message received:", data)
 
           if (data.type === "pong") {
             const latency = Date.now() - lastPingTime.current
             updateSystemState({ wsLatency: latency })
+            if (onLatencyUpdate) {
+              onLatencyUpdate(latency)
+            }
           } else if (data.type === "device_update") {
             // Handle individual device update
             const deviceData = data.data
@@ -69,8 +125,9 @@ export const useWebSocket = (url, onError) => {
 
             if (systemData.current_cct !== undefined) updates.current_cct = systemData.current_cct
             if (systemData.current_intensity !== undefined) updates.current_intensity = systemData.current_intensity
-            if (systemData.cw !== undefined) updates.cw = systemData.cw
-            if (systemData.ww !== undefined) updates.ww = systemData.ww
+            // Only update cw/ww if not currently adjusting sliders
+            if (!isAdjusting && systemData.cw !== undefined) updates.cw = systemData.cw
+            if (!isAdjusting && systemData.ww !== undefined) updates.ww = systemData.ww
             if (systemData.isSystemOn !== undefined) updates.isSystemOn = systemData.isSystemOn
             if (systemData.auto_mode !== undefined) updates.auto_mode = systemData.auto_mode
             if (systemData.current_scene !== undefined) updates.current_scene = systemData.current_scene
@@ -79,8 +136,13 @@ export const useWebSocket = (url, onError) => {
             if (systemData.system_timers !== undefined) updates.system_timers = systemData.system_timers
             if (systemData.isTimerEnabled !== undefined) updates.isTimerEnabled = systemData.isTimerEnabled
             if (systemData.is_manual_override !== undefined) updates.is_manual_override = systemData.is_manual_override
-            if (systemData.scene_data !== undefined) updates.scene_data = systemData.scene_data
 
+            // Handle scene data separately if callback provided
+            if (systemData.scene_data && onSceneData) {
+              onSceneData(systemData.scene_data)
+            }
+
+            // Handle scheduler updates
             if (systemData.scheduler) {
               updateScheduler({
                 status: systemData.scheduler.status,
@@ -91,54 +153,55 @@ export const useWebSocket = (url, onError) => {
             }
 
             updateSystemState(updates)
-          } else if (data.type === "log_update") {
-            // Handle log update - logs are arrays of plain strings
-            const logData = data.data
-            if (Array.isArray(logData.basicLogs)) {
-              logData.basicLogs.forEach((log) => addBasicLog(log))
+            
+            // Handle timer update callback
+            if (systemData.isTimerEnabled !== undefined && onTimerUpdate) {
+              onTimerUpdate(systemData.isTimerEnabled, systemData.system_timers)
             }
-            if (Array.isArray(logData.advancedLogs)) {
-              logData.advancedLogs.forEach((log) => addAdvancedLog(log))
-            }
-          } else if (data.type === "system_stats") {
-            // Handle system stats
+          } else if (data.type === "system_stats" || data.type === "system_stats_update") {
+            // Handle system stats (CPU, memory, temperature)
             updateSystemState({
-              cpu_percent: data.data.cpu_percent,
-              mem_percent: data.data.mem_percent,
+              cpu_percent: data.data.cpu_percent ?? data.data.cpu,
+              mem_percent: data.data.mem_percent ?? data.data.memory,
               temperature: data.data.temperature,
             })
+          } else if (data.type === "command_ack") {
+            console.log("Command acknowledged:", data.command)
+          } else if (data.type === "command_error") {
+            console.error("Command error:", data.error)
+            if (onError) {
+              onError(`Command failed: ${data.error}`)
+            }
           }
         } catch (err) {
           console.error("WebSocket parsing error:", err, "Raw message:", event.data)
-          addAdvancedLog(`[WebSocket] Parsing error: ${err.message}`)
           if (onError) {
             onError(`Failed to parse WebSocket message: ${err.message}`)
           }
         }
       }
 
-      ws.current.onclose = () => {
-        console.log("WebSocket Disconnected")
-        addAdvancedLog("[WebSocket] Disconnected")
+      ws.current.onclose = (event) => {
+        console.log("WebSocket Disconnected", event.code, event.reason)
+        isConnectedRef.current = false
         updateSystemState({ wsLatency: null })
 
-        if (pingInterval) {
-          clearInterval(pingInterval)
-          pingInterval = null
+        cleanup()
+
+        if (onDisconnect) {
+          onDisconnect()
         }
 
         // Attempt reconnection with exponential backoff
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const backoff = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxBackoff)
-          addAdvancedLog(
-            `[WebSocket] Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`
-          )
-          reconnectTimeout = setTimeout(() => {
+          console.log(`Reconnecting in ${backoff / 1000}s (Attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`)
+          reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttempts.current++
             connectWebSocket()
           }, backoff)
         } else {
-          addAdvancedLog("[WebSocket] Max reconnection attempts reached")
+          console.error("Max reconnection attempts reached")
           if (onError) {
             onError("Failed to reconnect to WebSocket. Please refresh the page.")
           }
@@ -147,7 +210,6 @@ export const useWebSocket = (url, onError) => {
 
       ws.current.onerror = (error) => {
         console.error("WebSocket error:", error)
-        addAdvancedLog("[WebSocket] Error occurred")
         if (onError) {
           onError("WebSocket error occurred")
         }
@@ -156,21 +218,19 @@ export const useWebSocket = (url, onError) => {
 
     connectWebSocket()
 
-    // Cleanup function
+    // Cleanup function on unmount
     return () => {
+      cleanup()
       if (ws.current) {
         ws.current.close()
         ws.current = null
       }
-      if (pingInterval) {
-        clearInterval(pingInterval)
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-      }
     }
-  }, [url, updateDevice, updateDevices, updateSystemState, updateScheduler, addBasicLog, addAdvancedLog, onError])
+  }, [url]) // Intentionally minimal dependencies to avoid reconnection loops
 
-  // Return WebSocket reference for sending commands
-  return ws
+  return { 
+    ws, 
+    sendCommand, 
+    isConnected: isConnectedRef.current 
+  }
 }

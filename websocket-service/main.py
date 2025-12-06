@@ -12,6 +12,7 @@ import structlog
 import uuid
 import os
 import time
+import signal
 import psutil
 from prometheus_client import (
     Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry, Info, ProcessCollector, PlatformCollector
@@ -41,22 +42,36 @@ logging.basicConfig(
 )
 logger = structlog.get_logger(service="websocket-service")
 
+# Connection management
 clients = set()
 clients_lock = asyncio.Lock()
 executor = ThreadPoolExecutor(max_workers=2)
+
+# Configuration constants
+MAX_CONNECTIONS = 100
+REDIS_RECONNECT_DELAY = 5  # seconds
+REDIS_MAX_RECONNECT_ATTEMPTS = 10
+
+# Shutdown flag for graceful shutdown
+shutdown_event = asyncio.Event()
+redis_connected = False
 
 # --- Prometheus Metrics ---
 REGISTRY = CollectorRegistry()
 ProcessCollector(registry=REGISTRY)
 PlatformCollector(registry=REGISTRY)
 WS_CLIENTS = Gauge('websocket_clients', 'Current WebSocket clients', registry=REGISTRY)
+WS_MAX_CONNECTIONS = Gauge('websocket_max_connections', 'Maximum allowed WebSocket connections', registry=REGISTRY)
+REDIS_CONNECTED = Gauge('websocket_redis_connected', 'Redis connection status (1=connected, 0=disconnected)', registry=REGISTRY)
 COMMAND_COUNT = Counter('websocket_command_forward_total', 'Total commands forwarded', ['command_type'], registry=REGISTRY)
 COMMAND_ERROR = Counter('websocket_command_error_total', 'Command forwarding errors', ['command_type'], registry=REGISTRY)
+CONNECTION_REJECTED = Counter('websocket_connection_rejected_total', 'WebSocket connections rejected', ['reason'], registry=REGISTRY)
 CPU_USAGE = Gauge('websocket_cpu_usage_percent', 'CPU usage percent', registry=REGISTRY)
 MEM_USAGE = Gauge('websocket_memory_usage_percent', 'Memory usage percent', registry=REGISTRY)
 UPTIME = Gauge('websocket_uptime_seconds', 'Service uptime in seconds', registry=REGISTRY)
 SERVICE_INFO = Info('websocket_service', 'WebSocket service build info', registry=REGISTRY)
 SERVICE_INFO.info({'version': '1.0.0', 'service': 'websocket-service'})
+WS_MAX_CONNECTIONS.set(MAX_CONNECTIONS)
 START_TIME = time.time()
 
 def redis_subscribe(pubsub):
@@ -80,29 +95,48 @@ async def subscribe_to_updates():
     Subscribe to device_update, system_update, and log_update channels.
     All messages are now JSON format (not pickle).
     Forward relevant updates to webapp clients.
+    Includes automatic reconnection with exponential backoff.
     """
+    global redis_connected
     correlation_id = str(uuid.uuid4())
-    logger.info("Starting Redis subscription", correlation_id=correlation_id)
-    try:
-        redis_client = redis.Redis(
-            host=config['redis']["host"],
-            port=config['redis']['port'],
-            decode_responses=False
-        )
-        pubsub = redis_client.pubsub()
-        pubsub.subscribe("device_update", "system_update", "log_update", "system_stats_update")
-        logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update", "system_stats_update"])
-        
-        # Track aggregated device state for webapp
-        devices_state = {}
-        # Track logs for webapp
-        basic_logs = deque(maxlen=50)
-        advanced_logs = deque(maxlen=100)
-        
-        loop = asyncio.get_event_loop()
-        while True:
-            message = await loop.run_in_executor(executor, redis_subscribe, pubsub)
-            if message:
+    reconnect_attempts = 0
+    
+    while not shutdown_event.is_set():
+        redis_client = None
+        pubsub = None
+        try:
+            logger.info("Connecting to Redis", correlation_id=correlation_id, attempt=reconnect_attempts + 1)
+            redis_client = redis.Redis(
+                host=config['redis']["host"],
+                port=config['redis']['port'],
+                decode_responses=False,
+                socket_connect_timeout=5,
+                socket_timeout=10
+            )
+            # Test connection
+            redis_client.ping()
+            redis_connected = True
+            REDIS_CONNECTED.set(1)
+            reconnect_attempts = 0
+            
+            pubsub = redis_client.pubsub()
+            pubsub.subscribe("device_update", "system_update", "log_update", "system_stats_update")
+            logger.info("Subscribed to channels", correlation_id=correlation_id, channels=["device_update", "system_update", "log_update", "system_stats_update"])
+            
+            # Track aggregated device state for webapp
+            devices_state = {}
+            # Track logs for webapp
+            basic_logs = deque(maxlen=50)
+            advanced_logs = deque(maxlen=100)
+            
+            loop = asyncio.get_event_loop()
+            while not shutdown_event.is_set():
+                message = await loop.run_in_executor(executor, redis_subscribe, pubsub)
+                if message is None:
+                    # Redis subscription error, break to reconnect
+                    logger.warning("Redis subscription returned None, reconnecting", correlation_id=correlation_id)
+                    break
+                    
                 channel = message["channel"]
                 data_bytes = message["data"]
                 
@@ -110,14 +144,14 @@ async def subscribe_to_updates():
                     if isinstance(channel, bytes):
                         channel = channel.decode("utf-8")
                 except UnicodeDecodeError as e:
-                    logger.error("Failed to decode channel", correlation_id=str(uuid.uuid4()), error=str(e), raw_channel=channel)
+                    logger.error("Failed to decode channel", correlation_id=str(uuid.uuid4()), error=str(e))
                     continue
                 
                 try:
                     # Parse JSON data
                     data = json.loads(data_bytes)
                 except json.JSONDecodeError as e:
-                    logger.error("JSON decode error", correlation_id=str(uuid.uuid4()), error=str(e), raw_data=data_bytes[:100])
+                    logger.error("JSON decode error", correlation_id=str(uuid.uuid4()), error=str(e))
                     continue
                 
                 ws_message = None
@@ -195,41 +229,76 @@ async def subscribe_to_updates():
                     logger.debug("Prepared log_update message", correlation_id=str(uuid.uuid4()))
                 
                 if ws_message:
-                    async with clients_lock:
-                        disconnected = []
-                        for ws in clients:
-                            try:
-                                await ws.send(ws_message)
-                                logger.debug(
-                                    "Sent message to client",
-                                    correlation_id=str(uuid.uuid4()),
-                                    message_type=channel,
-                                    client_host=ws.remote_address[0],
-                                    client_port=ws.remote_address[1]
-                                )
-                            except Exception as e:
-                                logger.error(
-                                    "Failed to send to client",
-                                    correlation_id=str(uuid.uuid4()),
-                                    message_type=channel,
-                                    client_host=ws.remote_address[0],
-                                    client_port=ws.remote_address[1],
-                                    error=str(e)
-                                )
-                                disconnected.append(ws)
-                        for ws in disconnected:
-                            clients.discard(ws)
-                            logger.info(
-                                "Removed disconnected client",
-                                correlation_id=str(uuid.uuid4()),
-                                client_host=ws.remote_address[0],
-                                client_port=ws.remote_address[1]
-                            )
-            await asyncio.sleep(0.01)
-    except Exception as e:
-        logger.error("Error in subscribe_to_updates", correlation_id=correlation_id, error=str(e))
-    finally:
-        redis_client.close()
+                    await broadcast_to_clients(ws_message, channel)
+                    
+                await asyncio.sleep(0.01)
+                
+        except redis.ConnectionError as e:
+            redis_connected = False
+            REDIS_CONNECTED.set(0)
+            logger.error("Redis connection error", correlation_id=correlation_id, error=str(e))
+        except Exception as e:
+            redis_connected = False
+            REDIS_CONNECTED.set(0)
+            logger.error("Error in subscribe_to_updates", correlation_id=correlation_id, error=str(e))
+        finally:
+            if pubsub:
+                try:
+                    pubsub.close()
+                except Exception:
+                    pass
+            if redis_client:
+                try:
+                    redis_client.close()
+                except Exception:
+                    pass
+        
+        # Reconnection with exponential backoff
+        if not shutdown_event.is_set():
+            reconnect_attempts += 1
+            if reconnect_attempts > REDIS_MAX_RECONNECT_ATTEMPTS:
+                logger.error("Max Redis reconnection attempts reached", correlation_id=correlation_id)
+                # Reset and try again
+                reconnect_attempts = 0
+            
+            delay = min(REDIS_RECONNECT_DELAY * (2 ** min(reconnect_attempts - 1, 5)), 60)
+            logger.info("Reconnecting to Redis", correlation_id=correlation_id, delay=delay, attempt=reconnect_attempts)
+            await asyncio.sleep(delay)
+
+
+async def broadcast_to_clients(ws_message, channel):
+    """Broadcast a message to all connected WebSocket clients."""
+    async with clients_lock:
+        disconnected = []
+        for ws in clients:
+            try:
+                await ws.send(ws_message)
+                logger.debug(
+                    "Sent message to client",
+                    correlation_id=str(uuid.uuid4()),
+                    message_type=channel,
+                    client_host=ws.remote_address[0],
+                    client_port=ws.remote_address[1]
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to send to client",
+                    correlation_id=str(uuid.uuid4()),
+                    message_type=channel,
+                    client_host=ws.remote_address[0],
+                    client_port=ws.remote_address[1],
+                    error=str(e)
+                )
+                disconnected.append(ws)
+        for ws in disconnected:
+            clients.discard(ws)
+            WS_CLIENTS.set(len(clients))
+            logger.info(
+                "Removed disconnected client",
+                correlation_id=str(uuid.uuid4()),
+                client_host=ws.remote_address[0],
+                client_port=ws.remote_address[1]
+            )
 
 async def forward_command_to_api(command):
     correlation_id = str(uuid.uuid4())
@@ -285,17 +354,31 @@ async def forward_command_to_api(command):
 async def websocket_handler(websocket):
     client_id = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
     correlation_id = str(uuid.uuid4())
-    logger.info("WebSocket client connected", correlation_id=correlation_id, client_id=client_id)
+    
+    # Check connection limit
     async with clients_lock:
+        if len(clients) >= MAX_CONNECTIONS:
+            logger.warning("Connection rejected: max connections reached", correlation_id=correlation_id, client_id=client_id, max_connections=MAX_CONNECTIONS)
+            CONNECTION_REJECTED.labels(reason="max_connections").inc()
+            await websocket.close(1013, "Max connections reached")
+            return
         clients.add(websocket)
         WS_CLIENTS.set(len(clients))
+    
+    logger.info("WebSocket client connected", correlation_id=correlation_id, client_id=client_id, total_clients=len(clients))
+    
     try:
         async for message in websocket:
             try:
                 command = json.loads(message)
                 logger.info("Received command", correlation_id=str(uuid.uuid4()), client_id=client_id, command_type=command.get("type"))
                 if command.get("type") == "ping":
-                    await websocket.send(json.dumps({"type": "pong", "isSystemOn": True}))
+                    # Include redis connection status in pong response
+                    await websocket.send(json.dumps({
+                        "type": "pong", 
+                        "isSystemOn": True,
+                        "redis_connected": redis_connected
+                    }))
                     logger.debug("Sent pong response", correlation_id=str(uuid.uuid4()), client_id=client_id)
                 else:
                     success = await forward_command_to_api(command)
@@ -312,7 +395,7 @@ async def websocket_handler(websocket):
                     error=str(e),
                     message=message[:100]
                 )
-                await websocket.send(json.dumps({"type": "command_error", "error": f"Invalid JSON: {str(e)}"}))
+                await websocket.send(json.dumps({"type": "command_error", "error": "Invalid JSON format"}))
             except websockets.exceptions.ConnectionClosed:
                 logger.info("Client closed connection", correlation_id=str(uuid.uuid4()), client_id=client_id)
                 break
@@ -323,7 +406,7 @@ async def websocket_handler(websocket):
                     client_id=client_id,
                     error=str(e)
                 )
-                await websocket.send(json.dumps({"type": "command_error", "error": f"Server error: {str(e)}"}))
+                await websocket.send(json.dumps({"type": "command_error", "error": "Internal server error"}))
     except websockets.exceptions.ConnectionClosed:
         logger.info("WebSocket client disconnected normally", correlation_id=correlation_id, client_id=client_id)
     except Exception as e:
@@ -332,23 +415,75 @@ async def websocket_handler(websocket):
         async with clients_lock:
             clients.discard(websocket)
             WS_CLIENTS.set(len(clients))
-        logger.info("WebSocket client disconnected", correlation_id=correlation_id, client_id=client_id)
+        logger.info("WebSocket client disconnected", correlation_id=correlation_id, client_id=client_id, remaining_clients=len(clients))
 
 async def metrics_handler(request):
     # aiohttp endpoint for /metrics (runs on separate small metrics server)
     CPU_USAGE.set(psutil.cpu_percent())
     MEM_USAGE.set(psutil.virtual_memory().percent)
     UPTIME.set(time.time() - START_TIME)
+    REDIS_CONNECTED.set(1 if redis_connected else 0)
     data = generate_latest(REGISTRY)
     return web.Response(body=data, content_type=CONTENT_TYPE_LATEST)
 
-async def start_metrics_server():
+
+async def health_handler(request):
+    """Health check endpoint for container orchestration."""
+    status = "healthy" if redis_connected else "degraded"
+    return web.json_response({
+        "status": status,
+        "redis_connected": redis_connected,
+        "connected_clients": len(clients),
+        "uptime_seconds": time.time() - START_TIME
+    })
+
+
+async def start_http_server():
+    """Start HTTP server for metrics and health endpoints."""
     app = web.Application()
     app.router.add_get('/metrics', metrics_handler)
+    app.router.add_get('/health', health_handler)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, config['microservices']['websocket_service']['host'], config['microservices']['websocket_service'].get('metrics_port', 9103))
+    site = web.TCPSite(
+        runner, 
+        config['microservices']['websocket_service']['host'], 
+        config['microservices']['websocket_service'].get('metrics_port', 9103)
+    )
     await site.start()
+    logger.info("HTTP server started", port=config['microservices']['websocket_service'].get('metrics_port', 9103))
+    return runner
+
+
+async def graceful_shutdown(ws_server, http_runner):
+    """Gracefully shutdown the server."""
+    correlation_id = str(uuid.uuid4())
+    logger.info("Initiating graceful shutdown", correlation_id=correlation_id)
+    
+    # Signal Redis subscription to stop
+    shutdown_event.set()
+    
+    # Close all WebSocket connections
+    async with clients_lock:
+        for ws in list(clients):
+            try:
+                await ws.close(1001, "Server shutting down")
+            except Exception:
+                pass
+        clients.clear()
+        WS_CLIENTS.set(0)
+    
+    # Close WebSocket server
+    ws_server.close()
+    await ws_server.wait_closed()
+    
+    # Cleanup HTTP server
+    await http_runner.cleanup()
+    
+    # Shutdown executor
+    executor.shutdown(wait=False)
+    
+    logger.info("Graceful shutdown complete", correlation_id=correlation_id)
 
 async def main():
     correlation_id = str(uuid.uuid4())
@@ -356,19 +491,48 @@ async def main():
         "Starting WebSocket server",
         correlation_id=correlation_id,
         host=config['microservices']['websocket_service']['host'],
-        port=config['microservices']['websocket_service']['port']
+        port=config['microservices']['websocket_service']['port'],
+        max_connections=MAX_CONNECTIONS
     )
-    asyncio.create_task(subscribe_to_updates())
-    asyncio.create_task(start_metrics_server())
-    async with websockets.serve(
+    
+    # Start Redis subscription
+    subscription_task = asyncio.create_task(subscribe_to_updates())
+    
+    # Start HTTP server for metrics and health
+    http_runner = await start_http_server()
+    
+    # Start WebSocket server
+    ws_server = await websockets.serve(
         websocket_handler,
         config['microservices']['websocket_service']['host'],
         config['microservices']['websocket_service']['port'],
         max_size=config["server"].get("max_message_size", 1000000),
         ping_interval=30,
-        ping_timeout=90
-    ):
-        await asyncio.Future()
+        ping_timeout=90,
+        max_queue=32  # Limit message queue per connection
+    )
+    
+    logger.info("WebSocket server started", correlation_id=correlation_id)
+    
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_event_loop()
+    
+    def signal_handler():
+        logger.info("Received shutdown signal", correlation_id=correlation_id)
+        asyncio.create_task(graceful_shutdown(ws_server, http_runner))
+    
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, signal_handler)
+    
+    try:
+        # Wait until shutdown is signaled
+        await shutdown_event.wait()
+    except Exception as e:
+        logger.error("Error in main loop", correlation_id=correlation_id, error=str(e))
+    finally:
+        if not shutdown_event.is_set():
+            await graceful_shutdown(ws_server, http_runner)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

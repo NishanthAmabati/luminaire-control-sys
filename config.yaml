@@ -46,6 +46,7 @@ microservices:
   websocket_service:
     host: "websocket-service"
     port: 5001
+    metrics_port: 9103
     log_level: "info"
   timer_service:
     host: "timer-service"

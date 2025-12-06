@@ -35,7 +35,6 @@ import {
   Clock,
 } from "lucide-react"
 import { toast, Toaster } from "react-hot-toast"
-import { debounce } from "lodash"
 import logo from "./SSS.png"
 import { useDevices } from "./contexts/DeviceContext"
 import { useSystem } from "./contexts/SystemContext"
@@ -165,20 +164,6 @@ const App = () => {
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
-
-  const debouncedUpdateState = useRef(
-    debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
-      setState((prev) => ({ ...prev, ...newState }));
-      setSceneData(newSceneData);
-      if (!isEditingTimer.onTime) setOnTime(newOnTime);
-      if (!isEditingTimer.offTime) setOffTime(newOffTime);
-      setLocalCct(newLocalCct);
-      setLocalIntensity(newLocalIntensity);
-      if (newVerticalLinePosition !== undefined) {
-        setVerticalLinePosition(newVerticalLinePosition);
-      }
-    }, 100)
-  ).current
 
   const getCurrentSecondOfDay = () => {
     const now = new Date()
