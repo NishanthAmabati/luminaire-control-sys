@@ -296,7 +296,8 @@ class SchedulerOperations:
                 self.state["scheduler"]["current_interval"] = current_idx // 10
                 self._set_state(self.state)
 
-                # Determine if values changed significantly (for logging purposes)
+                # Threshold checks used only for conditional logging (not for device updates)
+                # Device updates are now sent every second regardless of value changes
                 cw_threshold = 0.1  # 0.1% change threshold
                 ww_threshold = 0.1
                 cct_threshold = 1.0  # 1K change threshold

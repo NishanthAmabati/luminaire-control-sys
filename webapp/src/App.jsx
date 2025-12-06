@@ -327,7 +327,7 @@ const App = () => {
       
       setTimeout(() => setIsLoading(false), 800)
     },
-    [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler]
+    [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler, setSceneData]
   )
 
   const stopScheduler = useCallback(() => {
