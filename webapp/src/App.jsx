@@ -577,6 +577,14 @@ const App = () => {
           
           updateSystemState(systemUpdates)
           
+          // Update scene data for graphs
+          if (stateData.scene_data) {
+            setSceneData({
+              cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
+              intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
+            })
+          }
+          
           // Update local CCT and intensity values for sliders
           if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
           if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)

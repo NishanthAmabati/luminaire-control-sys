@@ -174,30 +174,6 @@ class TimerOperations:
                     error_msg = f"Invalid timer format: {timer.on} or {timer.off}"
                     logger.error(error_msg, error=str(e))
                     return {"status": "error", "error": error_msg}
-                
-                # Validate timer times are not too close to current time (within 2 minutes)
-                # This prevents immediate triggering and mode conflicts
-                current_datetime = datetime.strptime(current_time_str, "%H:%M")
-                
-                # Calculate time until each event (forward in time only)
-                on_minutes_until = self._minutes_until(on_time, current_datetime)
-                off_minutes_until = self._minutes_until(off_time, current_datetime)
-                
-                # Check if timer ON time is too soon (less than 2 minutes away)
-                if on_minutes_until < 2:
-                    logger.warning("Timer ON time too close to current time", on_time=timer.on, current_time=current_time_str, minutes_until=on_minutes_until)
-                    return {
-                        "status": "error",
-                        "error": f"Timer ON time ({timer.on}) is too close to current time ({current_time_str}). Please set at least 2 minutes in the future."
-                    }
-                
-                # Check if timer OFF time is too soon (less than 2 minutes away)
-                if off_minutes_until < 2:
-                    logger.warning("Timer OFF time too close to current time", off_time=timer.off, current_time=current_time_str, minutes_until=off_minutes_until)
-                    return {
-                        "status": "error",
-                        "error": f"Timer OFF time ({timer.off}) is too close to current time ({current_time_str}). Please set at least 2 minutes in the future."
-                    }
             
             # Update timers
             self.timers = [timer.dict() for timer in data.timers]
