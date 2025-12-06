@@ -456,11 +456,16 @@ const App = () => {
       setOffTime(systemState.system_timers[0].off || "");
       logBasic(`Timers populated from local copy: On ${systemState.system_timers[0].on}, Off ${systemState.system_timers[0].off}`);
     } else if (!newIsEnabled) {
+      // Clear timer fields and timer state when disabling
       setOnTime("");
       setOffTime("");
-      updateSystemState({ is_manual_override: false });
+      updateSystemState({ 
+        is_manual_override: false,
+        system_timers: [],
+        isTimerEnabled: false
+      });
     }
-  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers]);
+  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers, updateSystemState]);
 
   const handleTimeChange = useCallback(
     (e, type) => {

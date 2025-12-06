@@ -590,6 +590,7 @@ class SchedulerOperations:
         correlation_id = str(uuid.uuid4())
         logger.info("Toggling system", correlation_id=correlation_id, isSystemOn=data.isSystemOn)
         if not data.isSystemOn:
+            # Save current state before turning off
             self.state["last_state"] = {
                 "auto_mode": self.state["auto_mode"],
                 "current_scene": self.state["current_scene"],
@@ -598,7 +599,12 @@ class SchedulerOperations:
                 "current_cct": self.state["current_cct"],
                 "current_intensity": self.state["current_intensity"]
             }
-            self.stop_scheduler()
+            # Stop scheduler if running
+            if self.state["scheduler"]["status"] == "running":
+                self.stop_scheduler()
+                logger.info("Scheduler stopped for system OFF", correlation_id=correlation_id)
+            
+            # Turn off lights
             self.state["cw"], self.state["ww"] = 0.0, 0.0
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
@@ -609,6 +615,7 @@ class SchedulerOperations:
                     self.log_advanced(f"Toggle system OFF failed: {resp.text}")
                     logger.warning("Toggle system OFF failed", correlation_id=correlation_id, error=resp.text)
         else:
+            # Restore previous state
             last_state = self.state.get("last_state", {})
             self.state["auto_mode"] = last_state.get("auto_mode", False)
             self.state["current_scene"] = last_state.get("current_scene", None)
@@ -616,21 +623,30 @@ class SchedulerOperations:
             self.state["ww"] = last_state.get("ww", 50.0)
             self.state["current_cct"] = last_state.get("current_cct", 3500)
             self.state["current_intensity"] = last_state.get("current_intensity", 250)
+            
+            # If auto mode was active with a scene, restart the scheduler
             if self.state["auto_mode"] and self.state["current_scene"] in scene_data:
                 self.state["scene_data"] = scene_data[self.state["current_scene"]]
                 self.state["activationTime"] = time.strftime("%H:%M:%S")
                 self.state["loaded_scene"] = self.state["current_scene"]
                 self.state["scheduler"]["status"] = "running"
+                
+                # Start scheduler - it will pick up from current time of day
                 asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
-                self.log_basic(f"Reactivated scene: {self.state['current_scene']}")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
-                    json={"cw": self.state["cw"], "ww": self.state["ww"]}
-                )
-                if resp.status_code != 200:
-                    self.log_advanced(f"Toggle system ON failed: {resp.text}")
-                    logger.warning("Toggle system ON failed", correlation_id=correlation_id, error=resp.text)
+                self.log_basic(f"Reactivated scene: {self.state['current_scene']} after system ON")
+                logger.info("Scheduler restarted for system ON", correlation_id=correlation_id, scene=self.state["current_scene"])
+            else:
+                # Manual mode - just restore light levels
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                        json={"cw": self.state["cw"], "ww": self.state["ww"]}
+                    )
+                    if resp.status_code != 200:
+                        self.log_advanced(f"Toggle system ON failed: {resp.text}")
+                        logger.warning("Toggle system ON failed", correlation_id=correlation_id, error=resp.text)
+                logger.info("System turned ON in manual mode", correlation_id=correlation_id)
+        
         self.state["isSystemOn"] = data.isSystemOn
         self.log_basic(f"System turned {'ON' if data.isSystemOn else 'OFF'}")
         self._set_state(self.state)
