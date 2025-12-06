@@ -43,28 +43,6 @@ class TimerOperations:
         self.timers: List[Dict] = []
         self.is_enabled: bool = False
         self._running: bool = False
-    
-    def _minutes_until(self, target_time: datetime, current_time: datetime) -> int:
-        """
-        Calculate minutes until target_time from current_time (forward only).
-        Handles day wrap-around correctly.
-        
-        Args:
-            target_time: Target time (datetime with hour/minute)
-            current_time: Current time (datetime with hour/minute)
-            
-        Returns:
-            Minutes until target time (0-1439)
-        """
-        target_mins = target_time.hour * 60 + target_time.minute
-        current_mins = current_time.hour * 60 + current_time.minute
-        
-        if target_mins >= current_mins:
-            # Same day
-            return target_mins - current_mins
-        else:
-            # Next day (wrap around)
-            return (1440 - current_mins) + target_mins
         
     async def _broadcast_timer_status(self):
         """Broadcast current timer status via Redis pub/sub to update UI"""
@@ -77,58 +55,6 @@ class TimerOperations:
             logger.debug("Broadcasted timer status", timer_count=len(self.timers), enabled=self.is_enabled)
         except Exception as e:
             logger.error("Failed to broadcast timer status", error=str(e))
-    
-    async def _mark_past_triggers_as_processed(self):
-        """
-        Mark past timer triggers as already processed when enabling timers.
-        This prevents immediate triggering of past times when manually enabling.
-        """
-        try:
-            now = datetime.now()
-            today_str = now.strftime("%Y-%m-%d")
-            current_time_str = now.strftime("%H:%M")
-            
-            # Parse current time once for comparisons
-            current_time = datetime.strptime(current_time_str, "%H:%M")
-            
-            # Initialize or load trigger state
-            triggers_data = await self.redis_client.get("timer:triggers")
-            if triggers_data:
-                triggers = json.loads(triggers_data)
-                # Reset if different day
-                if triggers.get("date") != today_str:
-                    triggers = {"date": today_str, "triggered": {}}
-            else:
-                triggers = {"date": today_str, "triggered": {}}
-            
-            # Mark all past triggers as already processed
-            for idx, timer in enumerate(self.timers):
-                on_time_str = timer["on"]
-                off_time_str = timer["off"]
-                
-                # Parse times for proper comparison
-                on_time = datetime.strptime(on_time_str, "%H:%M")
-                off_time = datetime.strptime(off_time_str, "%H:%M")
-                
-                on_trigger_id = f"timer_{idx}_on_{today_str}"
-                off_trigger_id = f"timer_{idx}_off_{today_str}"
-                
-                # Mark triggers that have already passed as processed
-                # Compare times properly using datetime objects
-                if current_time >= on_time:
-                    triggers["triggered"][on_trigger_id] = now.isoformat()
-                    logger.debug("Marked past ON trigger as processed", timer_index=idx, on_time=on_time_str)
-                
-                if current_time >= off_time:
-                    triggers["triggered"][off_trigger_id] = now.isoformat()
-                    logger.debug("Marked past OFF trigger as processed", timer_index=idx, off_time=off_time_str)
-            
-            # Save updated trigger state
-            await self.redis_client.set("timer:triggers", json.dumps(triggers))
-            logger.info("Marked past triggers as processed", date=today_str, current_time=current_time_str)
-            
-        except Exception as e:
-            logger.error("Failed to mark past triggers", error=str(e))
         
     async def initialize(self):
         """Load timer state from Redis on startup"""
@@ -229,17 +155,11 @@ class TimerOperations:
             # Persist to Redis
             await self.redis_client.set("timer:enabled", json.dumps(self.is_enabled))
             
-            # When disabling, clear timers and trigger state completely
+            # When disabling, just disable - don't clear timer configurations
+            # Users may want to re-enable the same timers later
             if not enable:
-                self.timers = []
-                await self.redis_client.delete("timer:timers")
                 await self.redis_client.delete("timer:triggers")
-                logger.info("Timers cleared due to disable")
-            else:
-                # When enabling, clear trigger state to allow fresh start
-                # but mark current time triggers as already processed to prevent
-                # immediate past-time triggers
-                await self._mark_past_triggers_as_processed()
+                logger.info("Timer system disabled - triggers cleared")
                 
             # Broadcast timer status to UI
             await self._broadcast_timer_status()
