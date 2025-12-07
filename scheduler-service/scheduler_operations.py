@@ -442,7 +442,8 @@ class SchedulerOperations:
                 logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
             
             # Restore last manual values (not scene values)
-            if "last_state" in self.state and not self.state.get("auto_mode"):
+            # Only restore if we have last_state and we're actually in manual mode (auto_mode == False)
+            if "last_state" in self.state and self.state.get("auto_mode") == False:
                 # Use last manual values if available
                 last = self.state["last_state"]
                 self.state["cw"] = last.get("cw", self.state["cw"])
