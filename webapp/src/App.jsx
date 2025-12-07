@@ -1650,7 +1650,6 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(true)}
-                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={isTimerEnabled}
                         aria-label="Enable timer"
@@ -1660,7 +1659,6 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${!isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(false)}
-                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={!isTimerEnabled}
                         aria-label="Disable timer"
@@ -1678,9 +1676,9 @@ const App = () => {
                         type="time"
                         value={onTime}
                         onChange={(e) => handleTimeChange(e, "on")}
-                        disabled={!isTimerEnabled || !systemState.isSystemOn}
+                        disabled={!isTimerEnabled}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
+                        aria-disabled={!isTimerEnabled}
                       />
                     </div>
                     <div className="time-input-group">
@@ -1690,9 +1688,9 @@ const App = () => {
                         type="time"
                         value={offTime}
                         onChange={(e) => handleTimeChange(e, "off")}
-                        disabled={!isTimerEnabled || !systemState.isSystemOn}
+                        disabled={!isTimerEnabled}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
+                        aria-disabled={!isTimerEnabled}
                       />
                     </div>
                     <div className="set-button-group">
@@ -1700,7 +1698,7 @@ const App = () => {
                       <button
                         className="set-timer-button"
                         onClick={handleSetTimer}
-                        disabled={!isTimerEnabled || !systemState.isSystemOn}
+                        disabled={!isTimerEnabled}
                         aria-label="Set timer"
                       >
                         Set

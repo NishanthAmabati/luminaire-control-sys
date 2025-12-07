@@ -6,33 +6,29 @@ import { toast } from "react-hot-toast"
 const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, stopScheduler }) => {
   const debounceTimeout = useRef(null)
 
-  const adjustLight = useCallback((cw, ww, cct, intensity) => {
+  const adjustLight = useCallback((cct, intensity) => {
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
     debounceTimeout.current = setTimeout(() => {
-      sendCommand({ type: "adjust_light", cw, ww, cct, intensity })
+      // Calculate cw and ww from cct and intensity
+      const cwBase = (cct - 2000) / ((7000 - 2000) / 100.0)
+      const wwBase = 100.0 - cwBase
+      const intensityPercent = intensity / 1000.0
+      const cw = Math.max(0, Math.min(100, cwBase * intensityPercent))
+      const ww = Math.max(0, Math.min(100, wwBase * intensityPercent))
+      sendCommand({ type: "sendAll", cw, ww, intensity })
     }, 100)
   }, [sendCommand])
 
   const handleCctChange = useCallback((e) => {
     const cct = parseFloat(e.target.value)
     const intensity = state.current_intensity
-    adjustLight(null, null, cct, intensity)
+    adjustLight(cct, intensity)
   }, [state.current_intensity, adjustLight])
 
   const handleIntensityChange = useCallback((e) => {
     const intensity = parseFloat(e.target.value)
     const cct = state.current_cct
-    adjustLight(null, null, cct, intensity)
-  }, [state.current_cct, adjustLight])
-
-  const setCct = useCallback((cct) => {
-    const intensity = state.current_intensity
-    adjustLight(null, null, cct, intensity)
-  }, [state.current_intensity, adjustLight])
-
-  const setIntensity = useCallback((intensity) => {
-    const cct = state.current_cct
-    adjustLight(null, null, cct, intensity)
+    adjustLight(cct, intensity)
   }, [state.current_cct, adjustLight])
 
   return (
