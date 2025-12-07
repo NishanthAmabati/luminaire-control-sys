@@ -161,8 +161,8 @@ const Charts = ({ isLoading, theme, state, sceneData, verticalLinePosition }) =>
         },
       },
       y: { 
-        min: 2000, 
-        max: 7000, 
+        min: 3000,  // Slightly below device min (3500) for visual padding
+        max: 7000,  // Slightly above device max (6500) for visual padding
         title: { 
           display: true, 
           text: "CCT (K)", 
@@ -255,7 +255,7 @@ const Charts = ({ isLoading, theme, state, sceneData, verticalLinePosition }) =>
       },
       y: { 
         min: 0, 
-        max: 1000, 
+        max: 500,  // Match device capability (config max_intensity)
         title: { 
           display: true, 
           text: "Intensity (lux)", 
