@@ -91,6 +91,7 @@ class SchedulerOperations:
             "ww": 50.0,
             "scheduler": {
                 "current_cct": 3500,
+                "current_intensity": 250,
                 "current_interval": 0,
                 "total_intervals": config["luminaire_operations"]["total_intervals"],
                 "status": "idle",
@@ -300,6 +301,11 @@ class SchedulerOperations:
                 
                 self.state["current_cct"] = calc_cct
                 self.state["current_intensity"] = calc_intensity
+                
+                # Update scheduler object with current values for consistency
+                self.state["scheduler"]["current_cct"] = calc_cct
+                self.state["scheduler"]["current_intensity"] = calc_intensity
+                
                 cw, ww = self.calculate_cw_ww_from_cct_intensity(calc_cct, calc_intensity)
                 
                 # Round cw/ww to 2 decimal places for stability

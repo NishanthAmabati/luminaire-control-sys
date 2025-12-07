@@ -139,8 +139,7 @@ const App = () => {
     error: null,
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
-  const [localCct, setLocalCct] = useState(null)
-  const [localIntensity, setLocalIntensity] = useState(null)
+  // Removed localCct and localIntensity - using systemState.scheduler values directly
   const cctChartRef = useRef(null)
   const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -869,10 +868,8 @@ const App = () => {
               if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== systemState.isSystemOn && isTimerEnabled) {
                 updateSystemState({ is_manual_override: false });
               }
-              
-              // Update local CCT and intensity for UI display (explicit undefined checks for falsy values)
-              if (data.data.current_cct !== undefined) setLocalCct(data.data.current_cct);
-              if (data.data.current_intensity !== undefined) setLocalIntensity(data.data.current_intensity);
+              // WebSocket receives scheduler.current_cct and scheduler.current_intensity which are updated every second by backend
+              // No need for local state - just use systemState values directly which are already updated by updateSystemState
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
@@ -984,12 +981,12 @@ const App = () => {
           ? [
               {
                 label: "current CCT",
-                data: (localCct ?? systemState.current_cct)
+                data: systemState.scheduler.current_cct
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: localCct ?? systemState.current_cct }]
+                    ? [{ x: centerPosition, y: systemState.scheduler.current_cct }]
                     : [
-                        { x: 0, y: localCct ?? systemState.current_cct },
-                        { x: 8640, y: localCct ?? systemState.current_cct },
+                        { x: 0, y: systemState.scheduler.current_cct },
+                        { x: 8640, y: systemState.scheduler.current_cct },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1005,7 +1002,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.current_cct, localCct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1038,12 +1035,12 @@ const App = () => {
           ? [
               {
                 label: "current intensity",
-                data: (localIntensity ?? systemState.current_intensity)
+                data: systemState.scheduler.current_intensity
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: localIntensity ?? systemState.current_intensity }]
+                    ? [{ x: centerPosition, y: systemState.scheduler.current_intensity }]
                     : [
-                        { x: 0, y: localIntensity ?? systemState.current_intensity },
-                        { x: 8640, y: localIntensity ?? systemState.current_intensity },
+                        { x: 0, y: systemState.scheduler.current_intensity },
+                        { x: 8640, y: systemState.scheduler.current_intensity },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1059,7 +1056,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, localIntensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -1068,7 +1065,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current CCT: ${(localCct ?? systemState.current_cct).toFixed(1)}K`,
+          text: `Current CCT: ${systemState.scheduler.current_cct.toFixed(1)}K`,
         },
         title: {
           display: true,
@@ -1178,7 +1175,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct, localCct]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_cct]
   )
 
   const intensityChartOptions = useMemo(
@@ -1188,7 +1185,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current Intensity: ${(localIntensity ?? systemState.current_intensity).toFixed(1)} lux`,
+          text: `Current Intensity: ${systemState.scheduler.current_intensity.toFixed(1)} lux`,
         },
         title: {
           display: true,
@@ -1298,7 +1295,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity, localIntensity]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_intensity]
   )
 
   const monitoringDisplay = useMemo(() => {
@@ -1560,14 +1557,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={localCct !== null ? localCct : systemState.current_cct}
+                          value={systemState.scheduler.current_cct}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {localCct !== null ? localCct.toFixed(0) : systemState.current_cct.toFixed(0)} K
+                          {systemState.scheduler.current_cct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1584,14 +1581,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={localIntensity !== null ? localIntensity : systemState.current_intensity}
+                          value={systemState.scheduler.current_intensity}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {localIntensity !== null ? localIntensity.toFixed(0) : systemState.current_intensity.toFixed(0)} lux
+                          {systemState.scheduler.current_intensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
