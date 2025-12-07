@@ -307,8 +307,16 @@ class SchedulerOperations:
                 ww = round(ww, 2)
                 
                 self.state["cw"], self.state["ww"] = cw, ww
-                self.state["scheduler"]["interval_progress"] = (current_idx / 86400) * 100
+                # Calculate interval_progress as percentage (0-100) of day completion
+                self.state["scheduler"]["interval_progress"] = round((current_idx / 86400) * 100, 2)
                 self.state["scheduler"]["current_interval"] = current_idx // 10
+                
+                # Ensure all scheduler data is included in state before broadcasting
+                # This includes interval_progress, current_interval, total_intervals, status
+                logger.debug("State update before broadcast", correlation_id=correlation_id,
+                           interval_progress=self.state["scheduler"]["interval_progress"],
+                           current_interval=self.state["scheduler"]["current_interval"])
+                
                 self._set_state(self.state)
 
                 # Threshold checks used only for conditional logging (not for device updates)
@@ -498,6 +506,14 @@ class SchedulerOperations:
         self.state["loaded_scene"] = data.scene
         if data.scene in scene_data:
             self.state["scene_data"] = scene_data[data.scene]
+            # Validate scene data arrays
+            cct_array = self.state["scene_data"].get("cct", [])
+            intensity_array = self.state["scene_data"].get("intensity", [])
+            logger.info("Scene loaded", correlation_id=correlation_id, scene=data.scene,
+                       cct_points=len(cct_array), intensity_points=len(intensity_array))
+        else:
+            logger.warning("Scene not found in scene_data", correlation_id=correlation_id, scene=data.scene)
+            self.state["scene_data"] = {"cct": [], "intensity": []}
         self.log_basic(f"Loaded scene: {data.scene}")
         self._set_state(self.state)
         return self.state
@@ -520,6 +536,11 @@ class SchedulerOperations:
         # Add validation and fallback handling for missing scene_data
         if data.scene in scene_data:
             self.state["scene_data"] = scene_data[data.scene]
+            # Validate that scene_data contains the required arrays with data
+            cct_array = self.state["scene_data"].get("cct", [])
+            intensity_array = self.state["scene_data"].get("intensity", [])
+            logger.info("Scene data loaded", correlation_id=correlation_id, scene=data.scene, 
+                       cct_points=len(cct_array), intensity_points=len(intensity_array))
         else:
             # Fallback to empty scene_data if scene not found
             self.state["scene_data"] = {"cct": [], "intensity": []}
