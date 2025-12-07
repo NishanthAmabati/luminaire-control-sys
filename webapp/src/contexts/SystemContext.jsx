@@ -40,25 +40,10 @@ export const SystemProvider = ({ children }) => {
   })
 
   const updateSystemState = useCallback((updates) => {
-    if (updates.current_cct !== undefined || updates.current_intensity !== undefined) {
-      console.log('[SystemContext] updateSystemState called with current_cct/intensity:', {
-        current_cct: updates.current_cct,
-        current_intensity: updates.current_intensity
-      });
-    }
-    setSystemState((prev) => {
-      const newState = {
-        ...prev,
-        ...updates,
-      };
-      if (updates.current_cct !== undefined || updates.current_intensity !== undefined) {
-        console.log('[SystemContext] New state current_cct/intensity:', {
-          current_cct: newState.current_cct,
-          current_intensity: newState.current_intensity
-        });
-      }
-      return newState;
-    });
+    setSystemState((prev) => ({
+      ...prev,
+      ...updates,
+    }))
   }, [])
 
   const updateScheduler = useCallback((schedulerUpdates) => {

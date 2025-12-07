@@ -165,8 +165,6 @@ const App = () => {
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
-  const cctChartRef = useRef(null)
-  const intensityChartRef = useRef(null)
 
   const debouncedUpdateState = useRef(
     debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
@@ -305,26 +303,7 @@ const App = () => {
         })
         updateScheduler({ status: "paused" })
         setVerticalLinePosition(0)
-        
-        // Send current manual values to devices immediately when switching to manual mode
-        // This ensures the lights are controlled by manual settings right away
-        setTimeout(() => {
-          const min_cct = 3500
-          const max_cct = 6500
-          const max_intensity = 500
-          const cct = systemState.current_cct
-          const intensity = systemState.current_intensity
-          const clampedCct = Math.max(min_cct, Math.min(max_cct, cct))
-          const clampedIntensity = Math.max(0, Math.min(max_intensity, intensity))
-          const intensityPercent = clampedIntensity / max_intensity
-          const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
-          const wwBase = 100.0 - cwBase
-          const cw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
-          const ww = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
-          sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
-          logBasic(`Manual mode activated: CCT ${clampedCct}K, Intensity ${clampedIntensity} lux`)
-          setIsLoading(false)
-        }, 300)
+        setTimeout(() => setIsLoading(false), 500)
       }
     },
     [sendCommand, updateSystemState, updateScheduler, setSceneData]
@@ -756,12 +735,6 @@ const App = () => {
             // Logs UI removed for performance - ignoring log updates
             // Log functionality can be re-enabled by uncommenting LogContext usage
           } else if (data.type === "live_update") {
-              console.log('[WebSocket] Received live_update with current_cct/intensity:', {
-                current_cct: data.data.current_cct,
-                current_intensity: data.data.current_intensity,
-                cw: data.data.cw,
-                ww: data.data.ww
-              });
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
                   logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");
@@ -781,14 +754,8 @@ const App = () => {
               
               // Update system state via context
               const systemUpdates = {};
-              if (data.data.current_cct !== undefined) {
-                systemUpdates.current_cct = data.data.current_cct;
-                console.log('[WebSocket] Received current_cct:', data.data.current_cct);
-              }
-              if (data.data.current_intensity !== undefined) {
-                systemUpdates.current_intensity = data.data.current_intensity;
-                console.log('[WebSocket] Received current_intensity:', data.data.current_intensity);
-              }
+              if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
+              if (data.data.current_intensity !== undefined) systemUpdates.current_intensity = data.data.current_intensity;
               if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
               if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
@@ -805,7 +772,6 @@ const App = () => {
               if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
               if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
               
-              console.log('[WebSocket] Updating systemState with:', systemUpdates);
               updateSystemState(systemUpdates);
               
               // Update scheduler via context
@@ -951,13 +917,6 @@ const App = () => {
   const chartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
-    console.log('[Charts] CCT chartData recalculated:', {
-      current_cct: systemState.current_cct,
-      centerPosition,
-      verticalLinePosition,
-      auto_mode: systemState.auto_mode,
-      isSystemOn: systemState.isSystemOn
-    });
     return {
       datasets: [
         {
@@ -1012,13 +971,6 @@ const App = () => {
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
-    console.log('[Charts] Intensity chartData recalculated:', {
-      current_intensity: systemState.current_intensity,
-      centerPosition,
-      verticalLinePosition,
-      auto_mode: systemState.auto_mode,
-      isSystemOn: systemState.isSystemOn
-    });
     return {
       datasets: [
         {
@@ -1071,13 +1023,7 @@ const App = () => {
   }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
-    () => {
-      console.log('[Charts] CCT chartOptions recalculated:', {
-        current_cct: systemState.current_cct,
-        verticalLinePosition,
-        auto_mode: systemState.auto_mode
-      });
-      return {
+    () => ({
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1172,8 +1118,8 @@ const App = () => {
           },
         },
         y: {
-          min: 2000,
-          max: 7000,
+          min: 3500,
+          max: 6500,
           title: {
             display: true,
             text: "CCT (K)",
@@ -1192,18 +1138,12 @@ const App = () => {
           },
         },
       },
-    }},
+    }),
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct]
   )
 
   const intensityChartOptions = useMemo(
-    () => {
-      console.log('[Charts] Intensity chartOptions recalculated:', {
-        current_intensity: systemState.current_intensity,
-        verticalLinePosition,
-        auto_mode: systemState.auto_mode
-      });
-      return {
+    () => ({
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1299,7 +1239,7 @@ const App = () => {
         },
         y: {
           min: 0,
-          max: 700,
+          max: 500,
           title: {
             display: true,
             text: "Intensity (lux)",
@@ -1318,26 +1258,9 @@ const App = () => {
           },
         },
       },
-    }},
+    }),
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
   )
-
-  // Force chart updates when data/options change
-  useEffect(() => {
-    // Access the chart instance through the ref
-    const chart = cctChartRef.current;
-    if (chart && typeof chart.update === 'function') {
-      chart.update('none'); // 'none' mode = no animation for smooth updates
-    }
-  }, [chartData, chartOptions]);
-
-  useEffect(() => {
-    // Access the chart instance through the ref
-    const chart = intensityChartRef.current;
-    if (chart && typeof chart.update === 'function') {
-      chart.update('none');
-    }
-  }, [intensityChartData, intensityChartOptions]);
 
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString()
@@ -1429,12 +1352,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              ref={cctChartRef}
-              key={`cct-${Math.round(systemState.current_cct)}-${Math.floor(verticalLinePosition / 100)}`}
-              data={chartData} 
-              options={chartOptions}
-            />
+            <Line data={chartData} options={chartOptions} />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1442,12 +1360,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              ref={intensityChartRef}
-              key={`intensity-${Math.round(systemState.current_intensity)}-${Math.floor(verticalLinePosition / 100)}`}
-              data={intensityChartData} 
-              options={intensityChartOptions}
-            />
+            <Line data={intensityChartData} options={intensityChartOptions} />
           </div>
         </section>
         <section className="dashboard-grid">
@@ -1737,6 +1650,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(true)}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={isTimerEnabled}
                         aria-label="Enable timer"
@@ -1746,6 +1660,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${!isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(false)}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={!isTimerEnabled}
                         aria-label="Disable timer"
@@ -1763,9 +1678,9 @@ const App = () => {
                         type="time"
                         value={onTime}
                         onChange={(e) => handleTimeChange(e, "on")}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="time-input-group">
@@ -1775,9 +1690,9 @@ const App = () => {
                         type="time"
                         value={offTime}
                         onChange={(e) => handleTimeChange(e, "off")}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="set-button-group">
@@ -1785,7 +1700,7 @@ const App = () => {
                       <button
                         className="set-timer-button"
                         onClick={handleSetTimer}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         aria-label="Set timer"
                       >
                         Set
