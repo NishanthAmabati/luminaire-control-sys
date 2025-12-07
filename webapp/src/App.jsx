@@ -255,36 +255,39 @@ const App = () => {
         updateSystemState({ auto_mode: true })
         
         // Wait for backend to process mode switch and fetch updated state
-        setTimeout(async () => {
-          try {
-            const apiBaseUrl = `http://${window.location.hostname}:8000`
-            const response = await fetch(`${apiBaseUrl}/api/system_state`)
-            if (response.ok) {
-              const stateData = await response.json()
-              
-              // Update scene data if available
-              if (stateData.scene_data) {
-                setSceneData({
-                  cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
-                  intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
-                })
+        setTimeout(() => {
+          (async () => {
+            try {
+              const apiBaseUrl = `http://${window.location.hostname}:8000`
+              const response = await fetch(`${apiBaseUrl}/api/system_state`)
+              if (response.ok) {
+                const stateData = await response.json()
+                
+                // Update scene data if available
+                if (stateData.scene_data) {
+                  setSceneData({
+                    cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
+                    intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
+                  })
+                }
+                
+                // Update state
+                const systemUpdates = {}
+                if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
+                if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
+                updateSystemState(systemUpdates)
+                
+                // Update scheduler status
+                if (stateData.scheduler) {
+                  updateScheduler(stateData.scheduler)
+                }
               }
-              
-              // Update state
-              const systemUpdates = {}
-              if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
-              if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
-              updateSystemState(systemUpdates)
-              
-              // Update scheduler status
-              if (stateData.scheduler) {
-                updateScheduler(stateData.scheduler)
-              }
+            } catch (error) {
+              console.error("Error fetching state after mode switch:", error)
+            } finally {
+              setIsLoading(false)
             }
-          } catch (error) {
-            console.error("Error fetching state after mode switch:", error)
-          }
-          setIsLoading(false)
+          })()
         }, 300)
       } else {
         toast.success("Switched to Manual Mode")
