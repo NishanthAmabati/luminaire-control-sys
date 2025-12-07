@@ -811,12 +811,11 @@ const App = () => {
                 if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
                 if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-                if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+                // NOTE: current_cct is sent at root level (data.data.current_cct), NOT in scheduler object
+                // The scheduler object's current_cct is stale and should not be used
                 if (data.data.scheduler.interval_progress !== undefined) {
                   schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
-                  console.log('[WebSocket] Received interval_progress:', data.data.scheduler.interval_progress);
                 }
-                console.log('[WebSocket] Updating scheduler with:', schedulerUpdates);
                 updateScheduler(schedulerUpdates);
                 
                 // Update vertical line position for real-time graph animation when in auto mode
