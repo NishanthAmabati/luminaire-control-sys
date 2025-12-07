@@ -40,6 +40,9 @@ import logo from "./SSS.png"
 import { useDevices } from "./contexts/DeviceContext"
 import { useSystem } from "./contexts/SystemContext"
 import DeviceItem from "./components/DeviceItem"
+import IndependentCharts from "./components/IndependentCharts"
+import { useSchedulerUpdates } from "./hooks/useSchedulerUpdates"
+import { useCurrentValues } from "./hooks/useCurrentValues"
 // Log UI removed for performance - LogContext kept for potential future use
 // import { useLogs } from "./contexts/LogContext"
 
@@ -157,6 +160,11 @@ const App = () => {
   const [lastCompletionLog, setLastCompletionLog] = useState(null)
 
   const ws = useRef(null)
+  
+  // Independent hooks for real-time updates
+  const independentSchedulerState = useSchedulerUpdates(ws);
+  const independentCurrentValues = useCurrentValues(ws);
+  
   const debounceTimeout = useRef(null)
   const lastPingTime = useRef(0)
   const lastPongTime = useRef(0)
@@ -1267,28 +1275,22 @@ const App = () => {
     return `CCT: ${systemState.current_cct.toFixed(0)}K, Intensity: ${systemState.current_intensity.toFixed(0)}lux, ${timestamp}`
   }, [systemState.current_cct, systemState.current_intensity])
 
+  // Use independent scheduler state for progress bar - updates in real-time via WebSocket
   const intervalProgressPercent = useMemo(() => {
-    console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
     // When system is off, always show 0%
     if (!systemState.isSystemOn) {
-      console.log('[Progress Bar] System is OFF, returning 0.0');
       return "0.0"
     }
-    // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (systemState.scheduler.interval_progress !== undefined) {
-      const value = systemState.scheduler.interval_progress.toFixed(1);
-      console.log('[Progress Bar] Using backend interval_progress:', value);
-      return value;
+    // Use backend-provided interval_progress (percentage 0-100) from independent hook
+    if (independentSchedulerState.interval_progress !== undefined) {
+      return independentSchedulerState.interval_progress.toFixed(1);
     }
     // Fallback to local calculation if backend doesn't provide it
-    if (systemState.scheduler.total_intervals === 0) {
-      console.log('[Progress Bar] Fallback: total_intervals is 0, returning 0.0');
+    if (independentSchedulerState.total_intervals === 0) {
       return "0.0";
     }
-    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
-    console.log('[Progress Bar] Fallback: calculated locally:', calculated);
-    return calculated;
-  }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
+    return (((independentSchedulerState.current_interval + 1) / independentSchedulerState.total_intervals) * 100).toFixed(1);
+  }, [systemState.isSystemOn, independentSchedulerState.interval_progress, independentSchedulerState.current_interval, independentSchedulerState.total_intervals])
 
   const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
   const sceneload = (systemState.isSystemOn && systemState.loaded_scene) ? systemState.loaded_scene.slice(0, -4) : "None"
@@ -1345,24 +1347,15 @@ const App = () => {
         </div>
       </header>
       <main className="dashboard-content">
-        <section className="charts-container">
-          <div className="chart-card">
-            {isLoading && (
-              <div className="loading-overlay">
-                <FaSyncAlt className="loading-spinner" />
-              </div>
-            )}
-            <Line data={chartData} options={chartOptions} />
-          </div>
-          <div className="chart-card">
-            {isLoading && (
-              <div className="loading-overlay">
-                <FaSyncAlt className="loading-spinner" />
-              </div>
-            )}
-            <Line data={intensityChartData} options={intensityChartOptions} />
-          </div>
-        </section>
+        <IndependentCharts 
+          ws={ws}
+          isLoading={isLoading}
+          theme={theme}
+          isSystemOn={systemState.isSystemOn}
+          autoMode={systemState.auto_mode}
+          sceneData={sceneData}
+          verticalLinePosition={verticalLinePosition}
+        />
         <section className="dashboard-grid">
           <div className="card control-card">
             <div className="card-header">
