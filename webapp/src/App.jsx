@@ -742,7 +742,10 @@ const App = () => {
                 }
                 setIsTimerEnabled(data.data.isTimerEnabled !== undefined ? data.data.isTimerEnabled : isTimerEnabled);
               // Always update scene data when provided by backend
-              if (data.data.scene_data) {
+              // Clear scene data when system is turned off
+              if (data.data.isSystemOn === false) {
+                setSceneData({ cct: [], intensity: [] });
+              } else if (data.data.scene_data) {
                 setSceneData({
                   cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : sceneData.cct,
                   intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
@@ -757,6 +760,11 @@ const App = () => {
               if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
                 systemUpdates.isSystemOn = data.data.isSystemOn;
+                // When system is turned OFF, clear scene-related UI elements
+                if (data.data.isSystemOn === false) {
+                  systemUpdates.loaded_scene = null;
+                  systemUpdates.current_scene = null;
+                }
               }
               if (data.data.auto_mode !== undefined) systemUpdates.auto_mode = data.data.auto_mode;
               if (data.data.current_scene !== undefined) systemUpdates.current_scene = data.data.current_scene;
@@ -1256,17 +1264,21 @@ const App = () => {
   }, [systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
+    // When system is off, always show 0%
+    if (!systemState.isSystemOn) {
+      return "0.0"
+    }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
     if (systemState.scheduler.interval_progress !== undefined) {
       return systemState.scheduler.interval_progress.toFixed(1)
     }
     // Fallback to local calculation if backend doesn't provide it
-    if (systemState.scheduler.total_intervals === 0) return 0
+    if (systemState.scheduler.total_intervals === 0) return "0.0"
     return (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1)
-  }, [systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
+  }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
 
-  const scenecurrent = systemState.current_scene ? systemState.current_scene.slice(0, -4) : "None"
-  const sceneload = systemState.loaded_scene ? systemState.loaded_scene.slice(0, -4) : "None"
+  const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
+  const sceneload = (systemState.isSystemOn && systemState.loaded_scene) ? systemState.loaded_scene.slice(0, -4) : "None"
 
   return (
     <div className={`luminaire-dashboard ${theme}-theme`}>

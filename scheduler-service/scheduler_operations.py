@@ -435,12 +435,26 @@ class SchedulerOperations:
         correlation_id = str(uuid.uuid4())
         logger.info("Setting mode", correlation_id=correlation_id, auto=data.auto, current_scheduler_status=self.state["scheduler"]["status"])
         
-        self.state["auto_mode"] = data.auto
-        
         if not data.auto:
             # Switching to manual mode
-            # Save current manual values before pausing (in case they were set by user)
+            # Pause the scheduler but don't stop it
+            if self.state["scheduler"]["status"] == "running":
+                self.paused = True
+                self.state["scheduler"]["status"] = "paused"
+                logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
+            
+            # Restore last manual values if they exist (from previous manual mode session)
             # This preserves manual controls when switching back to manual mode
+            if "last_state" in self.state and self.state["last_state"].get("auto_mode") == False:
+                # Use last manual values from previous manual mode session
+                last = self.state["last_state"]
+                self.state["cw"] = last.get("cw", self.state["cw"])
+                self.state["ww"] = last.get("ww", self.state["ww"])
+                self.state["current_cct"] = last.get("current_cct", self.state["current_cct"])
+                self.state["current_intensity"] = last.get("current_intensity", self.state["current_intensity"])
+                logger.info("Restored manual mode values from last session", correlation_id=correlation_id, cw=self.state["cw"], ww=self.state["ww"])
+            
+            # Save current values as the new manual mode state
             self.state["last_state"] = {
                 "auto_mode": False,
                 "current_scene": self.state.get("current_scene"),
@@ -450,26 +464,12 @@ class SchedulerOperations:
                 "current_intensity": self.state.get("current_intensity", 250)
             }
             
-            # Pause the scheduler but don't stop it
-            if self.state["scheduler"]["status"] == "running":
-                self.paused = True
-                self.state["scheduler"]["status"] = "paused"
-                logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
-            
-            # Restore last manual values (not scene values)
-            # Only restore if we have last_state and we're actually in manual mode (auto_mode == False)
-            if "last_state" in self.state and self.state.get("auto_mode") == False:
-                # Use last manual values if available
-                last = self.state["last_state"]
-                self.state["cw"] = last.get("cw", self.state["cw"])
-                self.state["ww"] = last.get("ww", self.state["ww"])
-                self.state["current_cct"] = last.get("current_cct", self.state["current_cct"])
-                self.state["current_intensity"] = last.get("current_intensity", self.state["current_intensity"])
-                logger.info("Restored manual mode values", correlation_id=correlation_id, cw=self.state["cw"], ww=self.state["ww"])
+            self.state["auto_mode"] = False
             
         else:
             # Switching to auto mode
             self.stop_event.clear()
+            self.state["auto_mode"] = True
             
             # If there's a current scene, reactivate it
             if self.state["current_scene"]:
