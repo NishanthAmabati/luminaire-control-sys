@@ -239,18 +239,12 @@ class SchedulerOperations:
             while not self.stop_event.is_set() and self.current_interval_index < 86400:
                 loop_start = time.time()
                 if self.paused:
-                    logger.debug("Scheduler paused - sending manual mode updates", correlation_id=correlation_id)
-                    # When paused (manual mode), keep sending current state every second
-                    # This maintains liveness and connection with luminaires
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
-                            json={"cw": self.state["cw"], "ww": self.state["ww"]}
-                        )
-                        if resp.status_code != 200:
-                            logger.warning("SendAll failed in manual mode", correlation_id=correlation_id, error=resp.text)
+                    logger.debug("Scheduler paused - manual mode", correlation_id=correlation_id)
+                    # When paused (manual mode), DON'T send updates
+                    # Manual mode controls are handled by webapp sending direct commands
+                    # Scheduler only sends scene values when running in auto mode
                     
-                    # Broadcast current state
+                    # Just broadcast current state without sending to devices
                     self._set_state(self.state)
                     
                     # Sleep for update interval
@@ -430,13 +424,32 @@ class SchedulerOperations:
         
         if not data.auto:
             # Switching to manual mode
-            # DON'T clear scene data or current_scene - keep them for easy reactivation
-            # DON'T stop scheduler - just mark status as paused
+            # Save current manual values before pausing (in case they were set by user)
+            # This preserves manual controls when switching back to manual mode
+            self.state["last_state"] = {
+                "auto_mode": False,
+                "current_scene": self.state.get("current_scene"),
+                "cw": self.state.get("cw", 50.0),
+                "ww": self.state.get("ww", 50.0),
+                "current_cct": self.state.get("current_cct", 3500),
+                "current_intensity": self.state.get("current_intensity", 250)
+            }
+            
+            # Pause the scheduler but don't stop it
             if self.state["scheduler"]["status"] == "running":
-                # Pause the scheduler but don't stop it
                 self.paused = True
                 self.state["scheduler"]["status"] = "paused"
                 logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
+            
+            # Restore last manual values (not scene values)
+            if "last_state" in self.state and not self.state.get("auto_mode"):
+                # Use last manual values if available
+                last = self.state["last_state"]
+                self.state["cw"] = last.get("cw", self.state["cw"])
+                self.state["ww"] = last.get("ww", self.state["ww"])
+                self.state["current_cct"] = last.get("current_cct", self.state["current_cct"])
+                self.state["current_intensity"] = last.get("current_intensity", self.state["current_intensity"])
+                logger.info("Restored manual mode values", correlation_id=correlation_id, cw=self.state["cw"], ww=self.state["ww"])
             
         else:
             # Switching to auto mode
