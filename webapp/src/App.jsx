@@ -936,6 +936,13 @@ const App = () => {
   const chartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
+    console.log('[Charts] CCT chartData recalculated:', {
+      current_cct: systemState.current_cct,
+      centerPosition,
+      verticalLinePosition,
+      auto_mode: systemState.auto_mode,
+      isSystemOn: systemState.isSystemOn
+    });
     return {
       datasets: [
         {
@@ -990,6 +997,13 @@ const App = () => {
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
+    console.log('[Charts] Intensity chartData recalculated:', {
+      current_intensity: systemState.current_intensity,
+      centerPosition,
+      verticalLinePosition,
+      auto_mode: systemState.auto_mode,
+      isSystemOn: systemState.isSystemOn
+    });
     return {
       datasets: [
         {
@@ -1042,7 +1056,13 @@ const App = () => {
   }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
-    () => ({
+    () => {
+      console.log('[Charts] CCT chartOptions recalculated:', {
+        current_cct: systemState.current_cct,
+        verticalLinePosition,
+        auto_mode: systemState.auto_mode
+      });
+      return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1157,12 +1177,18 @@ const App = () => {
           },
         },
       },
-    }),
+    }},
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct]
   )
 
   const intensityChartOptions = useMemo(
-    () => ({
+    () => {
+      console.log('[Charts] Intensity chartOptions recalculated:', {
+        current_intensity: systemState.current_intensity,
+        verticalLinePosition,
+        auto_mode: systemState.auto_mode
+      });
+      return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1277,7 +1303,7 @@ const App = () => {
           },
         },
       },
-    }),
+    }},
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
   )
 
