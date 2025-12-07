@@ -741,10 +741,13 @@ const App = () => {
                   return;
                 }
                 setIsTimerEnabled(data.data.isTimerEnabled !== undefined ? data.data.isTimerEnabled : isTimerEnabled);
-              setSceneData({
-                cct: Array.isArray(data.data.scene_data?.cct) ? data.data.scene_data.cct : sceneData.cct,
-                intensity: Array.isArray(data.data.scene_data?.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
-              });
+              // Always update scene data when provided by backend
+              if (data.data.scene_data) {
+                setSceneData({
+                  cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : sceneData.cct,
+                  intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
+                });
+              }
               
               // Update system state via context
               const systemUpdates = {};
@@ -772,12 +775,13 @@ const App = () => {
                 if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
                 updateScheduler(schedulerUpdates);
                 
-                // Update vertical line position for real-time graph animation
-                if (systemState.auto_mode && data.data.scheduler.status === "running") {
+                // Update vertical line position for real-time graph animation when in auto mode
+                // Update whenever we're in auto mode and have scene data loaded
+                if (systemState.auto_mode && (data.data.scheduler.status === "running" || systemState.scheduler.status === "running" || data.data.loaded_scene || systemState.loaded_scene)) {
                   const currentSecond = getCurrentSecondOfDay();
                   setVerticalLinePosition(Math.floor(currentSecond / 10));
                   // Only update these timestamps on actual interval changes, not every update
-                  if (data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
+                  if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
                     lastIntervalUpdateTime.current = Date.now();
                   }
                 }
