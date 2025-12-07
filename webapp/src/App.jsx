@@ -165,6 +165,8 @@ const App = () => {
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
+  const cctChartRef = useRef(null)
+  const intensityChartRef = useRef(null)
 
   const debouncedUpdateState = useRef(
     debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
@@ -773,8 +775,14 @@ const App = () => {
               
               // Update system state via context
               const systemUpdates = {};
-              if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
-              if (data.data.current_intensity !== undefined) systemUpdates.current_intensity = data.data.current_intensity;
+              if (data.data.current_cct !== undefined) {
+                systemUpdates.current_cct = data.data.current_cct;
+                console.log('[WebSocket] Received current_cct:', data.data.current_cct);
+              }
+              if (data.data.current_intensity !== undefined) {
+                systemUpdates.current_intensity = data.data.current_intensity;
+                console.log('[WebSocket] Received current_intensity:', data.data.current_intensity);
+              }
               if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
               if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
@@ -791,6 +799,7 @@ const App = () => {
               if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
               if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
               
+              console.log('[WebSocket] Updating systemState with:', systemUpdates);
               updateSystemState(systemUpdates);
               
               // Update scheduler via context
@@ -1307,6 +1316,19 @@ const App = () => {
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
   )
 
+  // Force chart updates when data/options change
+  useEffect(() => {
+    if (cctChartRef.current) {
+      cctChartRef.current.update('none'); // 'none' mode = no animation for smooth updates
+    }
+  }, [chartData, chartOptions]);
+
+  useEffect(() => {
+    if (intensityChartRef.current) {
+      intensityChartRef.current.update('none');
+    }
+  }, [intensityChartData, intensityChartOptions]);
+
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString()
     return `CCT: ${systemState.current_cct.toFixed(0)}K, Intensity: ${systemState.current_intensity.toFixed(0)}lux, ${timestamp}`
@@ -1397,7 +1419,11 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={chartData} options={chartOptions} />
+            <Line 
+              ref={cctChartRef}
+              data={chartData} 
+              options={chartOptions}
+            />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1405,7 +1431,11 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={intensityChartData} options={intensityChartOptions} />
+            <Line 
+              ref={intensityChartRef}
+              data={intensityChartData} 
+              options={intensityChartOptions}
+            />
           </div>
         </section>
         <section className="dashboard-grid">
