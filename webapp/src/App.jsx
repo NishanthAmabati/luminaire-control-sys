@@ -247,40 +247,56 @@ const App = () => {
   }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
 
   const setMode = useCallback(
-    (auto) => {
+    async (auto) => {
       setIsLoading(true)
       sendCommand({ type: "set_mode", auto })
       if (auto) {
         toast.success("Switched to Auto Mode")
-        if (systemState.current_scene) {
-          updateSystemState({
-            loaded_scene: systemState.current_scene,
-            auto_mode: true,
-          })
-          setTimeout(() => {
-            sendCommand({ type: "load_scene", scene: systemState.current_scene })
-            logBasic(`Loading scene for charts: ${systemState.current_scene}`)
-            activateScene()
-          }, 1000)
-        } else {
-          console.warn("No current scene to reactivate")
-          updateSystemState({ auto_mode: true })
-          setSceneData({ cct: [], intensity: [] })
-        }
+        updateSystemState({ auto_mode: true })
+        
+        // Wait for backend to process mode switch and fetch updated state
+        setTimeout(async () => {
+          try {
+            const apiBaseUrl = `http://${window.location.hostname}:8000`
+            const response = await fetch(`${apiBaseUrl}/api/system_state`)
+            if (response.ok) {
+              const stateData = await response.json()
+              
+              // Update scene data if available
+              if (stateData.scene_data) {
+                setSceneData({
+                  cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
+                  intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
+                })
+              }
+              
+              // Update state
+              const systemUpdates = {}
+              if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
+              if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
+              updateSystemState(systemUpdates)
+              
+              // Update scheduler status
+              if (stateData.scheduler) {
+                updateScheduler(stateData.scheduler)
+              }
+            }
+          } catch (error) {
+            console.error("Error fetching state after mode switch:", error)
+          }
+          setIsLoading(false)
+        }, 300)
       } else {
-        logBasic("Switched to Manual mode")
         toast.success("Switched to Manual Mode")
-        setSceneData({ cct: [], intensity: [] })
-        updateSystemState({
-          auto_mode: false,
-          loaded_scene: null,
-        })
-        updateScheduler({ status: "idle" })
+        // DON'T clear scene_data - keep it for easy switch back to auto
+        // DON'T clear loaded_scene - keep the reference
+        updateSystemState({ auto_mode: false })
+        updateScheduler({ status: "paused" })
         setVerticalLinePosition(0)
+        setTimeout(() => setIsLoading(false), 500)
       }
-      setTimeout(() => setIsLoading(false), 500)
     },
-    [sendCommand, logBasic, systemState.current_scene, updateSystemState, updateScheduler, activateScene]
+    [sendCommand, updateSystemState, updateScheduler, setSceneData]
   )
 
   const loadScene = useCallback(
@@ -295,7 +311,6 @@ const App = () => {
           if (systemState.scheduler.status === "running" && systemState.current_scene === runningScene) {
             sendCommand({ type: "load_scene", scene: systemState.current_scene })
             toast.success(`Reverted to running scene: ${systemState.current_scene}`)
-            logBasic(`Reverted to running scene: ${systemState.current_scene}`)
             updateSystemState({ loaded_scene: systemState.current_scene })
             updateScheduler({ status: "running" })
           }
@@ -303,9 +318,11 @@ const App = () => {
       }
       sendCommand({ type: "load_scene", scene })
       toast.success(`Scene Loaded: ${scene}`)
-      logBasic(`Loaded scene: ${scene}`)
       updateSystemState({ loaded_scene: scene })
       updateScheduler({ status: "pending" })
+      
+      // Wait for backend to process load_scene command before fetching
+      await new Promise(resolve => setTimeout(resolve, 200))
       
       // Fetch scene data immediately to populate graphs
       try {
@@ -318,16 +335,16 @@ const App = () => {
               cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
               intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
             })
-            logBasic(`Loaded scene data for ${scene}: ${stateData.scene_data.cct?.length || 0} data points`)
+            console.log(`Loaded scene data for ${scene}: ${stateData.scene_data.cct?.length || 0} data points`)
           }
         }
       } catch (error) {
         console.error("Error fetching scene data after load:", error)
       }
       
-      setTimeout(() => setIsLoading(false), 800)
+      setTimeout(() => setIsLoading(false), 600)
     },
-    [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler, setSceneData]
+    [sendCommand, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler, setSceneData]
   )
 
   const stopScheduler = useCallback(() => {
