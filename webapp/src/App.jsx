@@ -719,6 +719,18 @@ const App = () => {
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log(
+            "%c[WS → FRONTEND] RAW PAYLOAD:",
+            "background: #222; color: #bada55; font-size:14px",
+            data
+          );
+          if (data.type === "system_state") {
+            console.log(
+              "%c[WS → SYSTEM_STATE] Received:",
+              "background: #003366; color: #fff; font-size:13px",
+              JSON.stringify(data.data, null, 2)
+            );
+          }
           if (data.type === "pong") {
             lastPongTime.current = Date.now();
             const latency = lastPongTime.current - lastPingTime.current;
