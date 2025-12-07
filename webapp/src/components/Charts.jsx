@@ -167,8 +167,8 @@ const Charts = ({ isLoading, theme, state, sceneData, verticalLinePosition }) =>
     scales: {
       x: getXAxisConfig(theme),
       y: { 
-        min: 3000,  // Slightly below device min (3500) for visual padding
-        max: 7000,  // Slightly above device max (6500) for visual padding
+        min: 2000,  // Wide range for better visualization
+        max: 7000,  // Wide range for better visualization
         title: { 
           display: true, 
           text: "CCT (K)", 
@@ -204,7 +204,7 @@ const Charts = ({ isLoading, theme, state, sceneData, verticalLinePosition }) =>
       x: getXAxisConfig(theme),
       y: { 
         min: 0, 
-        max: 500,  // Match device capability (config max_intensity)
+        max: 700,  // Wide range for better visualization
         title: { 
           display: true, 
           text: "Intensity (lux)", 
@@ -229,11 +229,21 @@ const Charts = ({ isLoading, theme, state, sceneData, verticalLinePosition }) =>
     <section className="charts-container">
       <div className="chart-card">
         {isLoading && <div className="loading-overlay"><FaSyncAlt className="loading-spinner" /></div>}
-        <Line data={chartData} options={chartOptions} />
+        <Line 
+          data={chartData} 
+          options={chartOptions} 
+          redraw={false}
+          updateMode="active"
+        />
       </div>
       <div className="chart-card">
         {isLoading && <div className="loading-overlay"><FaSyncAlt className="loading-spinner" /></div>}
-        <Line data={intensityChartData} options={intensityChartOptions} />
+        <Line 
+          data={intensityChartData} 
+          options={intensityChartOptions} 
+          redraw={false}
+          updateMode="active"
+        />
       </div>
     </section>
   )

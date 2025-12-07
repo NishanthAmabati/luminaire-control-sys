@@ -303,7 +303,26 @@ const App = () => {
         })
         updateScheduler({ status: "paused" })
         setVerticalLinePosition(0)
-        setTimeout(() => setIsLoading(false), 500)
+        
+        // Send current manual values to devices immediately when switching to manual mode
+        // This ensures the lights are controlled by manual settings right away
+        setTimeout(() => {
+          const min_cct = 3500
+          const max_cct = 6500
+          const max_intensity = 500
+          const cct = systemState.current_cct
+          const intensity = systemState.current_intensity
+          const clampedCct = Math.max(min_cct, Math.min(max_cct, cct))
+          const clampedIntensity = Math.max(0, Math.min(max_intensity, intensity))
+          const intensityPercent = clampedIntensity / max_intensity
+          const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
+          const wwBase = 100.0 - cwBase
+          const cw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
+          const ww = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
+          sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
+          logBasic(`Manual mode activated: CCT ${clampedCct}K, Intensity ${clampedIntensity} lux`)
+          setIsLoading(false)
+        }, 300)
       }
     },
     [sendCommand, updateSystemState, updateScheduler, setSceneData]
@@ -1118,8 +1137,8 @@ const App = () => {
           },
         },
         y: {
-          min: 3500,
-          max: 6500,
+          min: 2000,
+          max: 7000,
           title: {
             display: true,
             text: "CCT (K)",
@@ -1239,7 +1258,7 @@ const App = () => {
         },
         y: {
           min: 0,
-          max: 500,
+          max: 700,
           title: {
             display: true,
             text: "Intensity (lux)",
@@ -1352,7 +1371,12 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={chartData} options={chartOptions} />
+            <Line 
+              data={chartData} 
+              options={chartOptions} 
+              redraw={false}
+              updateMode="active"
+            />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1360,7 +1384,12 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={intensityChartData} options={intensityChartOptions} />
+            <Line 
+              data={intensityChartData} 
+              options={intensityChartOptions} 
+              redraw={false}
+              updateMode="active"
+            />
           </div>
         </section>
         <section className="dashboard-grid">
