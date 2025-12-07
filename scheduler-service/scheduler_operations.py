@@ -239,9 +239,22 @@ class SchedulerOperations:
             while not self.stop_event.is_set() and self.current_interval_index < 86400:
                 loop_start = time.time()
                 if self.paused:
-                    logger.debug("Scheduler paused", correlation_id=correlation_id)
-                    # When paused, don't send updates but keep state updated
-                    await asyncio.sleep(0.5)
+                    logger.debug("Scheduler paused - sending manual mode updates", correlation_id=correlation_id)
+                    # When paused (manual mode), keep sending current state every second
+                    # This maintains liveness and connection with luminaires
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                            json={"cw": self.state["cw"], "ww": self.state["ww"]}
+                        )
+                        if resp.status_code != 200:
+                            logger.warning("SendAll failed in manual mode", correlation_id=correlation_id, error=resp.text)
+                    
+                    # Broadcast current state
+                    self._set_state(self.state)
+                    
+                    # Sleep for update interval
+                    await asyncio.sleep(update_interval)
                     continue
 
                 elapsed_time = time.time() - self.start_time

@@ -275,6 +275,10 @@ const App = () => {
                 const systemUpdates = {}
                 if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
                 if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
+                if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
+                if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
+                if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
+                if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
                 updateSystemState(systemUpdates)
                 
                 // Update scheduler status
@@ -291,9 +295,12 @@ const App = () => {
         }, 300)
       } else {
         toast.success("Switched to Manual Mode")
-        // DON'T clear scene_data - keep it for easy switch back to auto
-        // DON'T clear loaded_scene - keep the reference
-        updateSystemState({ auto_mode: false })
+        // Clear scene data in UI when switching to manual (as requested)
+        setSceneData({ cct: [], intensity: [] })
+        updateSystemState({ 
+          auto_mode: false,
+          loaded_scene: null  // Clear loaded scene in UI
+        })
         updateScheduler({ status: "paused" })
         setVerticalLinePosition(0)
         setTimeout(() => setIsLoading(false), 500)
@@ -765,6 +772,14 @@ const App = () => {
                 if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
                 updateScheduler(schedulerUpdates);
                 
+                // Update vertical line position for real-time graph animation
+                if (systemState.auto_mode && data.data.scheduler.status === "running") {
+                  const currentSecond = getCurrentSecondOfDay();
+                  setVerticalLinePosition(Math.floor(currentSecond / 10));
+                  lastIntervalUpdateTime.current = Date.now();
+                  sceneStartTime.current = Date.now();
+                }
+                
                 // Check for scene completion
                 if (
                   data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
@@ -790,12 +805,6 @@ const App = () => {
               
               setLocalCct(data.data.current_cct || systemState.current_cct);
               setLocalIntensity(data.data.current_intensity || systemState.current_intensity);
-              if (data.data.isSystemOn && data.data.scheduler?.status === "running") {
-                const currentSecond = getCurrentSecondOfDay();
-                setVerticalLinePosition(Math.floor(currentSecond / 10));
-                lastIntervalUpdateTime.current = Date.now();
-                sceneStartTime.current = Date.now();
-              }
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
