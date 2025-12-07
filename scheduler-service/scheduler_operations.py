@@ -239,12 +239,19 @@ class SchedulerOperations:
             while not self.stop_event.is_set() and self.current_interval_index < 86400:
                 loop_start = time.time()
                 if self.paused:
-                    logger.debug("Scheduler paused - manual mode", correlation_id=correlation_id)
-                    # When paused (manual mode), DON'T send updates
-                    # Manual mode controls are handled by webapp sending direct commands
-                    # Scheduler only sends scene values when running in auto mode
+                    logger.debug("Scheduler paused - sending manual mode values", correlation_id=correlation_id)
+                    # When paused (manual mode), keep sending current manual control values every second
+                    # This maintains continuous device updates as requested
+                    # Manual controls set via webapp are stored in self.state and sent here
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
+                            json={"cw": self.state["cw"], "ww": self.state["ww"]}
+                        )
+                        if resp.status_code != 200:
+                            logger.warning("SendAll failed in manual mode", correlation_id=correlation_id, error=resp.text)
                     
-                    # Just broadcast current state without sending to devices
+                    # Broadcast current state for webapp updates
                     self._set_state(self.state)
                     
                     # Sleep for update interval
