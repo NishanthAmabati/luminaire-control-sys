@@ -5,7 +5,7 @@ variable "DOCKERHUB_USERNAME" {
 variable "GIT_SHA" {
   default = ""
 }
-
+/*
 group "default" {
   targets = [
     "luminaire",
@@ -14,6 +14,13 @@ group "default" {
     "monitoring",
     "api",
     "websocket",
+    "webapp",
+  ]
+}
+*/
+
+group "default" {
+  targets = [
     "webapp",
   ]
 }
