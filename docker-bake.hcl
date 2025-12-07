@@ -26,6 +26,7 @@ target "common" {
   cache-to   = ["type=gha,mode=max"]
 }
 
+/*
 target "luminaire" {
   inherits = ["common"]
   context  = "./luminaire-service"
@@ -79,6 +80,7 @@ target "websocket" {
     "${DOCKERHUB_USERNAME}/websocket-service:${GIT_SHA}",
   ]
 }
+*/
 
 target "webapp" {
   inherits = ["common"]
