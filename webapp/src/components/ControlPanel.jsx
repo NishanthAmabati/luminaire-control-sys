@@ -3,6 +3,9 @@ import { Sliders } from "lucide-react"
 import { FaPlay, FaStop } from 'react-icons/fa'; 
 import { toast } from "react-hot-toast"
 
+// Helper function to clamp values within a range
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
 const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, stopScheduler }) => {
   const debounceTimeout = useRef(null)
 
@@ -14,13 +17,13 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
       const min_cct = 3500
       const max_cct = 6500
       const max_intensity = 500
-      const clampedCct = Math.max(min_cct, Math.min(max_cct, cct))
-      const clampedIntensity = Math.max(0, Math.min(max_intensity, intensity))
+      const clampedCct = clamp(cct, min_cct, max_cct)
+      const clampedIntensity = clamp(intensity, 0, max_intensity)
       const intensityPercent = clampedIntensity / max_intensity
       const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
       const wwBase = 100.0 - cwBase
-      const cw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
-      const ww = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
+      const cw = clamp(cwBase * intensityPercent, 0, 99.99)
+      const ww = clamp(wwBase * intensityPercent, 0, 99.99)
       sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
     }, 100)
   }, [sendCommand])
