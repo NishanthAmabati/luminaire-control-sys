@@ -805,8 +805,9 @@ const App = () => {
                 updateSystemState({ is_manual_override: false });
               }
               
-              setLocalCct(data.data.current_cct || systemState.current_cct);
-              setLocalIntensity(data.data.current_intensity || systemState.current_intensity);
+              // Update local CCT and intensity for UI display (explicit undefined checks for falsy values)
+              if (data.data.current_cct !== undefined) setLocalCct(data.data.current_cct);
+              if (data.data.current_intensity !== undefined) setLocalIntensity(data.data.current_intensity);
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
