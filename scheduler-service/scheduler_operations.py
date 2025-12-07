@@ -161,14 +161,14 @@ class SchedulerOperations:
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
-        # Only log to structured logger, don't publish to webapp
+        # Only log to structured logger, NEVER publish to webapp
         logger.info("Basic Log", correlation_id=correlation_id, message=message)
 
     def log_advanced(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
-        # Only log to structured logger, don't publish to webapp
+        # Only log to structured logger, NEVER publish to webapp
         logger.debug("Advanced Log", correlation_id=correlation_id, message=message)
 
     async def run_smooth_scheduler(self, csv_path: str):
@@ -179,7 +179,8 @@ class SchedulerOperations:
         self.current_scheduler_task = asyncio.current_task()
         self.state["scheduler"]["status"] = "running"
         self._set_state(self.state)
-        self.log_basic(f"Activated scene: {os.path.basename(csv_path)}")
+        # Don't send log to webapp
+        logger.info("Activated scene", correlation_id=correlation_id, scene=os.path.basename(csv_path))
         try:
             scene_name = os.path.basename(csv_path)
             if scene_name not in scene_data:
@@ -227,10 +228,9 @@ class SchedulerOperations:
                     json={"cw": cw, "ww": ww}
                 )
                 if resp.status_code != 200:
-                    self.log_advanced(f"Initial SendAll failed: {resp.text}")
                     logger.warning("Initial SendAll failed", correlation_id=correlation_id, error=resp.text)
                 else:
-                    self.log_basic(f"Applied initial scene values: CCT {initial_cct:.1f}K, Intensity {initial_intensity:.1f}lux")
+                    logger.info("Applied initial scene values", correlation_id=correlation_id, cct=initial_cct, intensity=initial_intensity)
 
             last_interval_update = self.current_interval_index
             last_cw, last_ww, last_cct, last_intensity = cw, ww, initial_cct, initial_intensity
@@ -240,7 +240,8 @@ class SchedulerOperations:
                 loop_start = time.time()
                 if self.paused:
                     logger.debug("Scheduler paused", correlation_id=correlation_id)
-                    await asyncio.sleep(0.1)
+                    # When paused, don't send updates but keep state updated
+                    await asyncio.sleep(0.5)
                     continue
 
                 elapsed_time = time.time() - self.start_time
@@ -330,14 +331,13 @@ class SchedulerOperations:
                     )
                     last_interval_update = current_idx
                 
-                # Send to devices every update cycle (no threshold check)
+                # Send to devices every update cycle (once per second, no threshold check)
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
                         f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
                         json={"cw": cw, "ww": ww}
                     )
                     if resp.status_code != 200:
-                        self.log_advanced(f"SendAll failed: {resp.text}")
                         logger.warning("SendAll failed", correlation_id=correlation_id, error=resp.text)
                     else:
                         # Update last sent values only on successful send
@@ -417,22 +417,16 @@ class SchedulerOperations:
         
         if not data.auto:
             # Switching to manual mode
-            self.log_basic(f"Switched to Manual mode")
-            
-            # Stop scheduler if it's running
+            # DON'T clear scene data or current_scene - keep them for easy reactivation
+            # DON'T stop scheduler - just mark status as paused
             if self.state["scheduler"]["status"] == "running":
-                self.stop_scheduler()
-                logger.info("Scheduler stopped for manual mode", correlation_id=correlation_id)
-            
-            # Clear scene data but keep the scene reference for potential reactivation
-            self.state["scene_data"] = {"cct": [], "intensity": []}
-            self.state["loaded_scene"] = None
-            self.state["scheduler"]["status"] = "idle"
-            self.stop_event.set()
+                # Pause the scheduler but don't stop it
+                self.paused = True
+                self.state["scheduler"]["status"] = "paused"
+                logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
             
         else:
             # Switching to auto mode
-            self.log_basic(f"Switched to Auto mode")
             self.stop_event.clear()
             
             # If there's a current scene, reactivate it
@@ -441,14 +435,18 @@ class SchedulerOperations:
                     self.state["scene_data"] = scene_data[self.state["current_scene"]]
                     self.state["activationTime"] = time.strftime("%H:%M:%S")
                     self.state["loaded_scene"] = self.state["current_scene"]
-                    self.state["scheduler"]["status"] = "running"
                     
-                    # Start the scheduler task
-                    asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
-                    self.log_basic(f"Reactivated scene: {self.state['current_scene']}")
-                    logger.info("Scene reactivated for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
+                    # If scheduler was paused, resume it
+                    if self.state["scheduler"]["status"] == "paused" and self.current_scheduler_task:
+                        self.paused = False
+                        self.state["scheduler"]["status"] = "running"
+                        logger.info("Scheduler resumed for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
+                    # If no scheduler running, start a new one
+                    elif self.state["scheduler"]["status"] != "running":
+                        self.state["scheduler"]["status"] = "running"
+                        asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
+                        logger.info("Scene reactivated for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
                 else:
-                    self.log_basic(f"Failed to reactivate scene {self.state['current_scene']}: not found")
                     logger.warning("Failed to reactivate scene", correlation_id=correlation_id, scene=self.state["current_scene"])
                     self.state["current_scene"] = None
                     self.state["scene_data"] = {"cct": [], "intensity": []}
