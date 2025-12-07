@@ -776,8 +776,10 @@ const App = () => {
                 if (systemState.auto_mode && data.data.scheduler.status === "running") {
                   const currentSecond = getCurrentSecondOfDay();
                   setVerticalLinePosition(Math.floor(currentSecond / 10));
-                  lastIntervalUpdateTime.current = Date.now();
-                  sceneStartTime.current = Date.now();
+                  // Only update these timestamps on actual interval changes, not every update
+                  if (data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
+                    lastIntervalUpdateTime.current = Date.now();
+                  }
                 }
                 
                 // Check for scene completion
