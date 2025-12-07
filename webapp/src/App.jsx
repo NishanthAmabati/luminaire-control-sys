@@ -1371,7 +1371,11 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={chartData} options={chartOptions} />
+            <Line 
+              key={`cct-${localCct ?? systemState.current_cct}-${systemState.auto_mode}`}
+              data={chartData}
+              options={chartOptions}
+            />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1379,7 +1383,11 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line data={intensityChartData} options={intensityChartOptions} />
+            <Line 
+              key={`int-${localIntensity ?? systemState.current_intensity}-${systemState.auto_mode}`}
+              data={intensityChartData}
+              options={intensityChartOptions}
+            />
           </div>
         </section>
         <section className="dashboard-grid">
