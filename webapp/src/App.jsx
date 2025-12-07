@@ -1390,7 +1390,6 @@ const App = () => {
               </div>
             )}
             <Line 
-              key={`cct-${localCct ?? systemState.current_cct}-${systemState.auto_mode}`}
               data={chartData}
               options={chartOptions}
             />
@@ -1402,7 +1401,6 @@ const App = () => {
               </div>
             )}
             <Line 
-              key={`int-${localIntensity ?? systemState.current_intensity}-${systemState.auto_mode}`}
               data={intensityChartData}
               options={intensityChartOptions}
             />
