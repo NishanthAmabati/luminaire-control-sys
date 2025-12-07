@@ -776,8 +776,17 @@ const App = () => {
                 updateScheduler(schedulerUpdates);
                 
                 // Update vertical line position for real-time graph animation when in auto mode
-                // Update whenever we're in auto mode and have scene data loaded
-                if (systemState.auto_mode && (data.data.scheduler.status === "running" || systemState.scheduler.status === "running" || data.data.loaded_scene || systemState.loaded_scene)) {
+                // Check both incoming message data and current state to handle all cases:
+                // - When backend sends explicit "running" status
+                // - When scene is loaded (even if status not explicitly sent in this message)
+                const shouldUpdateVerticalLine = systemState.auto_mode && (
+                  data.data.scheduler?.status === "running" || 
+                  systemState.scheduler.status === "running" || 
+                  data.data.loaded_scene || 
+                  systemState.loaded_scene
+                );
+                
+                if (shouldUpdateVerticalLine) {
                   const currentSecond = getCurrentSecondOfDay();
                   setVerticalLinePosition(Math.floor(currentSecond / 10));
                   // Only update these timestamps on actual interval changes, not every update
