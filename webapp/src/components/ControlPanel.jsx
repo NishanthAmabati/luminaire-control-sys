@@ -9,13 +9,19 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
   const adjustLight = useCallback((cct, intensity) => {
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
     debounceTimeout.current = setTimeout(() => {
-      // Calculate cw and ww from cct and intensity
-      const cwBase = (cct - 2000) / ((7000 - 2000) / 100.0)
+      // Calculate cw and ww from cct and intensity using backend formula
+      // Backend uses: min_cct=3500, max_cct=6500, max_intensity=500
+      const min_cct = 3500
+      const max_cct = 6500
+      const max_intensity = 500
+      const clampedCct = Math.max(min_cct, Math.min(max_cct, cct))
+      const clampedIntensity = Math.max(0, Math.min(max_intensity, intensity))
+      const intensityPercent = clampedIntensity / max_intensity
+      const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
       const wwBase = 100.0 - cwBase
-      const intensityPercent = intensity / 1000.0
-      const cw = Math.max(0, Math.min(100, cwBase * intensityPercent))
-      const ww = Math.max(0, Math.min(100, wwBase * intensityPercent))
-      sendCommand({ type: "sendAll", cw, ww, intensity })
+      const cw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
+      const ww = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
+      sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
     }, 100)
   }, [sendCommand])
 
@@ -108,8 +114,8 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
               <input
                 id="cct-slider"
                 type="range"
-                min="2000"
-                max="7000"
+                min="3500"
+                max="6500"
                 step="100"
                 value={state.current_cct}
                 onChange={handleCctChange}
@@ -124,7 +130,7 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
                 id="intensity-slider"
                 type="range"
                 min="0"
-                max="1000"
+                max="500"
                 step="10"
                 value={state.current_intensity}
                 onChange={handleIntensityChange}
