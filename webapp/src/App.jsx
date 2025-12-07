@@ -756,6 +756,12 @@ const App = () => {
             // Logs UI removed for performance - ignoring log updates
             // Log functionality can be re-enabled by uncommenting LogContext usage
           } else if (data.type === "live_update") {
+              console.log('[WebSocket] Received live_update with current_cct/intensity:', {
+                current_cct: data.data.current_cct,
+                current_intensity: data.data.current_intensity,
+                cw: data.data.cw,
+                ww: data.data.ww
+              });
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
                   logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");
@@ -1318,14 +1324,18 @@ const App = () => {
 
   // Force chart updates when data/options change
   useEffect(() => {
-    if (cctChartRef.current) {
-      cctChartRef.current.update('none'); // 'none' mode = no animation for smooth updates
+    // Access the chart instance through the ref
+    const chart = cctChartRef.current;
+    if (chart && typeof chart.update === 'function') {
+      chart.update('none'); // 'none' mode = no animation for smooth updates
     }
   }, [chartData, chartOptions]);
 
   useEffect(() => {
-    if (intensityChartRef.current) {
-      intensityChartRef.current.update('none');
+    // Access the chart instance through the ref
+    const chart = intensityChartRef.current;
+    if (chart && typeof chart.update === 'function') {
+      chart.update('none');
     }
   }, [intensityChartData, intensityChartOptions]);
 
@@ -1421,6 +1431,7 @@ const App = () => {
             )}
             <Line 
               ref={cctChartRef}
+              key={`cct-${Math.round(systemState.current_cct)}-${Math.floor(verticalLinePosition / 100)}`}
               data={chartData} 
               options={chartOptions}
             />
@@ -1433,6 +1444,7 @@ const App = () => {
             )}
             <Line 
               ref={intensityChartRef}
+              key={`intensity-${Math.round(systemState.current_intensity)}-${Math.floor(verticalLinePosition / 100)}`}
               data={intensityChartData} 
               options={intensityChartOptions}
             />
