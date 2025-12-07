@@ -1371,12 +1371,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              data={chartData} 
-              options={chartOptions} 
-              redraw={false}
-              updateMode="active"
-            />
+            <Line data={chartData} options={chartOptions} />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1384,12 +1379,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              data={intensityChartData} 
-              options={intensityChartOptions} 
-              redraw={false}
-              updateMode="active"
-            />
+            <Line data={intensityChartData} options={intensityChartOptions} />
           </div>
         </section>
         <section className="dashboard-grid">
