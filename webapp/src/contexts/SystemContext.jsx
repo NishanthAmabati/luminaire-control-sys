@@ -47,13 +47,18 @@ export const SystemProvider = ({ children }) => {
   }, [])
 
   const updateScheduler = useCallback((schedulerUpdates) => {
-    setSystemState((prev) => ({
-      ...prev,
-      scheduler: {
-        ...prev.scheduler,
-        ...schedulerUpdates,
-      },
-    }))
+    console.log('[SystemContext] updateScheduler called with:', schedulerUpdates);
+    setSystemState((prev) => {
+      const newState = {
+        ...prev,
+        scheduler: {
+          ...prev.scheduler,
+          ...schedulerUpdates,
+        },
+      };
+      console.log('[SystemContext] New scheduler state:', newState.scheduler);
+      return newState;
+    })
   }, [])
 
   const resetSystemState = useCallback(() => {

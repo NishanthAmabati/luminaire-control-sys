@@ -781,7 +781,11 @@ const App = () => {
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
                 if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
                 if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
-                if (data.data.scheduler.interval_progress !== undefined) schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
+                if (data.data.scheduler.interval_progress !== undefined) {
+                  schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
+                  console.log('[WebSocket] Received interval_progress:', data.data.scheduler.interval_progress);
+                }
+                console.log('[WebSocket] Updating scheduler with:', schedulerUpdates);
                 updateScheduler(schedulerUpdates);
                 
                 // Update vertical line position for real-time graph animation when in auto mode
@@ -1264,17 +1268,26 @@ const App = () => {
   }, [systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
+    console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
     // When system is off, always show 0%
     if (!systemState.isSystemOn) {
+      console.log('[Progress Bar] System is OFF, returning 0.0');
       return "0.0"
     }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
     if (systemState.scheduler.interval_progress !== undefined) {
-      return systemState.scheduler.interval_progress.toFixed(1)
+      const value = systemState.scheduler.interval_progress.toFixed(1);
+      console.log('[Progress Bar] Using backend interval_progress:', value);
+      return value;
     }
     // Fallback to local calculation if backend doesn't provide it
-    if (systemState.scheduler.total_intervals === 0) return "0.0"
-    return (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1)
+    if (systemState.scheduler.total_intervals === 0) {
+      console.log('[Progress Bar] Fallback: total_intervals is 0, returning 0.0');
+      return "0.0";
+    }
+    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
+    console.log('[Progress Bar] Fallback: calculated locally:', calculated);
+    return calculated;
   }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
 
   const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
