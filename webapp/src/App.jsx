@@ -851,8 +851,14 @@ const App = () => {
               }
               
               // Update local CCT and intensity for UI display (explicit undefined checks for falsy values)
-              if (data.data.current_cct !== undefined) setLocalCct(data.data.current_cct);
-              if (data.data.current_intensity !== undefined) setLocalIntensity(data.data.current_intensity);
+              if (data.data.current_cct !== undefined) {
+                  updateSystemState({ current_cct: data.data.current_cct });
+                  setLocalCct(data.data.current_cct);
+              }
+              if (data.data.current_intensity !== undefined) {
+                  updateSystemState({ current_intensity: data.data.current_intensity });
+                  setLocalIntensity(data.data.current_intensity);
+              }
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
