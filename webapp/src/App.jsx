@@ -141,6 +141,8 @@ const App = () => {
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   const [localCct, setLocalCct] = useState(null)
   const [localIntensity, setLocalIntensity] = useState(null)
+  const cctChartRef = useRef(null)
+  const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
   const [verticalLinePosition, setVerticalLinePosition] = useState(0)
   const [manualSystemOff, setManualSystemOff] = useState(false)
@@ -1327,6 +1329,19 @@ const App = () => {
     return calculated;
   }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
 
+  // Manual chart update triggers - force Chart.js to update when data changes
+  useEffect(() => {
+    if (cctChartRef.current) {
+      cctChartRef.current.update('none'); // 'none' mode for instant update without animation
+    }
+  }, [chartData, chartOptions]);
+
+  useEffect(() => {
+    if (intensityChartRef.current) {
+      intensityChartRef.current.update('none');
+    }
+  }, [intensityChartData, intensityChartOptions]);
+
   const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
   const sceneload = (systemState.isSystemOn && systemState.loaded_scene) ? systemState.loaded_scene.slice(0, -4) : "None"
 
@@ -1390,6 +1405,7 @@ const App = () => {
               </div>
             )}
             <Line 
+              ref={cctChartRef}
               data={chartData}
               options={chartOptions}
             />
@@ -1401,6 +1417,7 @@ const App = () => {
               </div>
             )}
             <Line 
+              ref={intensityChartRef}
               data={intensityChartData}
               options={intensityChartOptions}
             />
