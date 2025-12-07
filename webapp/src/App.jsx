@@ -719,6 +719,16 @@ const App = () => {
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+        if (data.type === "live_update") {
+            updateSystemState(prev => ({
+                ...prev,
+                ...data.data,
+                scheduler: {
+                    ...prev.scheduler,
+                    ...data.data.scheduler
+                }
+            }));
+        }
           console.log(
             "%c[WS → FRONTEND] RAW PAYLOAD:",
             "background: #222; color: #bada55; font-size:14px",
@@ -762,9 +772,6 @@ const App = () => {
                 },
               });
             }
-          } else if (data.type === "log_update") {
-            // Logs UI removed for performance - ignoring log updates
-            // Log functionality can be re-enabled by uncommenting LogContext usage
           } else if (data.type === "live_update") {
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
