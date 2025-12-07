@@ -1065,7 +1065,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current CCT: ${systemState.scheduler.current_cct.toFixed(1)}K`,
+          text: `Current CCT: ${(systemState.scheduler.current_cct ?? 3500).toFixed(1)}K`,
         },
         title: {
           display: true,
@@ -1185,7 +1185,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current Intensity: ${systemState.scheduler.current_intensity.toFixed(1)} lux`,
+          text: `Current Intensity: ${(systemState.scheduler.current_intensity ?? 250).toFixed(1)} lux`,
         },
         title: {
           display: true,
