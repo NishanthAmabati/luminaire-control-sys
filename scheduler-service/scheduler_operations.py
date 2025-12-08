@@ -112,7 +112,11 @@ class SchedulerOperations:
                 "current_intensity": 250
             }
         }
+        # Deep merge loaded_state with defaults, especially for nested scheduler object
         state = {**defaults, **loaded_state}
+        # Ensure scheduler object has all required fields by merging with defaults
+        if "scheduler" in state:
+            state["scheduler"] = {**defaults["scheduler"], **state["scheduler"]}
         return state
 
     def _set_state(self, state):
