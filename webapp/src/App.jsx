@@ -980,12 +980,12 @@ const App = () => {
           ? [
               {
                 label: "current CCT",
-                data: systemState.current_cct
+                data: systemState.scheduler.current_cct
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.current_cct }]
+                    ? [{ x: centerPosition, y: systemState.scheduler.current_cct }]
                     : [
-                        { x: 0, y: systemState.current_cct },
-                        { x: 8640, y: systemState.current_cct },
+                        { x: 0, y: systemState.scheduler.current_cct },
+                        { x: 8640, y: systemState.scheduler.current_cct },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1001,7 +1001,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1034,12 +1034,12 @@ const App = () => {
           ? [
               {
                 label: "current intensity",
-                data: systemState.current_intensity
+                data: systemState.scheduler.current_intensity
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.current_intensity }]
+                    ? [{ x: centerPosition, y: systemState.scheduler.current_intensity }]
                     : [
-                        { x: 0, y: systemState.current_intensity },
-                        { x: 8640, y: systemState.current_intensity },
+                        { x: 0, y: systemState.scheduler.current_intensity },
+                        { x: 8640, y: systemState.scheduler.current_intensity },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1055,7 +1055,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -1064,7 +1064,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current CCT: ${(systemState.current_cct ?? 3500).toFixed(1)}K`,
+          text: `Current CCT: ${(systemState.scheduler.current_cct ?? 3500).toFixed(1)}K`,
         },
         title: {
           display: true,
@@ -1174,7 +1174,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_cct]
   )
 
   const intensityChartOptions = useMemo(
@@ -1184,7 +1184,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current Intensity: ${(systemState.current_intensity ?? 250).toFixed(1)} lux`,
+          text: `Current Intensity: ${(systemState.scheduler.current_intensity ?? 250).toFixed(1)} lux`,
         },
         title: {
           display: true,
@@ -1294,7 +1294,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_intensity]
   )
 
   const monitoringDisplay = useMemo(() => {
@@ -1556,14 +1556,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={systemState.current_cct ?? 3500}
+                          value={systemState.scheduler.current_cct ?? 3500}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.current_cct ?? 3500).toFixed(0)} K
+                          {(systemState.scheduler.current_cct ?? 3500).toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1580,14 +1580,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={systemState.current_intensity ?? 250}
+                          value={systemState.scheduler.current_intensity ?? 250}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.current_intensity ?? 250).toFixed(0)} lux
+                          {(systemState.scheduler.current_intensity ?? 250).toFixed(0)} lux
                         </div>
                       </div>
                     </div>
