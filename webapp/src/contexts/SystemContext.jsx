@@ -23,6 +23,7 @@ export const SystemProvider = ({ children }) => {
       current_interval: 0,
       total_intervals: 8640,
       interval_seconds: 1.0,
+      interval_progress: 0.0,
       status: "idle",
     },
     scene_data: { cct: [], intensity: [] },
@@ -35,6 +36,7 @@ export const SystemProvider = ({ children }) => {
     temperature: null,
     wsLatency: null,
     system_timers: [],
+    isTimerEnabled: false,
   })
 
   const updateSystemState = useCallback((updates) => {
@@ -45,13 +47,18 @@ export const SystemProvider = ({ children }) => {
   }, [])
 
   const updateScheduler = useCallback((schedulerUpdates) => {
-    setSystemState((prev) => ({
-      ...prev,
-      scheduler: {
-        ...prev.scheduler,
-        ...schedulerUpdates,
-      },
-    }))
+    console.log('[SystemContext] updateScheduler called with:', schedulerUpdates);
+    setSystemState((prev) => {
+      const newState = {
+        ...prev,
+        scheduler: {
+          ...prev.scheduler,
+          ...schedulerUpdates,
+        },
+      };
+      console.log('[SystemContext] New scheduler state:', newState.scheduler);
+      return newState;
+    })
   }, [])
 
   const resetSystemState = useCallback(() => {
@@ -67,6 +74,7 @@ export const SystemProvider = ({ children }) => {
         current_interval: 0,
         total_intervals: 8640,
         interval_seconds: 1.0,
+        interval_progress: 0.0,
         status: "idle",
       },
       scene_data: { cct: [], intensity: [] },
@@ -79,6 +87,7 @@ export const SystemProvider = ({ children }) => {
       temperature: null,
       wsLatency: null,
       system_timers: [],
+      isTimerEnabled: false,
     })
   }, [])
 

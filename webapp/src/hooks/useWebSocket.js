@@ -77,6 +77,7 @@ export const useWebSocket = (url, onError) => {
             if (systemData.loaded_scene !== undefined) updates.loaded_scene = systemData.loaded_scene
             if (systemData.available_scenes !== undefined) updates.available_scenes = systemData.available_scenes
             if (systemData.system_timers !== undefined) updates.system_timers = systemData.system_timers
+            if (systemData.isTimerEnabled !== undefined) updates.isTimerEnabled = systemData.isTimerEnabled
             if (systemData.is_manual_override !== undefined) updates.is_manual_override = systemData.is_manual_override
             if (systemData.scene_data !== undefined) updates.scene_data = systemData.scene_data
 

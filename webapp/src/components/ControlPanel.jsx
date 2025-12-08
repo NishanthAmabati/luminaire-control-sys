@@ -3,36 +3,41 @@ import { Sliders } from "lucide-react"
 import { FaPlay, FaStop } from 'react-icons/fa'; 
 import { toast } from "react-hot-toast"
 
+// Helper function to clamp values within a range
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
 const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, stopScheduler }) => {
   const debounceTimeout = useRef(null)
 
-  const adjustLight = useCallback((cw, ww, cct, intensity) => {
+  const adjustLight = useCallback((cct, intensity) => {
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
     debounceTimeout.current = setTimeout(() => {
-      sendCommand({ type: "adjust_light", cw, ww, cct, intensity })
+      // Calculate cw and ww from cct and intensity using backend formula
+      // Backend uses: min_cct=3500, max_cct=6500, max_intensity=500
+      const min_cct = 3500
+      const max_cct = 6500
+      const max_intensity = 500
+      const clampedCct = clamp(cct, min_cct, max_cct)
+      const clampedIntensity = clamp(intensity, 0, max_intensity)
+      const intensityPercent = clampedIntensity / max_intensity
+      const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
+      const wwBase = 100.0 - cwBase
+      const cw = clamp(cwBase * intensityPercent, 0, 99.99)
+      const ww = clamp(wwBase * intensityPercent, 0, 99.99)
+      sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
     }, 100)
   }, [sendCommand])
 
   const handleCctChange = useCallback((e) => {
     const cct = parseFloat(e.target.value)
     const intensity = state.current_intensity
-    adjustLight(null, null, cct, intensity)
+    adjustLight(cct, intensity)
   }, [state.current_intensity, adjustLight])
 
   const handleIntensityChange = useCallback((e) => {
     const intensity = parseFloat(e.target.value)
     const cct = state.current_cct
-    adjustLight(null, null, cct, intensity)
-  }, [state.current_cct, adjustLight])
-
-  const setCct = useCallback((cct) => {
-    const intensity = state.current_intensity
-    adjustLight(null, null, cct, intensity)
-  }, [state.current_intensity, adjustLight])
-
-  const setIntensity = useCallback((intensity) => {
-    const cct = state.current_cct
-    adjustLight(null, null, cct, intensity)
+    adjustLight(cct, intensity)
   }, [state.current_cct, adjustLight])
 
   return (
@@ -112,8 +117,8 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
               <input
                 id="cct-slider"
                 type="range"
-                min="2000"
-                max="7000"
+                min="3500"
+                max="6500"
                 step="100"
                 value={state.current_cct}
                 onChange={handleCctChange}
@@ -128,7 +133,7 @@ const ControlPanel = ({ state, sendCommand, setMode, loadScene, activateScene, s
                 id="intensity-slider"
                 type="range"
                 min="0"
-                max="1000"
+                max="500"
                 step="10"
                 value={state.current_intensity}
                 onChange={handleIntensityChange}
