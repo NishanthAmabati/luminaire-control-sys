@@ -720,16 +720,6 @@ const App = () => {
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-        if (data.type === "live_update") {
-            updateSystemState(prev => ({
-                ...prev,
-                ...data.data,
-                scheduler: {
-                    ...prev.scheduler,
-                    ...data.data.scheduler
-                }
-            }));
-        }
           console.log(
             "%c[WS → FRONTEND] RAW PAYLOAD:",
             "background: #222; color: #bada55; font-size:14px",
@@ -1299,8 +1289,10 @@ const App = () => {
 
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString()
-    return `CCT: ${systemState.current_cct.toFixed(0)}K, Intensity: ${systemState.current_intensity.toFixed(0)}lux, ${timestamp}`
-  }, [systemState.current_cct, systemState.current_intensity])
+    const cct = systemState.scheduler.current_cct ?? systemState.current_cct
+    const intensity = systemState.scheduler.current_intensity ?? systemState.current_intensity
+    return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
+  }, [systemState.scheduler.current_cct, systemState.scheduler.current_intensity, systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
