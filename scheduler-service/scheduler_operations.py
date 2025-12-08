@@ -115,8 +115,11 @@ class SchedulerOperations:
         # Deep merge loaded_state with defaults, especially for nested scheduler object
         state = {**defaults, **loaded_state}
         # Ensure scheduler object has all required fields by merging with defaults
-        if "scheduler" in state:
+        if "scheduler" in state and isinstance(state["scheduler"], dict):
             state["scheduler"] = {**defaults["scheduler"], **state["scheduler"]}
+        elif "scheduler" not in state or not isinstance(state["scheduler"], dict):
+            # If scheduler is missing or invalid, use defaults
+            state["scheduler"] = defaults["scheduler"]
         return state
 
     def _set_state(self, state):
