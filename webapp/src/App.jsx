@@ -804,49 +804,49 @@ const App = () => {
               updateSystemState(systemUpdates);
               
               // Update scheduler via context
-            if (data.data.scheduler) {
-              const schedulerUpdates = {};
-              if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
-              if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
-              if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-              if (data.data.scheduler.interval_progress !== undefined) schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
-              // Extract current_cct and current_intensity from scheduler object for real-time chart updates
-              if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
-              if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
-              updateScheduler(schedulerUpdates);
-              
-              // Update vertical line position for real-time graph animation when in auto mode
-              // Check both incoming message data and current state to handle all cases:
-              // - When backend sends explicit "running" status
-              // - When scene is loaded (even if status not explicitly sent in this message)
-              const shouldUpdateVerticalLine = systemState.auto_mode && (
-                data.data.scheduler?.status === "running" || 
-                systemState.scheduler.status === "running" || 
-                data.data.loaded_scene || 
-                systemState.loaded_scene
-              );
-              
-              if (shouldUpdateVerticalLine) {
-                const currentSecond = getCurrentSecondOfDay();
-                setVerticalLinePosition(Math.floor(currentSecond / 10));
-                // Only update these timestamps on actual interval changes, not every update
-                if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
-                  lastIntervalUpdateTime.current = Date.now();
+              if (data.data.scheduler) {
+                const schedulerUpdates = {};
+                if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
+                if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
+                if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
+                if (data.data.scheduler.interval_progress !== undefined) schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
+                // Extract current_cct and current_intensity from scheduler object for real-time chart updates
+                if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+                if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
+                updateScheduler(schedulerUpdates);
+                
+                // Update vertical line position for real-time graph animation when in auto mode
+                // Check both incoming message data and current state to handle all cases:
+                // - When backend sends explicit "running" status
+                // - When scene is loaded (even if status not explicitly sent in this message)
+                const shouldUpdateVerticalLine = systemState.auto_mode && (
+                  data.data.scheduler?.status === "running" || 
+                  systemState.scheduler.status === "running" || 
+                  data.data.loaded_scene || 
+                  systemState.loaded_scene
+                );
+                
+                if (shouldUpdateVerticalLine) {
+                  const currentSecond = getCurrentSecondOfDay();
+                  setVerticalLinePosition(Math.floor(currentSecond / 10));
+                  // Only update these timestamps on actual interval changes, not every update
+                  if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
+                    lastIntervalUpdateTime.current = Date.now();
+                  }
+                }
+                
+                // Check for scene completion
+                if (
+                  data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
+                  lastCompletionLog !== data.data.scheduler.current_interval
+                ) {
+                  logBasic("Scene completed");
+                  setLastCompletionLog(data.data.scheduler.current_interval);
+                  if (data.data.scheduler.status === "completed") {
+                    updateScheduler({ status: "idle" });
+                  }
                 }
               }
-              
-              // Check for scene completion
-              if (
-                data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
-                lastCompletionLog !== data.data.scheduler.current_interval
-              ) {
-                logBasic("Scene completed");
-                setLastCompletionLog(data.data.scheduler.current_interval);
-                if (data.data.scheduler.status === "completed") {
-                  updateScheduler({ status: "idle" });
-                }
-              }
-            }
               
               // Update devices if provided
               if (data.data.connected_devices) {
