@@ -4,7 +4,7 @@ import { useSystem } from "../contexts/SystemContext"
 
 /**
  * Custom hook to bootstrap initial state from REST APIs on app load.
- * Fetches devices, system state, timers, and optionally logs before switching to live updates.
+ * Fetches devices, system state, and optionally logs before switching to live updates.
  * Uses dynamic URL based on window.location for cross-IP and container access.
  */
 export const useBootstrapState = () => {
@@ -37,34 +37,15 @@ export const useBootstrapState = () => {
         const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
         if (scenesResponse.ok) {
           const scenesData = await scenesResponse.json()
-          if (Array.isArray(scenesData.available_scenes)) {
-            console.log("Bootstrapped available scenes:", scenesData.available_scenes)
-            updateSystemState({ available_scenes: scenesData.available_scenes })
+          if (Array.isArray(scenesData.scenes)) {
+            console.log("Bootstrapped available scenes:", scenesData.scenes)
+            updateSystemState({ available_scenes: scenesData.scenes })
           }
         } else {
           console.warn("Failed to fetch available scenes:", scenesResponse.status)
         }
       } catch (error) {
         console.error("Error bootstrapping scenes:", error)
-      }
-
-      try {
-        // Fetch timers from /api/timers endpoint
-        const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
-        if (timersResponse.ok) {
-          const timersData = await timersResponse.json()
-          if (Array.isArray(timersData.timers)) {
-            console.log("Bootstrapped timers:", timersData.timers)
-            updateSystemState({ 
-              system_timers: timersData.timers,
-              isTimerEnabled: timersData.isTimerEnabled 
-            })
-          }
-        } else {
-          console.warn("Failed to fetch timers:", timersResponse.status)
-        }
-      } catch (error) {
-        console.error("Error bootstrapping timers:", error)
       }
 
       // Note: System state and logs will be populated via WebSocket live_update and log_update

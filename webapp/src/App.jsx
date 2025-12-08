@@ -139,9 +139,8 @@ const App = () => {
     error: null,
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
-  // Removed localCct and localIntensity - using systemState.scheduler values directly
-  const cctChartRef = useRef(null)
-  const intensityChartRef = useRef(null)
+  const [localCct, setLocalCct] = useState(null)
+  const [localIntensity, setLocalIntensity] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [verticalLinePosition, setVerticalLinePosition] = useState(0)
   const [manualSystemOff, setManualSystemOff] = useState(false)
@@ -152,8 +151,8 @@ const App = () => {
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [isAdjusting, setIsAdjusting] = useState(false)
   const [isTimerEnabled, setIsTimerEnabled] = useState(() => JSON.parse(localStorage.getItem("isTimerEnabled") || "false"))
-  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "")
-  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "")
+  const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "00:00")
+  const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "23:59")
   const [runningScene, setRunningScene] = useState(null)
   const [lastCompletionLog, setLastCompletionLog] = useState(null)
 
@@ -248,89 +247,44 @@ const App = () => {
   }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
 
   const setMode = useCallback(
-    async (auto) => {
+    (auto) => {
       setIsLoading(true)
       sendCommand({ type: "set_mode", auto })
       if (auto) {
         toast.success("Switched to Auto Mode")
-        updateSystemState({ auto_mode: true })
-        
-        // Wait for backend to process mode switch and fetch updated state
-        setTimeout(() => {
-          (async () => {
-            try {
-              const apiBaseUrl = `http://${window.location.hostname}:8000`
-              const response = await fetch(`${apiBaseUrl}/api/system_state`)
-              if (response.ok) {
-                const stateData = await response.json()
-                
-                // Update scene data if available
-                if (stateData.scene_data) {
-                  setSceneData({
-                    cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
-                    intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
-                  })
-                }
-                
-                // Update state
-                const systemUpdates = {}
-                if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
-                if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
-                if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
-                if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
-                if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
-                if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
-                updateSystemState(systemUpdates)
-                
-                // Update scheduler status
-                if (stateData.scheduler) {
-                  updateScheduler(stateData.scheduler)
-                }
-              }
-            } catch (error) {
-              console.error("Error fetching state after mode switch:", error)
-            } finally {
-              setIsLoading(false)
-            }
-          })()
-        }, 300)
+        if (systemState.current_scene) {
+          updateSystemState({
+            loaded_scene: systemState.current_scene,
+            auto_mode: true,
+          })
+          setTimeout(() => {
+            sendCommand({ type: "load_scene", scene: systemState.current_scene })
+            logBasic(`Loading scene for charts: ${systemState.current_scene}`)
+            activateScene()
+          }, 1000)
+        } else {
+          console.warn("No current scene to reactivate")
+          updateSystemState({ auto_mode: true })
+          setSceneData({ cct: [], intensity: [] })
+        }
       } else {
+        logBasic("Switched to Manual mode")
         toast.success("Switched to Manual Mode")
-        // Clear scene data in UI when switching to manual (as requested)
         setSceneData({ cct: [], intensity: [] })
-        updateSystemState({ 
+        updateSystemState({
           auto_mode: false,
-          loaded_scene: null  // Clear loaded scene in UI
+          loaded_scene: null,
         })
-        updateScheduler({ status: "paused" })
+        updateScheduler({ status: "idle" })
         setVerticalLinePosition(0)
-        
-        // Send current manual values to devices immediately when switching to manual mode
-        // This ensures the lights are controlled by manual settings right away
-        setTimeout(() => {
-          const min_cct = 3500
-          const max_cct = 6500
-          const max_intensity = 500
-          const cct = systemState.current_cct
-          const intensity = systemState.current_intensity
-          const clampedCct = Math.max(min_cct, Math.min(max_cct, cct))
-          const clampedIntensity = Math.max(0, Math.min(max_intensity, intensity))
-          const intensityPercent = clampedIntensity / max_intensity
-          const cwBase = (clampedCct - min_cct) / ((max_cct - min_cct) / 100.0)
-          const wwBase = 100.0 - cwBase
-          const cw = Math.max(0, Math.min(99.99, cwBase * intensityPercent))
-          const ww = Math.max(0, Math.min(99.99, wwBase * intensityPercent))
-          sendCommand({ type: "sendAll", cw, ww, intensity: clampedIntensity })
-          logBasic(`Manual mode activated: CCT ${clampedCct}K, Intensity ${clampedIntensity} lux`)
-          setIsLoading(false)
-        }, 300)
       }
+      setTimeout(() => setIsLoading(false), 500)
     },
-    [sendCommand, updateSystemState, updateScheduler, setSceneData]
+    [sendCommand, logBasic, systemState.current_scene, updateSystemState, updateScheduler, activateScene]
   )
 
   const loadScene = useCallback(
-    async (scene) => {
+    (scene) => {
       setIsLoading(true)
       if (systemState.scheduler.status === "running" && systemState.current_scene) {
         setRunningScene(systemState.current_scene)
@@ -341,6 +295,7 @@ const App = () => {
           if (systemState.scheduler.status === "running" && systemState.current_scene === runningScene) {
             sendCommand({ type: "load_scene", scene: systemState.current_scene })
             toast.success(`Reverted to running scene: ${systemState.current_scene}`)
+            logBasic(`Reverted to running scene: ${systemState.current_scene}`)
             updateSystemState({ loaded_scene: systemState.current_scene })
             updateScheduler({ status: "running" })
           }
@@ -348,33 +303,12 @@ const App = () => {
       }
       sendCommand({ type: "load_scene", scene })
       toast.success(`Scene Loaded: ${scene}`)
+      logBasic(`Loaded scene: ${scene}`)
       updateSystemState({ loaded_scene: scene })
       updateScheduler({ status: "pending" })
-      
-      // Wait for backend to process load_scene command before fetching
-      await new Promise(resolve => setTimeout(resolve, 200))
-      
-      // Fetch scene data immediately to populate graphs
-      try {
-        const apiBaseUrl = `http://${window.location.hostname}:8000`
-        const response = await fetch(`${apiBaseUrl}/api/system_state`)
-        if (response.ok) {
-          const stateData = await response.json()
-          if (stateData.scene_data) {
-            setSceneData({
-              cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
-              intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
-            })
-            console.log(`Loaded scene data for ${scene}: ${stateData.scene_data.cct?.length || 0} data points`)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching scene data after load:", error)
-      }
-      
-      setTimeout(() => setIsLoading(false), 600)
+      setTimeout(() => setIsLoading(false), 800)
     },
-    [sendCommand, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler, setSceneData]
+    [sendCommand, logBasic, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler]
   )
 
   const stopScheduler = useCallback(() => {
@@ -511,15 +445,8 @@ const App = () => {
     setVerticalLinePosition(0);
   }, [sendCommand, logBasic, activateScene, systemState.isSystemOn, systemState.current_scene, updateSystemState]);
 
-  const handleTimerToggle = useCallback((enable) => {
-    // If enable is not provided, toggle the current state
-    const newIsEnabled = enable !== undefined ? enable : !isTimerEnabled;
-    
-    // Don't do anything if already in the desired state
-    if (newIsEnabled === isTimerEnabled) {
-      return;
-    }
-    
+  const handleTimerToggle = useCallback(() => {
+    const newIsEnabled = !isTimerEnabled;
     setIsTimerEnabled(newIsEnabled);
     sendCommand({ type: "toggle_timer", enable: newIsEnabled });
     toast.success(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
@@ -529,16 +456,11 @@ const App = () => {
       setOffTime(systemState.system_timers[0].off || "");
       logBasic(`Timers populated from local copy: On ${systemState.system_timers[0].on}, Off ${systemState.system_timers[0].off}`);
     } else if (!newIsEnabled) {
-      // Clear timer fields and timer state when disabling
       setOnTime("");
       setOffTime("");
-      updateSystemState({ 
-        is_manual_override: false,
-        system_timers: [],
-        isTimerEnabled: false
-      });
+      updateSystemState({ is_manual_override: false });
     }
-  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers, updateSystemState]);
+  }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers]);
 
   const handleTimeChange = useCallback(
     (e, type) => {
@@ -625,69 +547,18 @@ const App = () => {
       }
 
       try {
-        // Fetch full system state to restore CCT, intensity, mode, etc.
-        const stateResponse = await fetch(`${apiBaseUrl}/api/system_state`)
-        if (stateResponse.ok) {
-          const stateData = await stateResponse.json()
-          // Update all relevant system state fields
-          const systemUpdates = {}
-          if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
-          if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
-          if (stateData.auto_mode !== undefined) systemUpdates.auto_mode = stateData.auto_mode
-          if (stateData.isSystemOn !== undefined) systemUpdates.isSystemOn = stateData.isSystemOn
-          if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
-          if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
-          if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
-          if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
-          if (Array.isArray(stateData.available_scenes)) systemUpdates.available_scenes = stateData.available_scenes
-          
-          updateSystemState(systemUpdates)
-          
-          // Update scene data for graphs
-          if (stateData.scene_data) {
-            setSceneData({
-              cct: Array.isArray(stateData.scene_data.cct) ? stateData.scene_data.cct : [],
-              intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
-            })
-          }
-          
-          // Update local CCT and intensity values for sliders
-          if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
-          if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)
-          
-          // Update scheduler state if available
-          if (stateData.scheduler) {
-            updateScheduler(stateData.scheduler)
+        // Fetch available scenes
+        const scenesResponse = await fetch(`${apiBaseUrl}/api/available_scenes`)
+        if (scenesResponse.ok) {
+          const scenesData = await scenesResponse.json()
+          if (Array.isArray(scenesData.scenes)) {
+            updateSystemState({ available_scenes: scenesData.scenes })
           }
         } else {
-          console.warn("Failed to fetch system state:", stateResponse.status)
+          console.warn("Failed to fetch available scenes:", scenesResponse.status)
         }
       } catch (error) {
-        console.error("Error bootstrapping system state:", error)
-      }
-
-      try {
-        // Fetch timers from backend
-        const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
-        if (timersResponse.ok) {
-          const timersData = await timersResponse.json()
-          if (Array.isArray(timersData.timers)) {
-            updateSystemState({ 
-              system_timers: timersData.timers,
-              isTimerEnabled: timersData.isTimerEnabled 
-            })
-            // Update local timer state if timers exist
-            if (timersData.timers.length > 0) {
-              setOnTime(timersData.timers[0].on || "")
-              setOffTime(timersData.timers[0].off || "")
-            }
-            setIsTimerEnabled(timersData.isTimerEnabled || false)
-          }
-        } else {
-          console.warn("Failed to fetch timers:", timersResponse.status)
-        }
-      } catch (error) {
-        console.error("Error bootstrapping timers:", error)
+        console.error("Error bootstrapping scenes:", error)
       }
 
     }
@@ -720,28 +591,6 @@ const App = () => {
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-        if (data.type === "live_update") {
-            updateSystemState(prev => ({
-                ...prev,
-                ...data.data,
-                scheduler: {
-                    ...prev.scheduler,
-                    ...data.data.scheduler
-                }
-            }));
-        }
-          console.log(
-            "%c[WS → FRONTEND] RAW PAYLOAD:",
-            "background: #222; color: #bada55; font-size:14px",
-            data
-          );
-          if (data.type === "system_state") {
-            console.log(
-              "%c[WS → SYSTEM_STATE] Received:",
-              "background: #003366; color: #fff; font-size:13px",
-              JSON.stringify(data.data, null, 2)
-            );
-          }
           if (data.type === "pong") {
             lastPongTime.current = Date.now();
             const latency = lastPongTime.current - lastPingTime.current;
@@ -773,6 +622,9 @@ const App = () => {
                 },
               });
             }
+          } else if (data.type === "log_update") {
+            // Logs UI removed for performance - ignoring log updates
+            // Log functionality can be re-enabled by uncommenting LogContext usage
           } else if (data.type === "live_update") {
               const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
                 if (!isTimerEnabledValid) {
@@ -780,34 +632,23 @@ const App = () => {
                   return;
                 }
                 setIsTimerEnabled(data.data.isTimerEnabled !== undefined ? data.data.isTimerEnabled : isTimerEnabled);
-              // Always update scene data when provided by backend
-              // Clear scene data when system is turned off
-              if (data.data.isSystemOn === false) {
-                setSceneData({ cct: [], intensity: [] });
-              } else if (data.data.scene_data) {
-                setSceneData({
-                  cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : sceneData.cct,
-                  intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
-                });
-              }
+              setSceneData({
+                cct: Array.isArray(data.data.scene_data?.cct) ? data.data.scene_data.cct : sceneData.cct,
+                intensity: Array.isArray(data.data.scene_data?.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
+              });
               
               // Update system state via context
               const systemUpdates = {};
-              if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
-              if (data.data.current_intensity !== undefined) systemUpdates.current_intensity = data.data.current_intensity;
-              if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
-              if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
+              if (data.data.current_cct) systemUpdates.current_cct = data.data.current_cct;
+              if (data.data.current_intensity) systemUpdates.current_intensity = data.data.current_intensity;
+              if (!isAdjusting && data.data.cw) systemUpdates.cw = data.data.cw;
+              if (!isAdjusting && data.data.ww) systemUpdates.ww = data.data.ww;
               if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
                 systemUpdates.isSystemOn = data.data.isSystemOn;
-                // When system is turned OFF, clear scene-related UI elements
-                if (data.data.isSystemOn === false) {
-                  systemUpdates.loaded_scene = null;
-                  systemUpdates.current_scene = null;
-                }
               }
               if (data.data.auto_mode !== undefined) systemUpdates.auto_mode = data.data.auto_mode;
-              if (data.data.current_scene !== undefined) systemUpdates.current_scene = data.data.current_scene;
-              if (data.data.loaded_scene !== undefined) systemUpdates.loaded_scene = data.data.loaded_scene;
+              if (data.data.current_scene) systemUpdates.current_scene = data.data.current_scene;
+              if (data.data.loaded_scene) systemUpdates.loaded_scene = data.data.loaded_scene;
               if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
               if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
               
@@ -816,35 +657,11 @@ const App = () => {
               // Update scheduler via context
               if (data.data.scheduler) {
                 const schedulerUpdates = {};
-                if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
+                if (data.data.scheduler.status) schedulerUpdates.status = data.data.scheduler.status;
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
-                if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-                // NOTE: current_cct is sent at root level (data.data.current_cct), NOT in scheduler object
-                // The scheduler object's current_cct is stale and should not be used
-                if (data.data.scheduler.interval_progress !== undefined) {
-                  schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
-                }
+                if (data.data.scheduler.total_intervals) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
+                if (data.data.scheduler.current_cct) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
                 updateScheduler(schedulerUpdates);
-                
-                // Update vertical line position for real-time graph animation when in auto mode
-                // Check both incoming message data and current state to handle all cases:
-                // - When backend sends explicit "running" status
-                // - When scene is loaded (even if status not explicitly sent in this message)
-                const shouldUpdateVerticalLine = systemState.auto_mode && (
-                  data.data.scheduler?.status === "running" || 
-                  systemState.scheduler.status === "running" || 
-                  data.data.loaded_scene || 
-                  systemState.loaded_scene
-                );
-                
-                if (shouldUpdateVerticalLine) {
-                  const currentSecond = getCurrentSecondOfDay();
-                  setVerticalLinePosition(Math.floor(currentSecond / 10));
-                  // Only update these timestamps on actual interval changes, not every update
-                  if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
-                    lastIntervalUpdateTime.current = Date.now();
-                  }
-                }
                 
                 // Check for scene completion
                 if (
@@ -868,8 +685,15 @@ const App = () => {
               if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== systemState.isSystemOn && isTimerEnabled) {
                 updateSystemState({ is_manual_override: false });
               }
-              // WebSocket receives scheduler.current_cct and scheduler.current_intensity which are updated every second by backend
-              // No need for local state - just use systemState values directly which are already updated by updateSystemState
+              
+              setLocalCct(data.data.current_cct || systemState.current_cct);
+              setLocalIntensity(data.data.current_intensity || systemState.current_intensity);
+              if (data.data.isSystemOn && data.data.scheduler?.status === "running") {
+                const currentSecond = getCurrentSecondOfDay();
+                setVerticalLinePosition(Math.floor(currentSecond / 10));
+                lastIntervalUpdateTime.current = Date.now();
+                sceneStartTime.current = Date.now();
+              }
               //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
@@ -981,12 +805,12 @@ const App = () => {
           ? [
               {
                 label: "current CCT",
-                data: systemState.scheduler.current_cct
+                data: systemState.current_cct
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.scheduler.current_cct }]
+                    ? [{ x: centerPosition, y: systemState.current_cct }]
                     : [
-                        { x: 0, y: systemState.scheduler.current_cct },
-                        { x: 8640, y: systemState.scheduler.current_cct },
+                        { x: 0, y: systemState.current_cct },
+                        { x: 8640, y: systemState.current_cct },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1002,7 +826,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1035,12 +859,12 @@ const App = () => {
           ? [
               {
                 label: "current intensity",
-                data: systemState.scheduler.current_intensity
+                data: systemState.current_intensity
                   ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.scheduler.current_intensity }]
+                    ? [{ x: centerPosition, y: systemState.current_intensity }]
                     : [
-                        { x: 0, y: systemState.scheduler.current_intensity },
-                        { x: 8640, y: systemState.scheduler.current_intensity },
+                        { x: 0, y: systemState.current_intensity },
+                        { x: 8640, y: systemState.current_intensity },
                       ]
                   : [],
                 borderColor: annotationColor,
@@ -1056,7 +880,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -1065,7 +889,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current CCT: ${(systemState.scheduler.current_cct ?? 3500).toFixed(1)}K`,
+          text: `Current CCT: ${systemState.current_cct.toFixed(1)}K`,
         },
         title: {
           display: true,
@@ -1154,8 +978,8 @@ const App = () => {
           },
         },
         y: {
-          min: 2000,
-          max: 7000,
+          min: 3500,
+          max: 6500,
           title: {
             display: true,
             text: "CCT (K)",
@@ -1175,7 +999,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_cct]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_cct]
   )
 
   const intensityChartOptions = useMemo(
@@ -1185,7 +1009,7 @@ const App = () => {
       plugins: {
         plotAreaBackground: plotAreaBackgroundPlugin,
         currentValueLabel: {
-          text: `Current Intensity: ${(systemState.scheduler.current_intensity ?? 250).toFixed(1)} lux`,
+          text: `Current Intensity: ${systemState.current_intensity.toFixed(1)} lux`,
         },
         title: {
           display: true,
@@ -1275,7 +1099,7 @@ const App = () => {
         },
         y: {
           min: 0,
-          max: 700,
+          max: 500,
           title: {
             display: true,
             text: "Intensity (lux)",
@@ -1295,7 +1119,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_intensity]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.current_intensity]
   )
 
   const monitoringDisplay = useMemo(() => {
@@ -1304,43 +1128,12 @@ const App = () => {
   }, [systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
-    console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
-    // When system is off, always show 0%
-    if (!systemState.isSystemOn) {
-      console.log('[Progress Bar] System is OFF, returning 0.0');
-      return "0.0"
-    }
-    // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (systemState.scheduler.interval_progress !== undefined) {
-      const value = systemState.scheduler.interval_progress.toFixed(1);
-      console.log('[Progress Bar] Using backend interval_progress:', value);
-      return value;
-    }
-    // Fallback to local calculation if backend doesn't provide it
-    if (systemState.scheduler.total_intervals === 0) {
-      console.log('[Progress Bar] Fallback: total_intervals is 0, returning 0.0');
-      return "0.0";
-    }
-    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
-    console.log('[Progress Bar] Fallback: calculated locally:', calculated);
-    return calculated;
-  }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
+    if (systemState.scheduler.total_intervals === 0) return 0
+    return (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1)
+  }, [systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
 
-  // Manual chart update triggers - force Chart.js to update when data changes
-  useEffect(() => {
-    if (cctChartRef.current) {
-      cctChartRef.current.update('none'); // 'none' mode for instant update without animation
-    }
-  }, [chartData, chartOptions]);
-
-  useEffect(() => {
-    if (intensityChartRef.current) {
-      intensityChartRef.current.update('none');
-    }
-  }, [intensityChartData, intensityChartOptions]);
-
-  const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
-  const sceneload = (systemState.isSystemOn && systemState.loaded_scene) ? systemState.loaded_scene.slice(0, -4) : "None"
+  const scenecurrent = systemState.current_scene ? systemState.current_scene.slice(0, -4) : "None"
+  const sceneload = systemState.loaded_scene ? systemState.loaded_scene.slice(0, -4) : "None"
 
   return (
     <div className={`luminaire-dashboard ${theme}-theme`}>
@@ -1401,11 +1194,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              ref={cctChartRef}
-              data={chartData}
-              options={chartOptions}
-            />
+            <Line data={chartData} options={chartOptions} />
           </div>
           <div className="chart-card">
             {isLoading && (
@@ -1413,11 +1202,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
-              ref={intensityChartRef}
-              data={intensityChartData}
-              options={intensityChartOptions}
-            />
+            <Line data={intensityChartData} options={intensityChartOptions} />
           </div>
         </section>
         <section className="dashboard-grid">
@@ -1557,14 +1342,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={systemState.scheduler.current_cct}
+                          value={localCct !== null ? localCct : systemState.current_cct}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {systemState.scheduler.current_cct.toFixed(0)} K
+                          {localCct !== null ? localCct.toFixed(0) : systemState.current_cct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1581,14 +1366,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={systemState.scheduler.current_intensity}
+                          value={localIntensity !== null ? localIntensity : systemState.current_intensity}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {systemState.scheduler.current_intensity.toFixed(0)} lux
+                          {localIntensity !== null ? localIntensity.toFixed(0) : systemState.current_intensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
@@ -1707,6 +1492,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(true)}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={isTimerEnabled}
                         aria-label="Enable timer"
@@ -1716,6 +1502,7 @@ const App = () => {
                       <button
                         className={`timer-toggle-tab ${!isTimerEnabled ? "active" : ""}`}
                         onClick={() => handleTimerToggle(false)}
+                        disabled={!systemState.isSystemOn}
                         role="tab"
                         aria-selected={!isTimerEnabled}
                         aria-label="Disable timer"
@@ -1733,9 +1520,9 @@ const App = () => {
                         type="time"
                         value={onTime}
                         onChange={(e) => handleTimeChange(e, "on")}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="time-input-group">
@@ -1745,9 +1532,9 @@ const App = () => {
                         type="time"
                         value={offTime}
                         onChange={(e) => handleTimeChange(e, "off")}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         className={`time-input ${onTime && offTime && onTime === offTime ? "invalid" : ""}`}
-                        aria-disabled={!isTimerEnabled}
+                        aria-disabled={!isTimerEnabled || !systemState.isSystemOn}
                       />
                     </div>
                     <div className="set-button-group">
@@ -1755,7 +1542,7 @@ const App = () => {
                       <button
                         className="set-timer-button"
                         onClick={handleSetTimer}
-                        disabled={!isTimerEnabled}
+                        disabled={!isTimerEnabled || !systemState.isSystemOn}
                         aria-label="Set timer"
                       >
                         Set
