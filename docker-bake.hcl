@@ -21,7 +21,6 @@ group "default" {
 
 group "default" {
   targets = [
-    "scheduler",
     "webapp",
   ]
 }
@@ -89,15 +88,6 @@ target "websocket" {
   ]
 }
 */
-
-target "scheduler" {
-  inherits = ["common"]
-  context  = "./scheduler-service"
-  tags = [
-    "${DOCKERHUB_USERNAME}/scheduler-service:latest",
-    "${DOCKERHUB_USERNAME}/scheduler-service:${GIT_SHA}",
-  ]
-}
 
 target "webapp" {
   inherits = ["common"]
