@@ -20,6 +20,7 @@ export const SystemProvider = ({ children }) => {
     ww: 50.0,
     scheduler: {
       current_cct: 3500,
+      current_intensity: 250,
       current_interval: 0,
       total_intervals: 8640,
       interval_seconds: 1.0,
@@ -71,6 +72,7 @@ export const SystemProvider = ({ children }) => {
       ww: 50.0,
       scheduler: {
         current_cct: 3500,
+        current_intensity: 250,
         current_interval: 0,
         total_intervals: 8640,
         interval_seconds: 1.0,

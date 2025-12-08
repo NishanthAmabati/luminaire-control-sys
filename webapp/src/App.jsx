@@ -819,11 +819,10 @@ const App = () => {
                 if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
                 if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-                // NOTE: current_cct is sent at root level (data.data.current_cct), NOT in scheduler object
-                // The scheduler object's current_cct is stale and should not be used
-                if (data.data.scheduler.interval_progress !== undefined) {
-                  schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
-                }
+                if (data.data.scheduler.interval_progress !== undefined) schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
+                // Extract current_cct and current_intensity from scheduler object for real-time chart updates
+                if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+                if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
                 updateScheduler(schedulerUpdates);
                 
                 // Update vertical line position for real-time graph animation when in auto mode
