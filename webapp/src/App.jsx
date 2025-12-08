@@ -1556,14 +1556,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={systemState.scheduler.current_cct}
+                          value={systemState.scheduler.current_cct ?? 3500}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {systemState.scheduler.current_cct.toFixed(0)} K
+                          {(systemState.scheduler.current_cct ?? 3500).toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1580,14 +1580,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={systemState.scheduler.current_intensity}
+                          value={systemState.scheduler.current_intensity ?? 250}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {systemState.scheduler.current_intensity.toFixed(0)} lux
+                          {(systemState.scheduler.current_intensity ?? 250).toFixed(0)} lux
                         </div>
                       </div>
                     </div>
