@@ -574,23 +574,7 @@ const App = () => {
     setIsSearchVisible((prev) => !prev)
   }, [])
 
-  const animateVerticalLine = useCallback(() => {
-    if (systemState.isSystemOn) {
-      const now = Date.now()
-      if (now - lastIntervalUpdateTime.current >= 1000) {
-        const currentSecond = getCurrentSecondOfDay()
-        const newPosition = Math.floor(currentSecond / 10) % 8640
-        setVerticalLinePosition((prev) => {
-          if (Math.abs(prev - newPosition) >= 1) {
-            lastIntervalUpdateTime.current = now
-            return newPosition
-          }
-          return prev
-        })
-      }
-      animationFrameId.current = requestAnimationFrame(animateVerticalLine)
-    }
-  }, [systemState.isSystemOn])
+  // Removed animateVerticalLine function - using server-authoritative position from WebSocket
 
   useEffect(() => {
     localStorage.setItem("isTimerEnabled", JSON.stringify(isTimerEnabled))
@@ -815,22 +799,12 @@ const App = () => {
                 if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
                 updateScheduler(schedulerUpdates);
                 
-                // Update vertical line position for real-time graph animation when in auto mode
-                // Check both incoming message data and current state to handle all cases:
-                // - When backend sends explicit "running" status
-                // - When scene is loaded (even if status not explicitly sent in this message)
-                const shouldUpdateVerticalLine = systemState.auto_mode && (
-                  data.data.scheduler?.status === "running" || 
-                  systemState.scheduler.status === "running" || 
-                  data.data.loaded_scene || 
-                  systemState.loaded_scene
-                );
-                
-                if (shouldUpdateVerticalLine) {
-                  const currentSecond = getCurrentSecondOfDay();
-                  setVerticalLinePosition(Math.floor(currentSecond / 10));
-                  // Only update these timestamps on actual interval changes, not every update
-                  if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
+                // Update vertical line position for real-time graph animation using server-authoritative data
+                // Use scheduler.current_interval directly from WebSocket instead of local time calculation
+                if (data.data.scheduler.current_interval !== undefined) {
+                  setVerticalLinePosition(data.data.scheduler.current_interval);
+                  // Update timestamp on interval changes
+                  if (data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
                     lastIntervalUpdateTime.current = Date.now();
                   }
                 }
@@ -913,23 +887,7 @@ const App = () => {
     };
   }, [logAdvanced, logBasic]);
 
-  useEffect(() => {
-    if (systemState.isSystemOn) {
-      const currentSecond = getCurrentSecondOfDay()
-      setVerticalLinePosition(Math.floor(currentSecond / 10) % 8640)
-      animationFrameId.current = requestAnimationFrame(animateVerticalLine)
-    } else {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current)
-      }
-      setVerticalLinePosition(0)
-    }
-    return () => {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current)
-      }
-    }
-  }, [systemState.isSystemOn, systemState.auto_mode, animateVerticalLine])
+  // Removed useEffect for animateVerticalLine - using server-authoritative position from WebSocket
 
   const filteredDevices = useMemo(() => {
     if (!deviceSearchQuery) return Object.entries(devices)
@@ -991,7 +949,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, systemState.scheduler.current_interval, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1045,7 +1003,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, systemState.scheduler.current_interval, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
