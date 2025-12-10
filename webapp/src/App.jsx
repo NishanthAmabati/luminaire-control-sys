@@ -1370,11 +1370,11 @@ const App = () => {
   )
 
   const monitoringDisplay = useMemo(() => {
-    const timestamp = new Date().toLocaleTimeString()
-    const cct = systemState.scheduler.current_cct ?? systemState.current_cct
-    const intensity = systemState.scheduler.current_intensity ?? systemState.current_intensity
-    return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
-  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity])
+    const timestamp = new Date().toLocaleTimeString();
+    const cct = (systemState.scheduler.current_cct ?? systemState.current_cct) ?? 3500;
+    const intensity = (systemState.scheduler.current_intensity ?? systemState.current_intensity) ?? 250;
+    return `CCT: ${Number(cct).toFixed(0)}K, Intensity: ${Number(intensity).toFixed(0)}lux, ${timestamp}`;
+  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity]);
 
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
