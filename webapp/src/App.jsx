@@ -302,8 +302,19 @@ const App = () => {
           auto_mode: false,
           loaded_scene: null  // Clear loaded scene in UI
         })
+        sendCommand({ type: "stop_scheduler" })
         updateScheduler({ status: "paused" })
+
+        // Clear scene data from UI
+        setSceneData({ cct: [], intensity: [] })
+
+        // Reset vertical line position
         setVerticalLinePosition(0)
+
+        // Stop any ongoing animation
+        if (animationFrameId.current) {
+          cancelAnimationFrame(animationFrameId.current)
+        }
         
         // Send current manual values to devices immediately when switching to manual mode
         // This ensures the lights are controlled by manual settings right away
@@ -807,7 +818,7 @@ const App = () => {
               updateSystemState(systemUpdates);
               
               // Update scheduler via context
-              if (data.data.scheduler) {
+              if (data.data.scheduler && systemState.auto_mode) {
                 const schedulerUpdates = {};
                 if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
                 if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
@@ -1551,7 +1562,7 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={systemState.scheduler.current_cct ?? 3500}
+                          value={systemState.current_cct ?? 3500}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
@@ -1575,7 +1586,7 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={systemState.scheduler.current_intensity ?? 250}
+                          value={systemState.current_intensity ?? 250}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
