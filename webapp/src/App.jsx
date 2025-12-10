@@ -480,7 +480,6 @@ const App = () => {
         const validatedCct = Math.max(3500, Math.min(6500, Number(cct) || 3500));
         if (validatedCct !== systemState.current_cct) {
           sendCommand({ type: "set_cct", cct: validatedCct });
-          logBasic(`Set CCT to ${validatedCct}K`);
           updateSystemState({ current_cct: validatedCct });
         }
       }, 500);
@@ -511,7 +510,6 @@ const App = () => {
         const validatedIntensity = Math.max(0, Math.min(500, Number(intensity) || 0));
         if (validatedIntensity !== systemState.current_intensity) {
           sendCommand({ type: "set_intensity", intensity: validatedIntensity });
-          \\logBasic(`Set CCT to ${validatedCct}K`);
           updateSystemState({ current_intensity: validatedIntensity });
         }
       }, 500);
