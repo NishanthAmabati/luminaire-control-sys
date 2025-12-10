@@ -991,7 +991,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler.current_cct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1045,7 +1045,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -1164,7 +1164,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_cct]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
 
   const intensityChartOptions = useMemo(
@@ -1284,7 +1284,7 @@ const App = () => {
         },
       },
     }),
-    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler.current_intensity]
+    [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
 
   const monitoringDisplay = useMemo(() => {
@@ -1292,7 +1292,7 @@ const App = () => {
     const cct = systemState.scheduler.current_cct ?? systemState.current_cct
     const intensity = systemState.scheduler.current_intensity ?? systemState.current_intensity
     return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
-  }, [systemState.scheduler.current_cct, systemState.scheduler.current_intensity, systemState.current_cct, systemState.current_intensity])
+  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
@@ -1315,7 +1315,7 @@ const App = () => {
     const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
     console.log('[Progress Bar] Fallback: calculated locally:', calculated);
     return calculated;
-  }, [systemState.isSystemOn, systemState.scheduler.interval_progress, systemState.scheduler.current_interval, systemState.scheduler.total_intervals])
+  }, [systemState.isSystemOn, systemState.scheduler])
 
   // Manual chart update triggers - force Chart.js to update when data changes
   useEffect(() => {
