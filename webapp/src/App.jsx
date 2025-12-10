@@ -1384,8 +1384,8 @@ const App = () => {
       return "0.0"
     }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (systemState.scheduler.interval_progress !== undefined) {
-      const value = systemState.scheduler.interval_progress.toFixed(1);
+    if (typeof systemState.scheduler.interval_progress === 'number' && systemState.scheduler.interval_progress != null) {
+      const value = systemState.scheduler.interval_progress.toFixed(2);
       console.log('[Progress Bar] Using backend interval_progress:', value);
       return value;
     }
