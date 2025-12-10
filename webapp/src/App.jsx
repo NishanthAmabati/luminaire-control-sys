@@ -139,7 +139,7 @@ const App = () => {
     error: null,
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
-  // Removed localCct and localIntensity - using systemState.scheduler values directly
+  const [localCct, setLocalCct] = useState(null)
   const cctChartRef = useRef(null)
   const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -154,7 +154,7 @@ const App = () => {
   const [isTimerEnabled, setIsTimerEnabled] = useState(() => JSON.parse(localStorage.getItem("isTimerEnabled") || "false"))
   const [onTime, setOnTime] = useState(() => localStorage.getItem("onTime") || "")
   const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "")
-  const [runningScene, setRunningScene] = useState(null)
+  const [runningScene, setRunningScene, setLastRunningScene] = useState(null)
   const [lastCompletionLog, setLastCompletionLog] = useState(null)
 
   const ws = useRef(null)
@@ -253,6 +253,13 @@ const App = () => {
       sendCommand({ type: "set_mode", auto })
       if (auto) {
         toast.success("Switched to Auto Mode")
+        if (lastRunningScene) {
+          updateSystemState({ loaded_scene: lastRunningScene })
+          // Optionally, activate it immediately
+          setTimeout(() => {
+            activateScene()
+          }, 300)
+        }
         updateSystemState({ auto_mode: true })
         
         // Wait for backend to process mode switch and fetch updated state
@@ -296,11 +303,13 @@ const App = () => {
         }, 300)
       } else {
         toast.success("Switched to Manual Mode")
+        setLastRunningScene(systemState.current_scene)
         // Clear scene data in UI when switching to manual (as requested)
         setSceneData({ cct: [], intensity: [] })
         updateSystemState({ 
           auto_mode: false,
           loaded_scene: null  // Clear loaded scene in UI
+          current_scene: null
         })
         sendCommand({ type: "stop_scheduler" })
         updateScheduler({ status: "paused" })
@@ -448,6 +457,7 @@ const App = () => {
     [sendCommand, updateSystemState, systemState.current_cct]
   )
 
+  /*
   const setCct = useCallback(
     (cct) => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
@@ -461,8 +471,24 @@ const App = () => {
       }, 500)
     },
     [sendCommand, systemState.current_cct, logBasic, updateSystemState]
-  )
+  )*/
 
+  const setCct = useCallback(
+    (cct) => {
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+      debounceTimeout.current = setTimeout(() => {
+        const validatedCct = Math.max(3500, Math.min(6500, Number(cct) || 3500));
+        if (validatedCct !== systemState.current_cct) {
+          sendCommand({ type: "set_cct", cct: validatedCct });
+          logBasic(`Set CCT to ${validatedCct}K`);
+          updateSystemState({ current_cct: validatedCct });
+        }
+      }, 500);
+    },
+    [sendCommand, systemState.current_cct, updateSystemState]
+  );
+
+  /*
   const setIntensity = useCallback(
     (intensity) => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
@@ -476,8 +502,24 @@ const App = () => {
       }, 500)
     },
     [adjustIntensity, systemState.current_intensity, logBasic]
-  )
+  )*/
 
+  const setIntensity = useCallback(
+    (intensity) => {
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+      debounceTimeout.current = setTimeout(() => {
+        const validatedIntensity = Math.max(0, Math.min(500, Number(intensity) || 0));
+        if (validatedIntensity !== systemState.current_intensity) {
+          sendCommand({ type: "set_intensity", intensity: validatedIntensity });
+          \\logBasic(`Set CCT to ${validatedCct}K`);
+          updateSystemState({ current_intensity: validatedIntensity });
+        }
+      }, 500);
+    },
+    [sendCommand, systemState.current_intensity, updateSystemState]
+  );
+
+  /*
   const handleCctChange = useCallback(
     (e) => {
       setIsAdjusting(true)
@@ -489,8 +531,23 @@ const App = () => {
       }
     },
     [setCct]
-  )
+  )*/
 
+  const handleCctChange = useCallback(
+    (e) => {
+      const value = Number(e.target.value);
+      setLocalCct(value); // ✅ Immediate UI feedback
+      setIsAdjusting(true);
+      if (e.type === "change") {
+        // Only send to backend/system on release (mouse up / enter)
+        setCct(value);
+        setTimeout(() => setIsAdjusting(false), 500);
+      }
+    },
+    [setCct]
+  );
+
+  /*
   const handleIntensityChange = useCallback(
     (e) => {
       setIsAdjusting(true)
@@ -502,7 +559,20 @@ const App = () => {
       }
     },
     [setIntensity]
-  )
+  )*/
+
+  const handleIntensityChange = useCallback(
+    (e) => {
+      const value = Number(e.target.value);
+      setLocalIntensity(value); // ✅ Immediate UI feedback
+      setIsAdjusting(true);
+      if (e.type === "change") {
+        setIntensity(value);
+        setTimeout(() => setIsAdjusting(false), 500);
+      }
+    },
+    [setIntensity]
+  );
 
   const toggleSystem = useCallback(() => {
     const newSystemState = !systemState.isSystemOn;
@@ -642,8 +712,8 @@ const App = () => {
           const stateData = await stateResponse.json()
           // Update all relevant system state fields
           const systemUpdates = {}
-          if (stateData.current_cct !== undefined) systemUpdates.current_cct = stateData.current_cct
-          if (stateData.current_intensity !== undefined) systemUpdates.current_intensity = stateData.current_intensity
+          if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
+          if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)
           if (stateData.auto_mode !== undefined) systemUpdates.auto_mode = stateData.auto_mode
           if (stateData.isSystemOn !== undefined) systemUpdates.isSystemOn = stateData.isSystemOn
           if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
@@ -1562,14 +1632,14 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={systemState.current_cct ?? 3500}
+                          value={localCct}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.scheduler.current_cct ?? 3500).toFixed(0)} K
+                          {localCct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1586,14 +1656,14 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={systemState.current_intensity ?? 250}
+                          value={localIntensity}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.scheduler.current_intensity ?? 250).toFixed(0)} lux
+                          {localIntensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
