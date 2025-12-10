@@ -308,7 +308,7 @@ const App = () => {
         setSceneData({ cct: [], intensity: [] })
         updateSystemState({ 
           auto_mode: false,
-          loaded_scene: null  // Clear loaded scene in UI
+          loaded_scene: null,  // Clear loaded scene in UI
           current_scene: null
         })
         sendCommand({ type: "stop_scheduler" })
