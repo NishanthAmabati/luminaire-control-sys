@@ -140,6 +140,7 @@ const App = () => {
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   const [localCct, setLocalCct] = useState(null)
+  const [localIntensity, setLocalIntensity] = useState(null)
   const cctChartRef = useRef(null)
   const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -1637,7 +1638,7 @@ const App = () => {
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {localCct.toFixed(0)} K
+                          {(localCct !== null ? localCct.toFixed(0) : "—")} K
                         </div>
                       </div>
                     </div>
@@ -1661,7 +1662,7 @@ const App = () => {
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {localIntensity.toFixed(0)} lux
+                          {(localIntensity !== null ? localIntensity.toFixed(0) : "—")} lux
                         </div>
                       </div>
                     </div>
