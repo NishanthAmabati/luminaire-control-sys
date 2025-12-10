@@ -764,15 +764,12 @@ const App = () => {
               });
             }
           } else if (data.type === "live_update") {
-              // Make isTimerEnabled optional — default to current UI state
-              if (data.data.isTimerEnabled !== undefined) {
-                if (typeof data.data.isTimerEnabled === "boolean") {
-                  setIsTimerEnabled(data.data.isTimerEnabled);
-                } else {
-                  logAdvanced("Warning: isTimerEnabled is not boolean, ignoring");
+              const isTimerEnabledValid = typeof data.data.isTimerEnabled === "boolean";
+                if (!isTimerEnabledValid) {
+                  logAdvanced("Invalid live_update: isTimerEnabled is not a boolean");
+                  return;
                 }
-              }
-              // Continue processing live_update even if isTimerEnabled is missing
+                setIsTimerEnabled(data.data.isTimerEnabled !== undefined ? data.data.isTimerEnabled : isTimerEnabled);
               // Always update scene data when provided by backend
               // Clear scene data when system is turned off
               if (data.data.isSystemOn === false) {
