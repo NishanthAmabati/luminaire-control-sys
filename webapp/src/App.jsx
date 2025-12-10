@@ -1384,8 +1384,8 @@ const App = () => {
       return "0.0"
     }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (typeof systemState.scheduler.interval_progress === 'number' && systemState.scheduler.interval_progress != null) {
-      const value = systemState.scheduler.interval_progress.toFixed(2);
+    if (typeof progressValue === 'number' && progressValue != null) {
+      const value = progressValue.toFixed(2);
       console.log('[Progress Bar] Using backend interval_progress:', value);
       return value;
     }
@@ -1670,7 +1670,7 @@ const App = () => {
                     <div className="balance-container">
                       <div className="balance-item">
                         <span className="balance-label">Cool White</span>
-                        <div className="balance-value">{systemState.cw.toFixed(1)}%</div>
+                        <div className="balance-value">{(systemState.cw ?? 0).toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
                             onClick={() => adjustLight("cw", systemState.cw - 1)}
@@ -1690,7 +1690,7 @@ const App = () => {
                       </div>
                       <div className="balance-item">
                         <span className="balance-label">Warm White</span>
-                        <div className="balance-value">{systemState.ww.toFixed(1)}%</div>
+                        <div className="balance-value">{(systemState.ww ?? 0).toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
                             onClick={() => adjustLight("ww", systemState.ww - 1)}
