@@ -6,7 +6,7 @@ on:
       commit_sha:
         description: 'Git SHA to checkout for testing'
         required: true
-        default: ${{ github.sha }} # Default to the latest commit if not specified
+        default: copilot/fix-real-time-ui-updates
 
 jobs:
   build:
