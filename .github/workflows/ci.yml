@@ -2,6 +2,11 @@ name: ci
 
 on:
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Git SHA to checkout for testing'
+        required: true
+        default: ${{ github.sha }} # Default to the latest commit if not specified
 
 jobs:
   build:
@@ -10,9 +15,12 @@ jobs:
     steps:
       - name: checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.commit_sha }} 
 
       - name: Generate short SHA
         run: echo "GIT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        run: echo "GIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV 
 
       - name: set up QEMU
         uses: docker/setup-qemu-action@v3
