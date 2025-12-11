@@ -19,7 +19,7 @@ jobs:
           ref: ${{ github.event.inputs.commit_sha }} 
 
       - name: Generate short SHA
-        run: echo "GIT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        #run: echo "GIT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
         run: echo "GIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV 
 
       - name: set up QEMU
