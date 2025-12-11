@@ -1,5 +1,4 @@
 "use client"
-
 // Import necessary React hooks and components
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Line } from "react-chartjs-2"
@@ -42,7 +41,6 @@ import { useSystem } from "./contexts/SystemContext"
 import DeviceItem from "./components/DeviceItem"
 // Log UI removed for performance - LogContext kept for potential future use
 // import { useLogs } from "./contexts/LogContext"
-
 // Define custom plugin for chart labels
 const currentValueLabelPlugin = {
   id: "currentValueLabel",
@@ -88,7 +86,6 @@ const currentValueLabelPlugin = {
     ctx.restore()
   },
 }
-
 // Register Chart.js components
 ChartJS.register(
   ...registerables,
@@ -103,7 +100,6 @@ ChartJS.register(
   annotationPlugin,
   currentValueLabelPlugin
 )
-
 // Custom plugin for chart background
 const plotAreaBackgroundPlugin = {
   id: "plotAreaBackground",
@@ -123,14 +119,12 @@ const plotAreaBackgroundPlugin = {
     ctx.restore()
   },
 }
-
 const App = () => {
   // Use context hooks for decoupled state management
   const { devices, updateDevices } = useDevices()
   const { systemState, updateSystemState, updateScheduler } = useSystem()
   // Log UI removed for performance optimization
   // const { basicLogs, advancedLogs, addBasicLog, addAdvancedLog, clearBasicLogs, clearAdvancedLogs} = useLogs()
-
   // Local UI-only state
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark")
   const [state, setState] = useState({
@@ -157,7 +151,6 @@ const App = () => {
   const [offTime, setOffTime] = useState(() => localStorage.getItem("offTime") || "")
   const [runningScene, setRunningScene, setLastRunningScene] = useState(null)
   const [lastCompletionLog, setLastCompletionLog] = useState(null)
-
   const ws = useRef(null)
   const debounceTimeout = useRef(null)
   const lastPingTime = useRef(0)
@@ -167,7 +160,6 @@ const App = () => {
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
-
   const debouncedUpdateState = useRef(
     debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
       setState((prev) => ({ ...prev, ...newState }));
@@ -181,21 +173,17 @@ const App = () => {
       }
     }, 100)
   ).current
-
   const getCurrentSecondOfDay = () => {
     const now = new Date()
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
   }
-
   // Log functions converted to no-ops since logs UI was removed for performance
   const logBasic = useCallback((message) => {
     // No-op: logs UI removed for performance optimization
   }, []);
-
   const logAdvanced = useCallback((message) => {
     // No-op: logs UI removed for performance optimization
   }, []);
-
   const toggleTheme = () => {
     setTheme((prevTheme) => {
       const newTheme = prevTheme === "dark" ? "light" : "dark"
@@ -204,7 +192,6 @@ const App = () => {
       return newTheme
     })
   }
-
   const sendCommand = useCallback(
     (command) => {
       const commandString = JSON.stringify(command)
@@ -223,7 +210,6 @@ const App = () => {
     },
     [logAdvanced]
   )
-
   const activateScene = useCallback(() => {
     if (systemState.loaded_scene) {
       setIsLoading(true)
@@ -247,7 +233,6 @@ const App = () => {
       setTimeout(() => setIsLoading(false), 500)
     }
   }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
-
   const setMode = useCallback(
     async (auto) => {
       setIsLoading(true)
@@ -262,7 +247,7 @@ const App = () => {
           }, 300)
         }
         updateSystemState({ auto_mode: true })
-        
+       
         // Wait for backend to process mode switch and fetch updated state
         setTimeout(() => {
           (async () => {
@@ -271,7 +256,7 @@ const App = () => {
               const response = await fetch(`${apiBaseUrl}/api/system_state`)
               if (response.ok) {
                 const stateData = await response.json()
-                
+               
                 // Update scene data if available
                 if (stateData.scene_data) {
                   setSceneData({
@@ -279,7 +264,7 @@ const App = () => {
                     intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
                   })
                 }
-                
+               
                 // Update state
                 const systemUpdates = {}
                 if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
@@ -289,7 +274,7 @@ const App = () => {
                 if (stateData.cw !== undefined) systemUpdates.cw = stateData.cw
                 if (stateData.ww !== undefined) systemUpdates.ww = stateData.ww
                 updateSystemState(systemUpdates)
-                
+               
                 // Update scheduler status
                 if (stateData.scheduler) {
                   updateScheduler(stateData.scheduler)
@@ -307,25 +292,22 @@ const App = () => {
         setLastRunningScene(systemState.current_scene)
         // Clear scene data in UI when switching to manual (as requested)
         setSceneData({ cct: [], intensity: [] })
-        updateSystemState({ 
+        updateSystemState({
           auto_mode: false,
-          loaded_scene: null,  // Clear loaded scene in UI
+          loaded_scene: null, // Clear loaded scene in UI
           current_scene: null
         })
         sendCommand({ type: "stop_scheduler" })
         updateScheduler({ status: "paused" })
-
         // Clear scene data from UI
         setSceneData({ cct: [], intensity: [] })
-
         // Reset vertical line position
         setVerticalLinePosition(0)
-
         // Stop any ongoing animation
         if (animationFrameId.current) {
           cancelAnimationFrame(animationFrameId.current)
         }
-        
+       
         // Send current manual values to devices immediately when switching to manual mode
         // This ensures the lights are controlled by manual settings right away
         setTimeout(() => {
@@ -349,7 +331,6 @@ const App = () => {
     },
     [sendCommand, updateSystemState, updateScheduler, setSceneData]
   )
-
   const loadScene = useCallback(
     async (scene) => {
       setIsLoading(true)
@@ -371,10 +352,10 @@ const App = () => {
       toast.success(`Scene Loaded: ${scene}`)
       updateSystemState({ loaded_scene: scene })
       updateScheduler({ status: "pending" })
-      
+     
       // Wait for backend to process load_scene command before fetching
       await new Promise(resolve => setTimeout(resolve, 200))
-      
+     
       // Fetch scene data immediately to populate graphs
       try {
         const apiBaseUrl = `http://${window.location.hostname}:8000`
@@ -392,12 +373,11 @@ const App = () => {
       } catch (error) {
         console.error("Error fetching scene data after load:", error)
       }
-      
+     
       setTimeout(() => setIsLoading(false), 600)
     },
     [sendCommand, systemState.current_scene, systemState.scheduler.status, runningScene, updateSystemState, updateScheduler, setSceneData]
   )
-
   const stopScheduler = useCallback(() => {
     sendCommand({ type: "stop_scheduler" })
     toast.success("Scene Stopped")
@@ -423,7 +403,6 @@ const App = () => {
       previewTimeout.current = null
     }
   }, [sendCommand, logBasic, updateScheduler, updateSystemState])
-
   const adjustLight = useCallback(
     (light_type, value) => {
       setIsAdjusting(true)
@@ -443,7 +422,6 @@ const App = () => {
     },
     [sendCommand, logBasic, updateSystemState, systemState.cw, systemState.ww, systemState.current_intensity]
   )
-
   const adjustIntensity = useCallback(
     (value) => {
       const newIntensity = Math.max(0, Math.min(500, value))
@@ -457,7 +435,6 @@ const App = () => {
     },
     [sendCommand, updateSystemState, systemState.current_cct]
   )
-
   /*
   const setCct = useCallback(
     (cct) => {
@@ -473,7 +450,6 @@ const App = () => {
     },
     [sendCommand, systemState.current_cct, logBasic, updateSystemState]
   )*/
-
   const setCct = useCallback(
     (cct) => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
@@ -487,7 +463,6 @@ const App = () => {
     },
     [sendCommand, systemState.current_cct, updateSystemState]
   );
-
   /*
   const setIntensity = useCallback(
     (intensity) => {
@@ -503,7 +478,6 @@ const App = () => {
     },
     [adjustIntensity, systemState.current_intensity, logBasic]
   )*/
-
   const setIntensity = useCallback(
     (intensity) => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
@@ -517,7 +491,6 @@ const App = () => {
     },
     [sendCommand, systemState.current_intensity, updateSystemState]
   );
-
   /*
   const handleCctChange = useCallback(
     (e) => {
@@ -531,7 +504,6 @@ const App = () => {
     },
     [setCct]
   )*/
-
   const handleCctChange = useCallback(
     (e) => {
       const value = Number(e.target.value);
@@ -545,7 +517,6 @@ const App = () => {
     },
     [setCct]
   );
-
   /*
   const handleIntensityChange = useCallback(
     (e) => {
@@ -559,7 +530,6 @@ const App = () => {
     },
     [setIntensity]
   )*/
-
   const handleIntensityChange = useCallback(
     (e) => {
       const value = Number(e.target.value);
@@ -572,7 +542,6 @@ const App = () => {
     },
     [setIntensity]
   );
-
   const toggleSystem = useCallback(() => {
     const newSystemState = !systemState.isSystemOn;
     sendCommand({ type: "toggle_system", isSystemOn: newSystemState });
@@ -590,16 +559,15 @@ const App = () => {
     }
     setVerticalLinePosition(0);
   }, [sendCommand, logBasic, activateScene, systemState.isSystemOn, systemState.current_scene, updateSystemState]);
-
   const handleTimerToggle = useCallback((enable) => {
     // If enable is not provided, toggle the current state
     const newIsEnabled = enable !== undefined ? enable : !isTimerEnabled;
-    
+   
     // Don't do anything if already in the desired state
     if (newIsEnabled === isTimerEnabled) {
       return;
     }
-    
+   
     setIsTimerEnabled(newIsEnabled);
     sendCommand({ type: "toggle_timer", enable: newIsEnabled });
     toast.success(`Timer ${newIsEnabled ? "enabled" : "disabled"}`);
@@ -612,14 +580,13 @@ const App = () => {
       // Clear timer fields and timer state when disabling
       setOnTime("");
       setOffTime("");
-      updateSystemState({ 
+      updateSystemState({
         is_manual_override: false,
         system_timers: [],
         isTimerEnabled: false
       });
     }
   }, [isTimerEnabled, sendCommand, logBasic, systemState.system_timers, updateSystemState]);
-
   const handleTimeChange = useCallback(
     (e, type) => {
       const value = e.target.value;
@@ -631,7 +598,6 @@ const App = () => {
     },
     [setOnTime, setOffTime]
   );
-
   const handleSetTimer = useCallback(() => {
     if (!onTime || !offTime) {
       toast.error("Please set both On and Off times.");
@@ -645,15 +611,12 @@ const App = () => {
     toast.success("Timer set on backend.");
     logBasic(`Timer set: On ${onTime}, Off ${offTime}`);
   }, [onTime, offTime, sendCommand, logBasic]);
-
   const handleDeviceSearchChange = useCallback((e) => {
     setDeviceSearchQuery(e.target.value)
   }, [])
-
   const toggleSearchBar = useCallback(() => {
     setIsSearchVisible((prev) => !prev)
   }, [])
-
   const animateVerticalLine = useCallback(() => {
     if (systemState.isSystemOn) {
       const now = Date.now()
@@ -671,24 +634,21 @@ const App = () => {
       animationFrameId.current = requestAnimationFrame(animateVerticalLine)
     }
   }, [systemState.isSystemOn])
-
   useEffect(() => {
     localStorage.setItem("isTimerEnabled", JSON.stringify(isTimerEnabled))
     localStorage.setItem("onTime", onTime)
     localStorage.setItem("offTime", offTime)
   }, [isTimerEnabled, onTime, offTime])
-
   useEffect(() => {
     localStorage.setItem("theme", theme)
     document.body.className = theme
   }, [theme])
-
   // Bootstrap initial state from REST APIs on app load
   useEffect(() => {
     const bootstrapState = async () => {
       // Use dynamic API base URL from window.location for cross-IP/container access
       const apiBaseUrl = `http://${window.location.hostname}:8000`
-      
+     
       try {
         // Fetch initial device list
         const devicesResponse = await fetch(`${apiBaseUrl}/api/devices`)
@@ -703,7 +663,6 @@ const App = () => {
       } catch (error) {
         console.error("Error bootstrapping devices:", error)
       }
-
       try {
         // Fetch full system state to restore CCT, intensity, mode, etc.
         const stateResponse = await fetch(`${apiBaseUrl}/api/system_state`)
@@ -720,9 +679,9 @@ const App = () => {
           if (stateData.current_scene !== undefined) systemUpdates.current_scene = stateData.current_scene
           if (stateData.loaded_scene !== undefined) systemUpdates.loaded_scene = stateData.loaded_scene
           if (Array.isArray(stateData.available_scenes)) systemUpdates.available_scenes = stateData.available_scenes
-          
+         
           updateSystemState(systemUpdates)
-          
+         
           // Update scene data for graphs
           if (stateData.scene_data) {
             setSceneData({
@@ -730,11 +689,11 @@ const App = () => {
               intensity: Array.isArray(stateData.scene_data.intensity) ? stateData.scene_data.intensity : []
             })
           }
-          
+         
           // Update local CCT and intensity values for sliders
           if (stateData.current_cct !== undefined) setLocalCct(stateData.current_cct)
           if (stateData.current_intensity !== undefined) setLocalIntensity(stateData.current_intensity)
-          
+         
           // Update scheduler state if available
           if (stateData.scheduler) {
             updateScheduler(stateData.scheduler)
@@ -745,16 +704,15 @@ const App = () => {
       } catch (error) {
         console.error("Error bootstrapping system state:", error)
       }
-
       try {
         // Fetch timers from backend
         const timersResponse = await fetch(`${apiBaseUrl}/api/timers`)
         if (timersResponse.ok) {
           const timersData = await timersResponse.json()
           if (Array.isArray(timersData.timers)) {
-            updateSystemState({ 
+            updateSystemState({
               system_timers: timersData.timers,
-              isTimerEnabled: timersData.isTimerEnabled 
+              isTimerEnabled: timersData.isTimerEnabled
             })
             // Update local timer state if timers exist
             if (timersData.timers.length > 0) {
@@ -769,18 +727,14 @@ const App = () => {
       } catch (error) {
         console.error("Error bootstrapping timers:", error)
       }
-
     }
-
     bootstrapState()
   }, [])
-
   useEffect(() => {
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 10;
     const maxBackoff = 32000;
     let reconnectTimeout = null;
-
     const connectWebSocket = () => {
       setIsLoading(true);
       ws.current = new WebSocket(`ws://${window.location.hostname}:5001`);
@@ -863,7 +817,7 @@ const App = () => {
                   intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
                 });
               }
-              
+             
               // Update system state via context
               const systemUpdates = {};
               if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
@@ -883,9 +837,9 @@ const App = () => {
               if (data.data.loaded_scene !== undefined) systemUpdates.loaded_scene = data.data.loaded_scene;
               if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
               if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
-              
+             
               updateSystemState(systemUpdates);
-              
+             
               // Update scheduler via context
               if (data.data.scheduler && systemState.auto_mode) {
                 const schedulerUpdates = {};
@@ -897,18 +851,18 @@ const App = () => {
                 if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
                 if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
                 updateScheduler(schedulerUpdates);
-                
+               
                 // Update vertical line position for real-time graph animation when in auto mode
                 // Check both incoming message data and current state to handle all cases:
                 // - When backend sends explicit "running" status
                 // - When scene is loaded (even if status not explicitly sent in this message)
                 const shouldUpdateVerticalLine = systemState.auto_mode && (
-                  data.data.scheduler?.status === "running" || 
-                  systemState.scheduler.status === "running" || 
-                  data.data.loaded_scene || 
+                  data.data.scheduler?.status === "running" ||
+                  systemState.scheduler.status === "running" ||
+                  data.data.loaded_scene ||
                   systemState.loaded_scene
                 );
-                
+               
                 if (shouldUpdateVerticalLine) {
                   const currentSecond = getCurrentSecondOfDay();
                   setVerticalLinePosition(Math.floor(currentSecond / 10));
@@ -917,7 +871,7 @@ const App = () => {
                     lastIntervalUpdateTime.current = Date.now();
                   }
                 }
-                
+               
                 // Check for scene completion
                 if (
                   data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
@@ -930,12 +884,12 @@ const App = () => {
                   }
                 }
               }
-              
+             
               // Update devices if provided
               if (data.data.connected_devices) {
                 updateDevices(data.data.connected_devices);
               }
-              
+             
               // Clear is_manual_override if the timer triggers a system state change
               if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== systemState.isSystemOn && isTimerEnabled) {
                 updateSystemState({ is_manual_override: false });
@@ -995,7 +949,6 @@ const App = () => {
       }
     };
   }, [logAdvanced, logBasic]);
-
   useEffect(() => {
     if (systemState.isSystemOn) {
       const currentSecond = getCurrentSecondOfDay()
@@ -1013,7 +966,6 @@ const App = () => {
       }
     }
   }, [systemState.isSystemOn, systemState.auto_mode, animateVerticalLine])
-
   const filteredDevices = useMemo(() => {
     if (!deviceSearchQuery) return Object.entries(devices)
     return Object.entries(devices).filter(([ip]) => {
@@ -1021,7 +973,6 @@ const App = () => {
       return ip.toLowerCase().includes(searchLower)
     })
   }, [devices, deviceSearchQuery])
-
   const chartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
@@ -1075,7 +1026,6 @@ const App = () => {
       ],
     }
   }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
-
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
@@ -1129,7 +1079,6 @@ const App = () => {
       ],
     }
   }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
-
   const chartOptions = useMemo(
     () => ({
       responsive: true,
@@ -1249,7 +1198,6 @@ const App = () => {
     }),
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
-
   const intensityChartOptions = useMemo(
     () => ({
       responsive: true,
@@ -1369,26 +1317,18 @@ const App = () => {
     }),
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
-
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString();
     const cct = (systemState.scheduler.current_cct ?? systemState.current_cct) ?? 3500;
     const intensity = (systemState.scheduler.current_intensity ?? systemState.current_intensity) ?? 250;
     return `CCT: ${Number(cct).toFixed(0)}K, Intensity: ${Number(intensity).toFixed(0)}lux, ${timestamp}`;
   }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity]);
-
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
     // When system is off, always show 0%
     if (!systemState.isSystemOn) {
       console.log('[Progress Bar] System is OFF, returning 0.0');
       return "0.0"
-    }
-    // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (typeof progressValue === 'number' && progressValue != null) {
-      const value = progressValue.toFixed(2);
-      console.log('[Progress Bar] Using backend interval_progress:', value);
-      return value;
     }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
     if (typeof systemState.scheduler.interval_progress === 'number' && systemState.scheduler.interval_progress != null) {
@@ -1405,23 +1345,19 @@ const App = () => {
     console.log('[Progress Bar] Fallback: calculated locally:', calculated);
     return calculated;
   }, [systemState.isSystemOn, systemState.scheduler])
-
   // Manual chart update triggers - force Chart.js to update when data changes
   useEffect(() => {
     if (cctChartRef.current) {
       cctChartRef.current.update('none'); // 'none' mode for instant update without animation
     }
   }, [chartData, chartOptions]);
-
   useEffect(() => {
     if (intensityChartRef.current) {
       intensityChartRef.current.update('none');
     }
   }, [intensityChartData, intensityChartOptions]);
-
   const scenecurrent = (systemState.isSystemOn && systemState.current_scene) ? systemState.current_scene.slice(0, -4) : "None"
   const sceneload = (systemState.isSystemOn && systemState.loaded_scene) ? systemState.loaded_scene.slice(0, -4) : "None"
-
   return (
     <div className={`luminaire-dashboard ${theme}-theme`}>
       <Toaster
@@ -1481,7 +1417,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
+            <Line
               ref={cctChartRef}
               data={chartData}
               options={chartOptions}
@@ -1493,7 +1429,7 @@ const App = () => {
                 <FaSyncAlt className="loading-spinner" />
               </div>
             )}
-            <Line 
+            <Line
               ref={intensityChartRef}
               data={intensityChartData}
               options={intensityChartOptions}
@@ -1903,5 +1839,4 @@ const App = () => {
     </div>
   )
 }
-
 export default App
