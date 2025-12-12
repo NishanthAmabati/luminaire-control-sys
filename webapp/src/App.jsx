@@ -140,7 +140,6 @@ const App = () => {
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   const [localCct, setLocalCct] = useState(null)
-  const [localIntensity, setLocalIntensity] = useState(null)
   const cctChartRef = useRef(null)
   const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -1371,39 +1370,32 @@ const App = () => {
   )
 
   const monitoringDisplay = useMemo(() => {
-    const timestamp = new Date().toLocaleTimeString();
-    const cct = (systemState.scheduler.current_cct ?? systemState.current_cct) ?? 3500;
-    const intensity = (systemState.scheduler.current_intensity ?? systemState.current_intensity) ?? 250;
-    return `CCT: ${Number(cct).toFixed(0)}K, Intensity: ${Number(intensity).toFixed(0)}lux, ${timestamp}`;
-  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity]);
+    const timestamp = new Date().toLocaleTimeString()
+    const cct = systemState.scheduler.current_cct ?? systemState.current_cct
+    const intensity = systemState.scheduler.current_intensity ?? systemState.current_intensity
+    return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
+  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity])
 
   const intervalProgressPercent = useMemo(() => {
-    console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
-    // When system is off, always show 0%
     if (!systemState.isSystemOn) {
-      console.log('[Progress Bar] System is OFF, returning 0.0');
       return "0.0"
     }
-    // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
-    if (typeof progressValue === 'number' && progressValue != null) {
-      const value = progressValue.toFixed(2);
-      console.log('[Progress Bar] Using backend interval_progress:', value);
-      return value;
-    }
-    // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
+
+    // Prefer backend-provided progress
     if (typeof systemState.scheduler.interval_progress === 'number' && systemState.scheduler.interval_progress != null) {
-      const value = systemState.scheduler.interval_progress.toFixed(2);
-      console.log('[Progress Bar] Using backend interval_progress:', value);
-      return value;
+      return systemState.scheduler.interval_progress.toFixed(2)
     }
-    // Fallback to local calculation if backend doesn't provide it
-    if (systemState.scheduler.total_intervals === 0) {
-      console.log('[Progress Bar] Fallback: total_intervals is 0, returning 0.0');
-      return "0.0";
+
+    // Fallback: only calculate if values are valid numbers
+    const current = systemState.scheduler.current_interval ?? 0
+    const total = systemState.scheduler.total_intervals ?? 1
+
+    if (total <= 0) {
+      return "0.0"
     }
-    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
-    console.log('[Progress Bar] Fallback: calculated locally:', calculated);
-    return calculated;
+
+    const progress = ((current + 1) / total) * 100
+    return isNaN(progress) ? "0.0" : progress.toFixed(1)
   }, [systemState.isSystemOn, systemState.scheduler])
 
   // Manual chart update triggers - force Chart.js to update when data changes
@@ -1644,7 +1636,7 @@ const App = () => {
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {(localCct !== null ? localCct.toFixed(0) : "—")} K
+                          {localCct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1668,7 +1660,7 @@ const App = () => {
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {(localIntensity !== null ? localIntensity.toFixed(0) : "—")} lux
+                          {localIntensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
@@ -1677,7 +1669,7 @@ const App = () => {
                     <div className="balance-container">
                       <div className="balance-item">
                         <span className="balance-label">Cool White</span>
-                        <div className="balance-value">{(systemState.cw ?? 0).toFixed(1)}%</div>
+                        <div className="balance-value">{systemState.cw.toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
                             onClick={() => adjustLight("cw", systemState.cw - 1)}
@@ -1697,7 +1689,7 @@ const App = () => {
                       </div>
                       <div className="balance-item">
                         <span className="balance-label">Warm White</span>
-                        <div className="balance-value">{(systemState.ww ?? 0).toFixed(1)}%</div>
+                        <div className="balance-value">{systemState.ww.toFixed(1)}%</div>
                         <div className="balance-buttons">
                           <button
                             onClick={() => adjustLight("ww", systemState.ww - 1)}
