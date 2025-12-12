@@ -139,7 +139,8 @@ const App = () => {
     error: null,
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
-  const [localCct, setLocalCct] = useState(null)
+  const [localCct, setLocalCct] = useState(3500)      // safe default
+  const [localIntensity, setLocalIntensity] = useState(250) // safe default
   const cctChartRef = useRef(null)
   const intensityChartRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
