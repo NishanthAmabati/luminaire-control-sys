@@ -140,7 +140,6 @@ const App = () => {
   })
   const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   // Removed localCct and localIntensity - using systemState.scheduler values directly
-  const [sceneData, setSceneData] = useState({ cct: [], intensity: [] })
   const [localCct, setLocalCct] = useState(3500)      // safe default
   const [localIntensity, setLocalIntensity] = useState(250) // safe default
   const cctChartRef = useRef(null)
