@@ -792,6 +792,20 @@ const App = () => {
               }
             }
 
+            if (!systemState.auto_mode) return
+            setSceneData({
+              cct: Array.isArray(data.scene_data?.cct) ? data.scene_data.cct : [],
+              intensity: Array.isArray(data.scene_data?.intensity) ? data.scene_data.intensity : [],
+            })
+            if (data.data.isSystemOn === false) {
+              setSceneData({ cct: [], intensity: [] });
+            } else if (data.data.scene_data) {
+              setSceneData({
+                cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : sceneData.cct,
+                intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
+              });
+            }
+            
             /* ============================
               SYSTEM STATE (ALL MODES)
             ============================ */
