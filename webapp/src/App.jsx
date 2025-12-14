@@ -784,6 +784,8 @@ const App = () => {
               });
             }
           } else if (data.type === "live_update") {
+
+            // Make isTimerEnabled optional — default to current UI state
             if (data.data.isTimerEnabled !== undefined) {
               if (typeof data.data.isTimerEnabled === "boolean") {
                 setIsTimerEnabled(data.data.isTimerEnabled);
@@ -791,115 +793,102 @@ const App = () => {
                 logAdvanced("Warning: isTimerEnabled is not boolean, ignoring");
               }
             }
-
-            if (!data.data) return;
-
-            /* ============================
-              TIMER FLAG (ALL MODES)
-            ============================ */
-            if (typeof data.data.isTimerEnabled === "boolean") {
-              setIsTimerEnabled(data.data.isTimerEnabled);
-            }
-
-            /* ============================
-              SYSTEM STATE (ALL MODES)
-            ============================ */
-            const systemUpdates = {};
-
-            if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
-              systemUpdates.isSystemOn = data.data.isSystemOn;
-
-              if (data.data.isSystemOn === false) {
-                systemUpdates.current_scene = null;
-                systemUpdates.loaded_scene = null;
-              }
-            }
-
-            if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
-            if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
-
-            /* ============================
-              MANUAL MODE
-            ============================ */
-            if (!systemState.auto_mode) {
-
-              if (data.data.current_cct !== undefined)
-                systemUpdates.current_cct = data.data.current_cct;
-
-              if (data.data.current_intensity !== undefined)
-                systemUpdates.current_intensity = data.data.current_intensity;
-
-              if (Object.keys(systemUpdates).length > 0) {
-                updateSystemState(systemUpdates);
-              }
-              return;
-            }
-
-            /* ============================
-              AUTO MODE
-            ============================ */
-
-            // Scene data
-            if (data.data.scene_data) {
+            // Continue processing live_update even if isTimerEnabled is missing
+            // Always update scene data when provided by backend
+            // Clear scene data when system is turned off
+            if (!systemState.auto_mode) return
+            setSceneData({
+              cct: Array.isArray(data.scene_data?.cct) ? data.scene_data.cct : [],
+              intensity: Array.isArray(data.scene_data?.intensity) ? data.scene_data.intensity : [],
+            })
+            if (data.data.isSystemOn === false) {
+              setSceneData({ cct: [], intensity: [] });
+            } else if (data.data.scene_data) {
               setSceneData({
-                cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : [],
-                intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : [],
+                cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : sceneData.cct,
+                intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
               });
             }
-
-            // Scene metadata
-            if (data.data.current_scene !== undefined)
-              systemUpdates.current_scene = data.data.current_scene;
-
-            if (data.data.loaded_scene !== undefined)
-              systemUpdates.loaded_scene = data.data.loaded_scene;
-
-            if (Array.isArray(data.data.available_scenes))
-              systemUpdates.available_scenes = data.data.available_scenes;
-
-            if (Array.isArray(data.data.system_timers))
-              systemUpdates.system_timers = data.data.system_timers;
-
-            /* ============================
-              SCHEDULER (CRITICAL FIX)
-            ============================ */
-            if (data.data.scheduler) {
-              const schedulerUpdates = {};
-
-              if (data.data.scheduler.status !== undefined)
-                schedulerUpdates.status = data.data.scheduler.status;
-
-              if (data.data.scheduler.current_interval !== undefined)
-                schedulerUpdates.current_interval = data.data.scheduler.current_interval;
-
-              if (data.data.scheduler.total_intervals !== undefined)
-                schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
-
-              if (data.data.scheduler.interval_progress !== undefined)
-                schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
-
-              if (data.data.scheduler.current_cct !== undefined)
-                schedulerUpdates.current_cct = data.data.scheduler.current_cct;
-
-              if (data.data.scheduler.current_intensity !== undefined)
-                schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
-
-              updateScheduler(schedulerUpdates);
-
-              // Vertical line sync
-              if (schedulerUpdates.status === "running") {
-                const currentSecond = getCurrentSecondOfDay();
-                setVerticalLinePosition(Math.floor(currentSecond / 10));
+            
+            // Update system state via context
+            const systemUpdates = {};
+            if (data.data.current_cct !== undefined && systemState.auto_mode) systemUpdates.current_cct = data.data.current_cct;
+            if (data.data.current_intensity !== undefined && systemState.auto_mode) systemUpdates.current_intensity = data.data.current_intensity;
+            if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
+            if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
+            if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
+              systemUpdates.isSystemOn = data.data.isSystemOn;
+              // When system is turned OFF, clear scene-related UI elements
+              if (data.data.isSystemOn === false) {
+                systemUpdates.loaded_scene = null;
+                systemUpdates.current_scene = null;
               }
             }
-
+            if (data.data.auto_mode !== undefined) systemUpdates.auto_mode = data.data.auto_mode;
+            if (data.data.current_scene !== undefined) systemUpdates.current_scene = data.data.current_scene;
+            if (data.data.loaded_scene !== undefined) systemUpdates.loaded_scene = data.data.loaded_scene;
+            if (Array.isArray(data.data.available_scenes)) systemUpdates.available_scenes = data.data.available_scenes;
+            if (Array.isArray(data.data.system_timers)) systemUpdates.system_timers = data.data.system_timers;
+            
+            updateSystemState(systemUpdates);
+            
+            // Update scheduler via context
+            if (data.data.scheduler) {
+              const schedulerUpdates = {};
+              if (data.data.scheduler.status !== undefined) schedulerUpdates.status = data.data.scheduler.status;
+              if (data.data.scheduler.current_interval !== undefined) schedulerUpdates.current_interval = data.data.scheduler.current_interval;
+              if (data.data.scheduler.total_intervals !== undefined) schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
+              if (data.data.scheduler.interval_progress !== undefined) schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
+              // Extract current_cct and current_intensity from scheduler object for real-time chart updates
+              if (data.data.scheduler.current_cct !== undefined) schedulerUpdates.current_cct = data.data.scheduler.current_cct;
+              if (data.data.scheduler.current_intensity !== undefined) schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
+              updateScheduler(schedulerUpdates);
+              
+              // Update vertical line position for real-time graph animation when in auto mode
+              // Check both incoming message data and current state to handle all cases:
+              // - When backend sends explicit "running" status
+              // - When scene is loaded (even if status not explicitly sent in this message)
+              const shouldUpdateVerticalLine = systemState.auto_mode && (
+                data.data.scheduler?.status === "running" || 
+                systemState.scheduler.status === "running" || 
+                data.data.loaded_scene || 
+                systemState.loaded_scene
+              );
+              
+              if (shouldUpdateVerticalLine) {
+                const currentSecond = getCurrentSecondOfDay();
+                setVerticalLinePosition(Math.floor(currentSecond / 10));
+                // Only update these timestamps on actual interval changes, not every update
+                if (data.data.scheduler.current_interval !== undefined && data.data.scheduler.current_interval !== systemState.scheduler.current_interval) {
+                  lastIntervalUpdateTime.current = Date.now();
+                }
+              }
+              
+              // Check for scene completion
+              if (
+                data.data.scheduler.current_interval === data.data.scheduler.total_intervals - 1 &&
+                lastCompletionLog !== data.data.scheduler.current_interval
+              ) {
+                logBasic("Scene completed");
+                setLastCompletionLog(data.data.scheduler.current_interval);
+                if (data.data.scheduler.status === "completed") {
+                  updateScheduler({ status: "idle" });
+                }
+              }
+            }
+            
+            // Update devices if provided
             if (data.data.connected_devices) {
               updateDevices(data.data.connected_devices);
             }
-
-            if (Object.keys(systemUpdates).length > 0) {
-              updateSystemState(systemUpdates);
+            
+            // Clear is_manual_override if the timer triggers a system state change
+            if (data.data.isSystemOn !== undefined && data.data.isSystemOn !== systemState.isSystemOn && isTimerEnabled) {
+              updateSystemState({ is_manual_override: false });
             }
+            // WebSocket receives scheduler.current_cct and scheduler.current_intensity which are updated every second by backend
+            // No need for local state - just use systemState values directly which are already updated by updateSystemState
+            //logBasic(`Processed live_update: isTimerEnabled=${data.data.isTimerEnabled}`);
           }
         } catch (err) {
           console.error("WebSocket parsing error:", err, "Raw message:", event.data);
