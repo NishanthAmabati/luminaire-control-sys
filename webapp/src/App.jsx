@@ -787,6 +787,14 @@ const App = () => {
 
             if (!data.data) return
 
+            if (data.data.isTimerEnabled !== undefined) {
+              if (typeof data.data.isTimerEnabled === "boolean") {
+                setIsTimerEnabled(data.data.isTimerEnabled);
+              } else {
+                logAdvanced("Warning: isTimerEnabled is not boolean, ignoring");
+              }
+            }
+
             /* ============================
               TIMER FLAG (ALL MODES)
               ============================ */
