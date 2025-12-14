@@ -946,11 +946,13 @@ const App = () => {
   }, [systemState.isSystemOn, systemState.auto_mode, animateVerticalLine])
 
   const filteredDevices = useMemo(() => {
-    if (!deviceSearchQuery) return Object.entries(devices)
-    return Object.entries(devices).filter(([ip]) => {
-      const searchLower = deviceSearchQuery.toLowerCase()
-      return ip.toLowerCase().includes(searchLower)
-    })
+    return Object.entries(devices)
+      .filter(([ip, data]) => data.connected === true) // ✅ Only connected devices
+      .filter(([ip, data]) => {
+        if (!deviceSearchQuery) return true
+        const searchLower = deviceSearchQuery.toLowerCase()
+        return ip.toLowerCase().includes(searchLower)
+      })
   }, [devices, deviceSearchQuery])
 
   const chartData = useMemo(() => {
