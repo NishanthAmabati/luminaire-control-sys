@@ -784,9 +784,6 @@ const App = () => {
               });
             }
           } else if (data.type === "live_update") {
-
-            if (!data.data) return
-
             if (data.data.isTimerEnabled !== undefined) {
               if (typeof data.data.isTimerEnabled === "boolean") {
                 setIsTimerEnabled(data.data.isTimerEnabled);
@@ -795,162 +792,115 @@ const App = () => {
               }
             }
 
+            if (!data.data) return;
+
             /* ============================
               TIMER FLAG (ALL MODES)
-              ============================ */
-            if (data.data.isTimerEnabled !== undefined) {
-              if (typeof data.data.isTimerEnabled === "boolean") {
-                setIsTimerEnabled(data.data.isTimerEnabled)
-              } else {
-                logAdvanced("Warning: isTimerEnabled is not boolean, ignoring")
-              }
+            ============================ */
+            if (typeof data.data.isTimerEnabled === "boolean") {
+              setIsTimerEnabled(data.data.isTimerEnabled);
             }
 
             /* ============================
               SYSTEM STATE (ALL MODES)
-              ============================ */
-            const systemUpdates = {}
+            ============================ */
+            const systemUpdates = {};
 
-            // System ON / OFF must always reflect backend truth
             if (data.data.isSystemOn !== undefined && !systemState.is_manual_override) {
-              systemUpdates.isSystemOn = data.data.isSystemOn
+              systemUpdates.isSystemOn = data.data.isSystemOn;
 
-              // If system turns OFF, clear scene references
               if (data.data.isSystemOn === false) {
-                systemUpdates.current_scene = null
-                systemUpdates.loaded_scene = null
+                systemUpdates.current_scene = null;
+                systemUpdates.loaded_scene = null;
               }
             }
 
-            // Labels must update even in manual mode
-            if (data.data.current_cct !== undefined) {
-              systemUpdates.current_cct = data.data.current_cct
-            }
-
-            if (data.data.current_intensity !== undefined) {
-              systemUpdates.current_intensity = data.data.current_intensity
-            }
-
-            if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw
-            if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww
+            if (data.data.cw !== undefined) systemUpdates.cw = data.data.cw;
+            if (data.data.ww !== undefined) systemUpdates.ww = data.data.ww;
 
             /* ============================
-              MANUAL MODE — STOP HERE
-              ============================ */
+              MANUAL MODE
+            ============================ */
             if (!systemState.auto_mode) {
+
+              if (data.data.current_cct !== undefined)
+                systemUpdates.current_cct = data.data.current_cct;
+
+              if (data.data.current_intensity !== undefined)
+                systemUpdates.current_intensity = data.data.current_intensity;
+
               if (Object.keys(systemUpdates).length > 0) {
-                updateSystemState(systemUpdates)
+                updateSystemState(systemUpdates);
               }
-              return
+              return;
             }
 
             /* ============================
-              AUTO MODE ONLY BELOW
-              ============================ */
+              AUTO MODE
+            ============================ */
 
-            // Scene chart data
+            // Scene data
             if (data.data.scene_data) {
               setSceneData({
-                cct: Array.isArray(data.data.scene_data.cct)
-                  ? data.data.scene_data.cct
-                  : [],
-                intensity: Array.isArray(data.data.scene_data.intensity)
-                  ? data.data.scene_data.intensity
-                  : [],
-              })
+                cct: Array.isArray(data.data.scene_data.cct) ? data.data.scene_data.cct : [],
+                intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : [],
+              });
             }
 
             // Scene metadata
             if (data.data.current_scene !== undefined)
-              systemUpdates.current_scene = data.data.current_scene
+              systemUpdates.current_scene = data.data.current_scene;
 
             if (data.data.loaded_scene !== undefined)
-              systemUpdates.loaded_scene = data.data.loaded_scene
+              systemUpdates.loaded_scene = data.data.loaded_scene;
 
             if (Array.isArray(data.data.available_scenes))
-              systemUpdates.available_scenes = data.data.available_scenes
+              systemUpdates.available_scenes = data.data.available_scenes;
 
             if (Array.isArray(data.data.system_timers))
-              systemUpdates.system_timers = data.data.system_timers
+              systemUpdates.system_timers = data.data.system_timers;
 
-            // Scheduler
+            /* ============================
+              SCHEDULER (CRITICAL FIX)
+            ============================ */
             if (data.data.scheduler) {
-              const schedulerUpdates = {}
+              const schedulerUpdates = {};
 
               if (data.data.scheduler.status !== undefined)
-                schedulerUpdates.status = data.data.scheduler.status
+                schedulerUpdates.status = data.data.scheduler.status;
 
               if (data.data.scheduler.current_interval !== undefined)
-                schedulerUpdates.current_interval = data.data.scheduler.current_interval
+                schedulerUpdates.current_interval = data.data.scheduler.current_interval;
 
               if (data.data.scheduler.total_intervals !== undefined)
-                schedulerUpdates.total_intervals = data.data.scheduler.total_intervals
+                schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
 
               if (data.data.scheduler.interval_progress !== undefined)
-                schedulerUpdates.interval_progress = data.data.scheduler.interval_progress
+                schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
 
               if (data.data.scheduler.current_cct !== undefined)
-                schedulerUpdates.current_cct = data.data.scheduler.current_cct
+                schedulerUpdates.current_cct = data.data.scheduler.current_cct;
 
               if (data.data.scheduler.current_intensity !== undefined)
-                schedulerUpdates.current_intensity = data.data.scheduler.current_intensity
+                schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
 
-              updateScheduler(schedulerUpdates)
+              updateScheduler(schedulerUpdates);
 
-              // Vertical line animation
-              const shouldUpdateVerticalLine =
-                data.data.scheduler.status === "running" ||
-                systemState.scheduler.status === "running" ||
-                data.data.loaded_scene ||
-                systemState.loaded_scene
-
-              if (shouldUpdateVerticalLine) {
-                const currentSecond = getCurrentSecondOfDay()
-                setVerticalLinePosition(Math.floor(currentSecond / 10))
-
-                if (
-                  data.data.scheduler.current_interval !== undefined &&
-                  data.data.scheduler.current_interval !== systemState.scheduler.current_interval
-                ) {
-                  lastIntervalUpdateTime.current = Date.now()
-                }
-              }
-
-              // Scene completion
-              if (
-                data.data.scheduler.current_interval ===
-                  data.data.scheduler.total_intervals - 1 &&
-                lastCompletionLog !== data.data.scheduler.current_interval
-              ) {
-                logBasic("Scene completed")
-                setLastCompletionLog(data.data.scheduler.current_interval)
-
-                if (data.data.scheduler.status === "completed") {
-                  updateScheduler({ status: "idle" })
-                }
+              // Vertical line sync
+              if (schedulerUpdates.status === "running") {
+                const currentSecond = getCurrentSecondOfDay();
+                setVerticalLinePosition(Math.floor(currentSecond / 10));
               }
             }
 
-            // Devices update
             if (data.data.connected_devices) {
-              updateDevices(data.data.connected_devices)
+              updateDevices(data.data.connected_devices);
             }
 
-            // Clear manual override when timer toggles system
-            if (
-              data.data.isSystemOn !== undefined &&
-              data.data.isSystemOn !== systemState.isSystemOn &&
-              isTimerEnabled
-            ) {
-              updateSystemState({ is_manual_override: false })
-            }
-
-            // Apply accumulated system updates
             if (Object.keys(systemUpdates).length > 0) {
-              updateSystemState(systemUpdates)
+              updateSystemState(systemUpdates);
             }
           }
-
         } catch (err) {
           console.error("WebSocket parsing error:", err, "Raw message:", event.data);
           logAdvanced(`WebSocket parsing error: ${err}`);
