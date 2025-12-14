@@ -285,9 +285,8 @@ const App = () => {
       return
     }
     // manual mode
-    // Snapshot values (avoid stale closures)
-    const manualCct = systemState.current_cct
-    const manualIntensity = systemState.current_intensity
+    const manualCct = localCct
+    const manualIntensity = localIntensity
 
     if (systemState.current_scene) {
       lastAutoSceneRef.current = systemState.current_scene
@@ -304,7 +303,7 @@ const App = () => {
     updateScheduler({
       status: "idle",
       total_intervals: 0,
-      current_interval: 0,
+      current_interval: 0
     })
     setVerticalLinePosition(0)
     setLocalCct(manualCct)
@@ -1570,7 +1569,9 @@ const App = () => {
                           className="range-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.scheduler.current_cct ?? 3500).toFixed(0)} K
+                          {systemState.auto_mode
+                            ? (systemState.scheduler.current_cct ?? 3500).toFixed(0)
+                            : localCct.toFixed(0)} K
                         </div>
                       </div>
                     </div>
@@ -1594,7 +1595,9 @@ const App = () => {
                           className="range-slider intensity-slider"
                         />
                         <div className="slider-value">
-                          {(systemState.scheduler.current_intensity ?? 250).toFixed(0)} lux
+                          {systemState.auto_mode
+                            ? (systemState.scheduler.current_intensity ?? 250).toFixed(0)
+                            : localIntensity.toFixed(0)} lux
                         </div>
                       </div>
                     </div>
