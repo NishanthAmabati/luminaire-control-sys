@@ -250,105 +250,96 @@ const App = () => {
   }, [systemState.loaded_scene, sendCommand, logBasic, updateSystemState, updateScheduler])
 
   const setMode = useCallback(async (auto) => {
-      setIsLoading(true)
-      if (auto) {
-        toast.success("Switched to Auto Mode")
-        updateSystemState({ auto_mode: true })
+    setIsLoading(true)
+    sendCommand({ type: "set_mode", auto })
+    if (auto) {
+      toast.success("Switched to Auto Mode")
+      updateSystemState({ auto_mode: true })
 
-        // If there was a previously running scene, reload it fresh
-        if (lastAutoSceneRef.current) {
-          const scene = lastAutoSceneRef.current
-          sendCommand({ type: "load_scene", scene })
+      const sceneToRestore = lastAutoSceneRef.current
 
-          setTimeout(() => {
-            sendCommand({ type: "activate_scene", scene })
-            updateSystemState({
-              loaded_scene: scene,
-              current_scene: scene,
-            })
+      if (sceneToRestore) {
+        sendCommand({ type: "load_scene", scene: sceneToRestore })
 
-            updateScheduler({ status: "running" })
-            setIsLoading(false)
-          }, 300)
-        } else {
-          // No previous scene → stay idle in auto
-          updateSystemState({
-            loaded_scene: null,
-            current_scene: null,
-          })
-          updateScheduler({ status: "idle" })
-          setIsLoading(false)
-        }
-
-        return
-      }
-      else {
-        /* =========================
-          MANUAL MODE
-          ========================= */
-
-        // Remember last auto scene (if any)
-        if (systemState.current_scene) {
-          lastAutoSceneRef.current = systemState.current_scene
-        }
-
-        toast.success("Switched to Manual Mode")
-
-        // Stop scheduler & ensure backend does not run scenes
-        sendCommand({ type: "stop_scheduler" })
-
-        // Clear charts immediately
-        setSceneData({ cct: [], intensity: [] })
-
-        // Switch frontend state
-        updateSystemState({
-          auto_mode: false,
-          current_scene: null,
-          loaded_scene: null,
-        })
-
-        updateScheduler({
-          status: "idle",
-          total_intervals: 0,
-          current_interval: 0,
-        })
-
-        setVerticalLinePosition(0)
-
-        // Restore last known values into manual sliders
-        setLocalCct(systemState.current_cct)
-        setLocalIntensity(systemState.current_intensity)
-
-        // Apply manual values to devices (single atomic command)
         setTimeout(() => {
-          const minCct = 3500
-          const maxCct = 6500
-          const maxIntensity = 500
+          sendCommand({ type: "activate_scene", scene: sceneToRestore })
 
-          const cct = Math.max(minCct, Math.min(maxCct, systemState.current_cct))
-          const intensity = Math.max(0, Math.min(maxIntensity, systemState.current_intensity))
+          updateSystemState({
+            loaded_scene: sceneToRestore,
+            current_scene: sceneToRestore,
+          })
 
-          const intensityPct = intensity / maxIntensity
-          const cwBase = (cct - minCct) / ((maxCct - minCct) / 100)
-          const wwBase = 100 - cwBase
-
-          const cw = Math.max(0, Math.min(99.99, cwBase * intensityPct))
-          const ww = Math.max(0, Math.min(99.99, wwBase * intensityPct))
-
-          sendCommand({ type: "sendAll", cw, ww, intensity })
-
-          logBasic(`Manual mode: CCT=${cct}K Intensity=${intensity}`)
+          updateScheduler({ status: "running" })
           setIsLoading(false)
         }, 300)
-      }, [
-      sendCommand,
-      systemState.current_scene,
-      systemState.current_cct,
-      systemState.current_intensity,
-      updateSystemState,
-      updateScheduler,
-      setSceneData,
-    ])
+      } else {
+        updateSystemState({
+          loaded_scene: null,
+          current_scene: null,
+        })
+
+        updateScheduler({ status: "idle" })
+        setIsLoading(false)
+      }
+
+      return
+    }
+    // manual mode
+    // Snapshot values (avoid stale closures)
+    const manualCct = systemState.current_cct
+    const manualIntensity = systemState.current_intensity
+
+    if (systemState.current_scene) {
+      lastAutoSceneRef.current = systemState.current_scene
+    }
+
+    toast.success("Switched to Manual Mode")
+    sendCommand({ type: "stop_scheduler" })
+    setSceneData({ cct: [], intensity: [] })
+    updateSystemState({
+      auto_mode: false,
+      current_scene: null,
+      loaded_scene: null,
+    })
+    updateScheduler({
+      status: "idle",
+      total_intervals: 0,
+      current_interval: 0,
+    })
+    setVerticalLinePosition(0)
+    setLocalCct(manualCct)
+    setLocalIntensity(manualIntensity)
+
+    setTimeout(() => {
+      const minCct = 3500
+      const maxCct = 6500
+      const maxIntensity = 500
+
+      const cct = Math.max(minCct, Math.min(maxCct, manualCct))
+      const intensity = Math.max(0, Math.min(maxIntensity, manualIntensity))
+
+      const intensityPct = intensity / maxIntensity
+      const cwBase = (cct - minCct) / ((maxCct - minCct) / 100)
+      const wwBase = 100 - cwBase
+
+      const cw = Math.max(0, Math.min(99.99, cwBase * intensityPct))
+      const ww = Math.max(0, Math.min(99.99, wwBase * intensityPct))
+
+      sendCommand({ type: "sendAll", cw, ww, intensity })
+      logBasic(`Manual mode applied: CCT=${cct}, Intensity=${intensity}`)
+
+      setIsLoading(false)
+    }, 300)
+
+  }, [
+    sendCommand,
+    systemState.current_scene,
+    systemState.current_cct,
+    systemState.current_intensity,
+    updateSystemState,
+    updateScheduler,
+    setSceneData,
+  ])
 
   const loadScene = useCallback(
     async (scene) => {
