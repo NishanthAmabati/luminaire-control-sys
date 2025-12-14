@@ -55,7 +55,6 @@ class SchedulerOperations:
     def __init__(self):
         self._state_lock = threading.Lock()
         self.stop_event = threading.Event()
-        self.paused = False
         self.current_scheduler_task = None
         self.current_interval_index = 0
         self.total_intervals = 0
@@ -246,26 +245,6 @@ class SchedulerOperations:
 
             while not self.stop_event.is_set() and self.current_interval_index < 86400:
                 loop_start = time.time()
-                if self.paused:
-                    logger.debug("Scheduler paused - sending manual mode values", correlation_id=correlation_id)
-                    # When paused (manual mode), keep sending current manual control values every second
-                    # This maintains continuous device updates as requested
-                    # Manual controls set via webapp are stored in self.state and sent here
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.post(
-                            f"http://{config['microservices']['luminaire_service']['host']}:{config['microservices']['luminaire_service']['port']}/sendAll",
-                            json={"cw": self.state["cw"], "ww": self.state["ww"]}
-                        )
-                        if resp.status_code != 200:
-                            logger.warning("SendAll failed in manual mode", correlation_id=correlation_id, error=resp.text)
-                    
-                    # Broadcast current state for webapp updates
-                    self._set_state(self.state)
-                    
-                    # Sleep for update interval
-                    await asyncio.sleep(update_interval)
-                    continue
-
                 elapsed_time = time.time() - self.start_time
                 current_idx = int(seconds_since_midnight + elapsed_time) % 86400
                 self.current_interval_index = current_idx
@@ -446,72 +425,74 @@ class SchedulerOperations:
 
     async def set_mode(self, data: SetModeData):
         correlation_id = str(uuid.uuid4())
-        logger.info("Setting mode", correlation_id=correlation_id, auto=data.auto, current_scheduler_status=self.state["scheduler"]["status"])
-        
+        logger.info(
+            "Setting mode",
+            correlation_id=correlation_id,
+            auto=data.auto,
+            scheduler_status=self.state["scheduler"]["status"]
+        )
         if not data.auto:
-            # Switching to manual mode
-            # Pause the scheduler but don't stop it
+            # MANUAL MODE → HARD STOP
             if self.state["scheduler"]["status"] == "running":
-                self.paused = True
-                self.state["scheduler"]["status"] = "paused"
-                logger.info("Scheduler paused for manual mode", correlation_id=correlation_id)
-            
-            # Restore last manual values if they exist (from previous manual mode session)
-            # This preserves manual controls when switching back to manual mode
-            if "last_state" in self.state and self.state["last_state"].get("auto_mode") == False:
-                # Use last manual values from previous manual mode session
-                last = self.state["last_state"]
-                self.state["cw"] = last.get("cw", self.state["cw"])
-                self.state["ww"] = last.get("ww", self.state["ww"])
-                self.state["current_cct"] = last.get("current_cct", self.state["current_cct"])
-                self.state["current_intensity"] = last.get("current_intensity", self.state["current_intensity"])
-                logger.info("Restored manual mode values from last session", correlation_id=correlation_id, cw=self.state["cw"], ww=self.state["ww"])
-            
-            # Save current values as the new manual mode state
-            self.state["last_state"] = {
-                "auto_mode": False,
-                "current_scene": self.state.get("current_scene"),
-                "cw": self.state.get("cw", 50.0),
-                "ww": self.state.get("ww", 50.0),
-                "current_cct": self.state.get("current_cct", 3500),
-                "current_intensity": self.state.get("current_intensity", 250)
+                self.stop_scheduler()
+                logger.info(
+                    "Scheduler stopped for manual mode",
+                    correlation_id=correlation_id
+                )
+            # Reset scheduler state completely
+            self.state["scheduler"] = {
+                "status": "idle",
+                "current_interval": 0,
+                "total_intervals": 0,
+                "interval_progress": 0,
+                "current_cct": self.state["current_cct"],
+                "current_intensity": self.state["current_intensity"],
             }
-            
+
+            # Clear scene references
+            self.state["scene_data"] = {"cct": [], "intensity": []}
+
             self.state["auto_mode"] = False
-            
+
         else:
-            # Switching to auto mode
-            self.stop_event.clear()
+            # ============================
+            # AUTO MODE → FRESH START
+            # ============================
             self.state["auto_mode"] = True
-            
-            # If there's a current scene, reactivate it
-            if self.state["current_scene"]:
-                if self.state["current_scene"] in scene_data:
-                    self.state["scene_data"] = scene_data[self.state["current_scene"]]
-                    self.state["activationTime"] = time.strftime("%H:%M:%S")
-                    self.state["loaded_scene"] = self.state["current_scene"]
-                    
-                    # If scheduler was paused, resume it
-                    if self.state["scheduler"]["status"] == "paused" and self.current_scheduler_task:
-                        self.paused = False
-                        self.state["scheduler"]["status"] = "running"
-                        logger.info("Scheduler resumed for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
-                    # If no scheduler running, start a new one
-                    elif self.state["scheduler"]["status"] != "running":
-                        self.state["scheduler"]["status"] = "running"
-                        asyncio.create_task(self.run_smooth_scheduler(os.path.join(config["luminaire_operations"]["scene_directory"], self.state["current_scene"])))
-                        logger.info("Scene reactivated for auto mode", correlation_id=correlation_id, scene=self.state["current_scene"])
-                else:
-                    logger.warning("Failed to reactivate scene", correlation_id=correlation_id, scene=self.state["current_scene"])
-                    self.state["current_scene"] = None
-                    self.state["scene_data"] = {"cct": [], "intensity": []}
-                    self.state["scheduler"]["status"] = "idle"
+
+            if self.state["current_scene"] and self.state["current_scene"] in scene_data:
+                self.state["scene_data"] = scene_data[self.state["current_scene"]]
+                self.state["activationTime"] = time.strftime("%H:%M:%S")
+                self.state["loaded_scene"] = self.state["current_scene"]
+                self.state["scheduler"]["status"] = "running"
+
+                # Clear stop flag ONLY before starting
+                self.stop_event.clear()
+
+                asyncio.create_task(
+                    self.run_smooth_scheduler(
+                        os.path.join(
+                            config["luminaire_operations"]["scene_directory"],
+                            self.state["current_scene"]
+                        )
+                    )
+                )
+
+                logger.info(
+                    "Scene activated fresh in auto mode",
+                    correlation_id=correlation_id,
+                    scene=self.state["current_scene"]
+                )
             else:
-                logger.info("No scene to activate in auto mode", correlation_id=correlation_id)
+                logger.info(
+                    "Auto mode enabled with no scene",
+                    correlation_id=correlation_id
+                )
                 self.state["scheduler"]["status"] = "idle"
-        
+
         self._set_state(self.state)
         return self.state
+
 
     async def load_scene(self, data: LoadSceneData):
         correlation_id = str(uuid.uuid4())
@@ -746,4 +727,3 @@ class SchedulerOperations:
         self.log_basic(f"System turned {'ON' if data.isSystemOn else 'OFF'}")
         self._set_state(self.state)
         return self.state
-
