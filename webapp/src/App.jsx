@@ -282,65 +282,65 @@ const App = () => {
 
         return
       }
+      else {
+        /* =========================
+          MANUAL MODE
+          ========================= */
 
-      /* =========================
-        MANUAL MODE
-        ========================= */
+        // Remember last auto scene (if any)
+        if (systemState.current_scene) {
+          lastAutoSceneRef.current = systemState.current_scene
+        }
 
-      // Remember last auto scene (if any)
-      if (systemState.current_scene) {
-        lastAutoSceneRef.current = systemState.current_scene
-      }
+        toast.success("Switched to Manual Mode")
 
-      toast.success("Switched to Manual Mode")
+        // Stop scheduler & ensure backend does not run scenes
+        sendCommand({ type: "stop_scheduler" })
 
-      // Stop scheduler & ensure backend does not run scenes
-      sendCommand({ type: "stop_scheduler" })
+        // Clear charts immediately
+        setSceneData({ cct: [], intensity: [] })
 
-      // Clear charts immediately
-      setSceneData({ cct: [], intensity: [] })
+        // Switch frontend state
+        updateSystemState({
+          auto_mode: false,
+          current_scene: null,
+          loaded_scene: null,
+        })
 
-      // Switch frontend state
-      updateSystemState({
-        auto_mode: false,
-        current_scene: null,
-        loaded_scene: null,
-      })
+        updateScheduler({
+          status: "idle",
+          total_intervals: 0,
+          current_interval: 0,
+        })
 
-      updateScheduler({
-        status: "idle",
-        total_intervals: 0,
-        current_interval: 0,
-      })
+        setVerticalLinePosition(0)
 
-      setVerticalLinePosition(0)
+        // Restore last known values into manual sliders
+        setLocalCct(systemState.current_cct)
+        setLocalIntensity(systemState.current_intensity)
 
-      // Restore last known values into manual sliders
-      setLocalCct(systemState.current_cct)
-      setLocalIntensity(systemState.current_intensity)
+        // Apply manual values to devices (single atomic command)
+        setTimeout(() => {
+          const minCct = 3500
+          const maxCct = 6500
+          const maxIntensity = 500
 
-      // Apply manual values to devices (single atomic command)
-      setTimeout(() => {
-        const minCct = 3500
-        const maxCct = 6500
-        const maxIntensity = 500
+          const cct = Math.max(minCct, Math.min(maxCct, systemState.current_cct))
+          const intensity = Math.max(0, Math.min(maxIntensity, systemState.current_intensity))
 
-        const cct = Math.max(minCct, Math.min(maxCct, systemState.current_cct))
-        const intensity = Math.max(0, Math.min(maxIntensity, systemState.current_intensity))
+          const intensityPct = intensity / maxIntensity
+          const cwBase = (cct - minCct) / ((maxCct - minCct) / 100)
+          const wwBase = 100 - cwBase
 
-        const intensityPct = intensity / maxIntensity
-        const cwBase = (cct - minCct) / ((maxCct - minCct) / 100)
-        const wwBase = 100 - cwBase
+          const cw = Math.max(0, Math.min(99.99, cwBase * intensityPct))
+          const ww = Math.max(0, Math.min(99.99, wwBase * intensityPct))
 
-        const cw = Math.max(0, Math.min(99.99, cwBase * intensityPct))
-        const ww = Math.max(0, Math.min(99.99, wwBase * intensityPct))
+          sendCommand({ type: "sendAll", cw, ww, intensity })
 
-        sendCommand({ type: "sendAll", cw, ww, intensity })
-
-        logBasic(`Manual mode: CCT=${cct}K Intensity=${intensity}`)
-        setIsLoading(false)
-      }, 300)
-    }, [
+          logBasic(`Manual mode: CCT=${cct}K Intensity=${intensity}`)
+          setIsLoading(false)
+        }, 300)
+      }, [
       sendCommand,
       systemState.current_scene,
       systemState.current_cct,
