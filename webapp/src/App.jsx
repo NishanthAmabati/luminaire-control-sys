@@ -1630,7 +1630,7 @@ const App = () => {
                           min="3500"
                           max="6500"
                           step="50"
-                          value={manualCct}
+                          value={localCct}
                           onInput={handleCctChange}
                           onChange={handleCctChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
@@ -1654,7 +1654,7 @@ const App = () => {
                           min="0"
                           max="500"
                           step="10"
-                          value={manualIntensity}
+                          value={localIntensity}
                           onInput={handleIntensityChange}
                           onChange={handleIntensityChange}
                           disabled={systemState.auto_mode || !systemState.isSystemOn}
