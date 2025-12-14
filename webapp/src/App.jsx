@@ -857,22 +857,22 @@ const App = () => {
             if (data.data.scheduler) {
               const schedulerUpdates = {};
 
-              if (data.data.scheduler.status !== undefined)
+              if (data.data.scheduler.status)
                 schedulerUpdates.status = data.data.scheduler.status;
 
-              if (data.data.scheduler.current_interval !== undefined)
+              if (data.data.scheduler.current_interval)
                 schedulerUpdates.current_interval = data.data.scheduler.current_interval;
 
-              if (data.data.scheduler.total_intervals !== undefined)
+              if (data.data.scheduler.total_intervals)
                 schedulerUpdates.total_intervals = data.data.scheduler.total_intervals;
 
-              if (data.data.scheduler.interval_progress !== undefined)
+              if (data.data.scheduler.interval_progress)
                 schedulerUpdates.interval_progress = data.data.scheduler.interval_progress;
 
-              if (data.data.scheduler.current_cct !== undefined)
+              if (data.data.scheduler.current_cct)
                 schedulerUpdates.current_cct = data.data.scheduler.current_cct;
 
-              if (data.data.scheduler.current_intensity !== undefined)
+              if (data.data.scheduler.current_intensity)
                 schedulerUpdates.current_intensity = data.data.scheduler.current_intensity;
 
               updateScheduler(schedulerUpdates);
