@@ -792,15 +792,6 @@ const App = () => {
               }
             }
 
-            if (!data.data) return;
-
-            /* ============================
-              TIMER FLAG (ALL MODES)
-            ============================ */
-            if (typeof data.data.isTimerEnabled === "boolean") {
-              setIsTimerEnabled(data.data.isTimerEnabled);
-            }
-
             /* ============================
               SYSTEM STATE (ALL MODES)
             ============================ */
