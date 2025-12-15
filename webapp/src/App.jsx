@@ -998,7 +998,7 @@ const App = () => {
                           { x: 0, y: monitoringValues.cct },
                           { x: 8640, y: monitoringValues.cct },
                         ]
-                    : []
+                    : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
@@ -1058,7 +1058,7 @@ const App = () => {
                           { x: 0, y: monitoringValues.intensity },
                           { x: 8640, y: monitoringValues.intensity },
                         ]
-                    : []
+                    : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
