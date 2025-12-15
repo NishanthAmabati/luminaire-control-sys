@@ -21,6 +21,7 @@ group "default" {
 
 group "default" {
   targets = [
+    "luminaire",
     "scheduler",
     "webapp",
   ]
@@ -89,6 +90,14 @@ target "websocket" {
   ]
 }
 */
+target "luminaire" {
+  inherits = ["common"]
+  context  = "./luminaire-service"
+  tags = [
+    "${DOCKERHUB_USERNAME}/luminaire-service:latest",
+    "${DOCKERHUB_USERNAME}/luminaire-service:${GIT_SHA}",
+  ]
+}
 
 target "scheduler" {
   inherits = ["common"]
