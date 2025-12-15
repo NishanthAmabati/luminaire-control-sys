@@ -954,6 +954,29 @@ const App = () => {
       })
   }, [devices, deviceSearchQuery])
 
+  const monitoringValues = useMemo(() => {
+    const cct = systemState.auto_mode
+      ? systemState.scheduler.current_cct
+      : systemState.current_cct
+
+    const intensity = systemState.auto_mode
+      ? systemState.scheduler.current_intensity
+      : systemState.current_intensity
+
+    return { cct, intensity }
+  }, [
+    systemState.auto_mode,
+    systemState.scheduler.current_cct,
+    systemState.scheduler.current_intensity,
+    systemState.current_cct,
+    systemState.current_intensity,
+  ])
+
+  const monitoringDisplay = useMemo(() => {
+    const timestamp = new Date().toLocaleTimeString()
+    return `CCT: ${monitoringValues.cct?.toFixed(0)}K, Intensity: ${monitoringValues.intensity?.toFixed(0)}lux, ${timestamp}`
+  }, [monitoringValues])
+
   const chartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
     const annotationColor = theme === "dark" ? "#E6E6E6" : "#34C759"
@@ -1313,29 +1336,6 @@ const App = () => {
     }),
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
-
-  const monitoringValues = useMemo(() => {
-    const cct = systemState.auto_mode
-      ? systemState.scheduler.current_cct
-      : systemState.current_cct
-
-    const intensity = systemState.auto_mode
-      ? systemState.scheduler.current_intensity
-      : systemState.current_intensity
-
-    return { cct, intensity }
-  }, [
-    systemState.auto_mode,
-    systemState.scheduler.current_cct,
-    systemState.scheduler.current_intensity,
-    systemState.current_cct,
-    systemState.current_intensity,
-  ])
-
-  const monitoringDisplay = useMemo(() => {
-    const timestamp = new Date().toLocaleTimeString()
-    return `CCT: ${monitoringValues.cct?.toFixed(0)}K, Intensity: ${monitoringValues.intensity?.toFixed(0)}lux, ${timestamp}`
-  }, [monitoringValues])
 
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
