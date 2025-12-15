@@ -794,7 +794,10 @@ const App = () => {
                   intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
                 });
               }
-              
+              updateSystemState({
+                ...(data.current_cct !== undefined && { current_cct: data.current_cct }),
+                ...(data.current_intensity !== undefined && { current_intensity: data.current_intensity }),
+              })
               // Update system state via context
               const systemUpdates = {};
               if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
@@ -986,14 +989,28 @@ const App = () => {
           ? [
               {
                 label: "current CCT",
-                data: systemState.scheduler.current_cct
-                  ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.scheduler.current_cct }]
-                    : [
-                        { x: 0, y: systemState.scheduler.current_cct },
-                        { x: 8640, y: systemState.scheduler.current_cct },
-                      ]
-                  : [],
+                data:
+                  (systemState.auto_mode
+                    ? systemState.scheduler.current_cct
+                    : systemState.current_cct) !== undefined
+                    ? systemState.auto_mode
+                      ? [
+                          {
+                            x: centerPosition,
+                            y: systemState.scheduler.current_cct,
+                          },
+                        ]
+                      : [
+                          {
+                            x: 0,
+                            y: systemState.current_cct,
+                          },
+                          {
+                            x: 8640,
+                            y: systemState.current_cct,
+                          },
+                        ]
+                    : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
@@ -1007,7 +1024,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1040,14 +1057,28 @@ const App = () => {
           ? [
               {
                 label: "current intensity",
-                data: systemState.scheduler.current_intensity
-                  ? systemState.auto_mode
-                    ? [{ x: centerPosition, y: systemState.scheduler.current_intensity }]
-                    : [
-                        { x: 0, y: systemState.scheduler.current_intensity },
-                        { x: 8640, y: systemState.scheduler.current_intensity },
-                      ]
-                  : [],
+                data:
+                  (systemState.auto_mode
+                    ? systemState.scheduler.current_intensity
+                    : systemState.current_intensity) !== undefined
+                    ? systemState.auto_mode
+                      ? [
+                          {
+                            x: centerPosition,
+                            y: systemState.scheduler.current_intensity,
+                          },
+                        ]
+                      : [
+                          {
+                            x: 0,
+                            y: systemState.current_intensity,
+                          },
+                          {
+                            x: 8640,
+                            y: systemState.current_intensity,
+                          },
+                        ]
+                    : [],
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
@@ -1061,7 +1092,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
 
   const chartOptions = useMemo(
     () => ({
@@ -1305,8 +1336,12 @@ const App = () => {
 
   const monitoringDisplay = useMemo(() => {
     const timestamp = new Date().toLocaleTimeString()
-    const cct = systemState.scheduler.current_cct ?? systemState.current_cct
-    const intensity = systemState.scheduler.current_intensity ?? systemState.current_intensity
+    const cct = systemState.auto_mode
+      ? systemState.scheduler.current_cct
+      : systemState.current_cct
+    const intensity = systemState.auto_mode
+      ? systemState.scheduler.current_intensity
+      : systemState.current_intensity
     return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
   }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity])
 
