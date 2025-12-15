@@ -1346,7 +1346,7 @@ const App = () => {
     }
     // Use backend-provided interval_progress (percentage 0-100) directly instead of calculating locally
     if (systemState.scheduler.interval_progress !== undefined) {
-      const value = systemState.scheduler.interval_progress.toFixed(1);
+      const value = systemState.scheduler.interval_progress.toFixed(2);
       console.log('[Progress Bar] Using backend interval_progress:', value);
       return value;
     }
@@ -1355,7 +1355,7 @@ const App = () => {
       console.log('[Progress Bar] Fallback: total_intervals is 0, returning 0.0');
       return "0.0";
     }
-    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(1);
+    const calculated = (((systemState.scheduler.current_interval + 1) / systemState.scheduler.total_intervals) * 100).toFixed(2);
     console.log('[Progress Bar] Fallback: calculated locally:', calculated);
     return calculated;
   }, [systemState.isSystemOn, systemState.scheduler])
