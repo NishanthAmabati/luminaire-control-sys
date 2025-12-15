@@ -986,27 +986,19 @@ const App = () => {
               {
                 label: "current CCT",
                 data:
-                  (systemState.auto_mode
-                    ? systemState.scheduler.current_cct
-                    : systemState.current_cct) !== undefined
+                  monitoringValues.cct !== undefined
                     ? systemState.auto_mode
                       ? [
                           {
                             x: centerPosition,
-                            y: systemState.scheduler.current_cct,
+                            y: monitoringValues.cct,
                           },
                         ]
                       : [
-                          {
-                            x: 0,
-                            y: systemState.current_cct,
-                          },
-                          {
-                            x: 8640,
-                            y: systemState.current_cct,
-                          },
+                          { x: 0, y: monitoringValues.cct },
+                          { x: 8640, y: monitoringValues.cct },
                         ]
-                    : [],
+                    : []
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
@@ -1020,7 +1012,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.cct, systemState.isSystemOn, systemState.scheduler, systemState.current_cct, theme, verticalLinePosition, systemState.auto_mode, monitoringValues])
 
   const intensityChartData = useMemo(() => {
     const centerPosition = systemState.auto_mode ? verticalLinePosition : 4320
@@ -1054,27 +1046,19 @@ const App = () => {
               {
                 label: "current intensity",
                 data:
-                  (systemState.auto_mode
-                    ? systemState.scheduler.current_intensity
-                    : systemState.current_intensity) !== undefined
+                  monitoringValues.intensity !== undefined
                     ? systemState.auto_mode
                       ? [
                           {
                             x: centerPosition,
-                            y: systemState.scheduler.current_intensity,
+                            y: monitoringValues.intensity,
                           },
                         ]
                       : [
-                          {
-                            x: 0,
-                            y: systemState.current_intensity,
-                          },
-                          {
-                            x: 8640,
-                            y: systemState.current_intensity,
-                          },
+                          { x: 0, y: monitoringValues.intensity },
+                          { x: 8640, y: monitoringValues.intensity },
                         ]
-                    : [],
+                    : []
                 borderColor: annotationColor,
                 backgroundColor: annotationColor,
                 pointStyle: systemState.auto_mode ? "circle" : false,
@@ -1088,7 +1072,7 @@ const App = () => {
           : []),
       ],
     }
-  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode])
+  }, [sceneData.intensity, systemState.isSystemOn, systemState.scheduler, systemState.current_intensity, theme, verticalLinePosition, systemState.auto_mode, monitoringValues])
 
   const chartOptions = useMemo(
     () => ({
@@ -1330,16 +1314,28 @@ const App = () => {
     [theme, verticalLinePosition, systemState.auto_mode, systemState.isSystemOn, systemState.scheduler]
   )
 
-  const monitoringDisplay = useMemo(() => {
-    const timestamp = new Date().toLocaleTimeString()
+  const monitoringValues = useMemo(() => {
     const cct = systemState.auto_mode
       ? systemState.scheduler.current_cct
       : systemState.current_cct
+
     const intensity = systemState.auto_mode
       ? systemState.scheduler.current_intensity
       : systemState.current_intensity
-    return `CCT: ${cct.toFixed(0)}K, Intensity: ${intensity.toFixed(0)}lux, ${timestamp}`
-  }, [systemState.scheduler, systemState.current_cct, systemState.current_intensity])
+
+    return { cct, intensity }
+  }, [
+    systemState.auto_mode,
+    systemState.scheduler.current_cct,
+    systemState.scheduler.current_intensity,
+    systemState.current_cct,
+    systemState.current_intensity,
+  ])
+
+  const monitoringDisplay = useMemo(() => {
+    const timestamp = new Date().toLocaleTimeString()
+    return `CCT: ${monitoringValues.cct?.toFixed(0)}K, Intensity: ${monitoringValues.intensity?.toFixed(0)}lux, ${timestamp}`
+  }, [monitoringValues])
 
   const intervalProgressPercent = useMemo(() => {
     console.log('[Progress Bar] useMemo recalculating, systemState.scheduler:', systemState.scheduler);
