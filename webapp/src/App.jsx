@@ -794,10 +794,6 @@ const App = () => {
                   intensity: Array.isArray(data.data.scene_data.intensity) ? data.data.scene_data.intensity : sceneData.intensity,
                 });
               }
-              updateSystemState({
-                ...(data.current_cct !== undefined && { current_cct: data.current_cct }),
-                ...(data.current_intensity !== undefined && { current_intensity: data.current_intensity }),
-              })
               // Update system state via context
               const systemUpdates = {};
               if (data.data.current_cct !== undefined) systemUpdates.current_cct = data.data.current_cct;
