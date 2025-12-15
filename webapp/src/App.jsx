@@ -229,6 +229,8 @@ const App = () => {
     if (systemState.loaded_scene) {
       setIsLoading(true)
       sendCommand({ type: "activate_scene", scene: systemState.loaded_scene })
+      // STORE LAST AUTO SCENE
+      lastAutoSceneRef.current = systemState.loaded_scene
       toast.success(`Scene Activated`)
       logBasic(`Activated scene: ${systemState.loaded_scene}`)
       updateSystemState({
@@ -287,10 +289,6 @@ const App = () => {
     // manual mode
     const manualCct = localCct
     const manualIntensity = localIntensity
-
-    if (systemState.current_scene) {
-      lastAutoSceneRef.current = systemState.current_scene
-    }
 
     toast.success("Switched to Manual Mode")
     sendCommand({ type: "stop_scheduler" })
@@ -390,6 +388,7 @@ const App = () => {
 
   const stopScheduler = useCallback(() => {
     sendCommand({ type: "stop_scheduler" })
+    lastAutoSceneRef.current = null
     toast.success("Scene Stopped")
     logBasic("Scheduler stopped")
     updateScheduler({ status: "idle", total_intervals: 0, current_interval: 0 })
