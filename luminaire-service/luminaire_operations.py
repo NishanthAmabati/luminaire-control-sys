@@ -229,28 +229,12 @@ class LuminaireOperations:
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
-        # Publish log event in JSON
-        log_event = {
-            "type": "basic",
-            "timestamp": timestamp,
-            "message": message,
-            "formatted": formatted_message
-        }
-        redis_client.publish("log_update", json.dumps(log_event))
         logger.info("Basic Log", correlation_id=correlation_id, message=message)
 
     def log_advanced(self, message: str):
         correlation_id = str(uuid.uuid4())
         timestamp = time.strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
-        # Publish log event in JSON
-        log_event = {
-            "type": "advanced",
-            "timestamp": timestamp,
-            "message": message,
-            "formatted": formatted_message
-        }
-        redis_client.publish("log_update", json.dumps(log_event))
         logger.debug("Advanced Log", correlation_id=correlation_id, message=message)
 
     def list(self) -> dict:
