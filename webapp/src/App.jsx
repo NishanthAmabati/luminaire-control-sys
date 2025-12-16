@@ -168,6 +168,8 @@ const App = () => {
   const sceneStartTime = useRef(null)
   const lastCommandSent = useRef(null)
   const previewTimeout = useRef(null)
+  const lastAutoSceneRef = useRef(null)
+
 
   const debouncedUpdateState = useRef(
     debounce((newState, newSceneData, newOnTime, newOffTime, newLocalCct, newLocalIntensity, newVerticalLinePosition) => {
