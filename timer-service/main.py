@@ -130,16 +130,20 @@ async def health():
         # Check Redis connection
         await timer_ops.redis_client.ping()
         
+        # Use the new health_check method from TimerOperations
+        internal_health = await timer_ops.health_check()
+        
         return {
             "status": "healthy",
             "service": "timer-service",
-            "timers_enabled": timer_ops.is_enabled,
-            "active_timers": len(timer_ops.timers)
+            "scheduler_running": internal_health["running"],
+            "timer_enabled": timer_ops.is_enabled,
+            "timer_configured": internal_health["timer_configured"],
+            "metrics": internal_health["metrics"]
         }
     except Exception as e:
         logger.error("Health check failed", error=str(e))
         raise HTTPException(status_code=503, detail=f"Service unhealthy: {str(e)}")
-
 
 @app.get("/metrics")
 async def metrics():
