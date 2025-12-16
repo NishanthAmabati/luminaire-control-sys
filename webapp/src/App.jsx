@@ -307,6 +307,9 @@ const App = () => {
     setLocalCct(manualCct)
     setLocalIntensity(manualIntensity)
 
+    sendCommand({ type: "set_cct", cct: localCct });
+    sendCommand({ type: "set_intensity", intensity: localIntensity });
+
     setTimeout(() => {
       const minCct = 3500
       const maxCct = 6500
