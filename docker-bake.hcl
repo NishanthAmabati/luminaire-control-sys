@@ -21,7 +21,7 @@ group "default" {
 
 group "default" {
   targets = [
-    "webapp",
+    "timer",
   ]
 }
 
@@ -52,15 +52,6 @@ target "scheduler" {
   ]
 }
 
-target "timer" {
-  inherits = ["common"]
-  context  = "./timer-service"
-  tags = [
-    "${DOCKERHUB_USERNAME}/timer-service:latest",
-    "${DOCKERHUB_USERNAME}/timer-service:${GIT_SHA}",
-  ]
-}
-
 target "monitoring" {
   inherits = ["common"]
   context  = "./monitoring-service"
@@ -87,7 +78,6 @@ target "websocket" {
     "${DOCKERHUB_USERNAME}/websocket-service:${GIT_SHA}",
   ]
 }
-*/
 
 target "webapp" {
   inherits = ["common"]
@@ -95,5 +85,15 @@ target "webapp" {
   tags = [
     "${DOCKERHUB_USERNAME}/webapp:latest",
     "${DOCKERHUB_USERNAME}/webapp:${GIT_SHA}",
+  ]
+}
+*/
+
+target "timer" {
+  inherits = ["common"]
+  context  = "./timer-service"
+  tags = [
+    "${DOCKERHUB_USERNAME}/timer-service:latest",
+    "${DOCKERHUB_USERNAME}/timer-service:${GIT_SHA}",
   ]
 }

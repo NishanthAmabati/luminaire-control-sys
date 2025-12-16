@@ -1,446 +1,321 @@
-"""
-Production-Grade Timer Service Operations
-
-This module provides robust timer functionality with:
-- Immediate trigger support (triggers at scheduled time even if just set)
-- Proper timezone handling
-- Race condition prevention
-- Clear trigger state management
-- Comprehensive error handling
-- Redis-backed persistence
-- Retry logic for API failures
-- Performance optimizations
-"""
-
 import asyncio
 import json
 import logging
 import httpx
 import structlog
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
-import redis. asyncio as aioredis
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from typing import Dict, Optional
 
-from timer_service.models import Timer, SetTimerData
+import redis.asyncio as aioredis
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.jobstores.base import JobLookupError
+
+from timer_service.models import SetTimerData
 
 logger = structlog.get_logger(service="timer-service")
 
-# Timer check interval in seconds - how often to check for timers to trigger
-TIMER_CHECK_INTERVAL = 15
-
-# Maximum retries for API calls
+# Constants
 MAX_API_RETRIES = 3
-
-# API call timeout
 API_TIMEOUT = 10.0
+IST = ZoneInfo("Asia/Kolkata")
+TRIGGERS_TTL_SECONDS = 86400 * 3  # 3 days - clean up old trigger data automatically
 
 
 class TimerOperations:
-    """Production-grade timer operations with immediate triggering support"""
+    """Production-grade timer operations with APScheduler and single timer support"""
     
     def __init__(self, redis_client: aioredis.Redis, api_url: str):
-        """
-        Initialize timer operations
-        
-        Args:
-            redis_client: Async Redis client for state persistence
-            api_url: API service URL for system control
-        """
-        self. redis_client = redis_client
+        self.redis_client = redis_client
         self.api_url = api_url
-        self.timers: List[Dict] = []
-        self.is_enabled: bool = False
-        self._running: bool = False
         
-        # Metrics for monitoring
+        # Single timer state
+        self.on_time: Optional[str] = None   # "HH:MM"
+        self.off_time: Optional[str] = None  # "HH:MM"
+        self.is_enabled: bool = False
+        
+        # APScheduler
+        self.scheduler = AsyncIOScheduler(timezone=IST)
+        
+        # Job IDs
+        self.on_job_id = "timer_on"
+        self.off_job_id = "timer_off"
+        
+        # Metrics
         self.metrics = {
             "triggers_total": 0,
             "triggers_failed": 0,
             "last_trigger_time": None,
-            "last_check_time": None
+            "last_check_time": None  # Not needed anymore but kept for compatibility
         }
-        
+    
     async def _broadcast_timer_status(self):
         """Broadcast current timer status via Redis pub/sub to update UI"""
         try:
+            # When disabled or no timer set, broadcast empty strings for on/off
+            broadcast_on = self.on_time if self.is_enabled and self.on_time else ""
+            broadcast_off = self.off_time if self.is_enabled and self.off_time else ""
+            
             timer_status = {
-                "system_timers": self.timers,
+                "system_timers": [{"on": broadcast_on, "off": broadcast_off}],
                 "isTimerEnabled": self.is_enabled,
             }
             await self.redis_client.publish("system_update", json.dumps(timer_status))
-            logger.debug("Broadcasted timer status", timer_count=len(self.timers), enabled=self.is_enabled)
+            logger.debug("Broadcasted timer status", enabled=self.is_enabled, on=broadcast_on, off=broadcast_off)
         except Exception as e:
             logger.error("Failed to broadcast timer status", error=str(e))
+    
+    async def _safe_disable(self, reason: str):
+        """Centralised disable logic on error or manual disable"""
+        logger.warning(f"Disabling timer system: {reason}")
+        self.is_enabled = False
+        self.scheduler.remove_all_jobs()
         
-    async def initialize(self):
-        """Load timer state from Redis on startup"""
-        try:
-            # Load timers from Redis
-            timers_data = await self.redis_client.get("timer:timers")
-            if timers_data:
-                self.timers = json.loads(timers_data)
-                
-            # Load enabled state from Redis
-            enabled_data = await self.redis_client.get("timer:enabled")
-            if enabled_data:
-                self.is_enabled = json.loads(enabled_data)
-                
-            logger.info("Timer state loaded from Redis", timers=len(self.timers), enabled=self. is_enabled)
-            
-            # Broadcast initial timer status to UI
-            await self._broadcast_timer_status()
-        except Exception as e:
-            logger.error("Failed to load timer state from Redis", error=str(e))
-            
-    async def set_timers(self, data: SetTimerData) -> Dict:
-        """
-        Set system timers
+        # Clear all Redis state
+        await self.redis_client.delete("timer:timers", "timer:enabled", "timer:triggers")
         
-        Args:
-            data: Timer configuration data
-            
-        Returns:
-            Dict with status and current timer configuration
-        """
-        try:
-            # Validate all timers
-            for timer in data. timers:
-                try:
-                    # Validate time format
-                    on_time = datetime.strptime(timer.on, "%H:%M")
-                    off_time = datetime.strptime(timer.off, "%H:%M")
-                    
-                    # Check for same time
-                    if timer.on == timer.off:
-                        error_msg = f"ON and OFF times cannot be the same: {timer.on}"
-                        logger.error(error_msg)
-                        return {"status": "error", "error": error_msg}
-                        
-                except ValueError as e:
-                    error_msg = f"Invalid timer format: {timer.on} or {timer.off}. Expected HH:MM format."
-                    logger.error(error_msg, error=str(e))
-                    return {"status": "error", "error": error_msg}
-            
-            # Update timers - add enabled flag if not present
-            self.timers = []
-            for timer in data.timers:
-                timer_dict = timer.dict()
-                if "enabled" not in timer_dict:
-                    timer_dict["enabled"] = True
-                self. timers.append(timer_dict)
-            
-            self.is_enabled = len(self.timers) > 0
-            
-            # Persist to Redis
-            await self.redis_client.set("timer:timers", json.dumps(self. timers))
-            await self. redis_client.set("timer:enabled", json.dumps(self. is_enabled))
-            
-            # Clear all trigger state (allows immediate triggering on schedule)
-            await self.redis_client.delete("timer:triggers")
-            
-            # Broadcast timer status to UI
-            await self._broadcast_timer_status()
-            
-            logger.info("Timers set successfully", timer_count=len(self.timers), enabled=self.is_enabled)
-            
-            return {
-                "status": "success",
-                "message": f"Set {len(self.timers)} timer(s)",
-                "isTimerEnabled": self.is_enabled,
-                "timers": self. timers
-            }
-        except Exception as e:
-            logger. error("Failed to set timers", error=str(e), exc_info=True)
-            return {"status": "error", "error": str(e)}
-            
-    async def get_timers(self) -> Dict:
-        """
-        Get current timer configuration
-        
-        Returns:
-            Dict with timers and enabled state
-        """
-        return {
-            "timers": self.timers,
-            "isTimerEnabled": self.is_enabled
-        }
-        
-    async def toggle_timers(self, enable: bool) -> Dict:
-        """
-        Enable or disable the timer system
-        
-        Args:
-            enable: True to enable, False to disable
-            
-        Returns:
-            Dict with status and current configuration
-        """
-        try:
-            self.is_enabled = enable
-            
-            # Persist to Redis
-            await self.redis_client. set("timer:enabled", json. dumps(self.is_enabled))
-            
-            # When disabling, clear trigger state
-            # Users can re-enable with the same timer configurations
-            if not enable:
-                await self.redis_client.delete("timer:triggers")
-                logger.info("Timer system disabled - triggers cleared")
-            else:
-                logger.info("Timer system enabled", timers_count=len(self.timers))
-                
-            # Broadcast timer status to UI
-            await self._broadcast_timer_status()
-                
-            logger.info("Timer system toggled", enabled=enable, timers_count=len(self.timers))
-            
-            return {
-                "status": "success",
-                "message": f"Timer system {'enabled' if enable else 'disabled'}",
-                "isTimerEnabled": self.is_enabled,
-                "timers": self.timers
-            }
-        except Exception as e:
-            logger.error("Failed to toggle timer system", error=str(e), exc_info=True)
-            return {"status": "error", "error": str(e)}
-            
-    async def reset_timers(self) -> Dict:
-        """
-        Reset all timers and disable the system
-        
-        Returns:
-            Dict with status
-        """
-        try:
-            self.timers = []
-            self.is_enabled = False
-            
-            # Clear Redis
-            await self.redis_client. delete("timer:timers")
-            await self.redis_client. delete("timer:enabled")
-            await self.redis_client.delete("timer:triggers")
-            
-            # Broadcast the cleared state to UI
-            await self._broadcast_timer_status()
-            
-            logger.info("Timers reset and state broadcasted")
-            
-            return {
-                "status": "success",
-                "message": "All timers reset",
-                "isTimerEnabled": False,
-                "timers": []
-            }
-        except Exception as e:
-            logger.error("Failed to reset timers", error=str(e), exc_info=True)
-            return {"status": "error", "error": str(e)}
-            
-    async def _trigger_system(self, turn_on: bool, timer_id: str) -> bool:
-        """
-        Trigger system ON or OFF with retry logic
-        
-        Directly sets the system to the desired state with exponential backoff retry. 
-        
-        Args:
-            turn_on: True to turn on, False to turn off
-            timer_id: Identifier for this trigger (for logging/tracking)
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        # Broadcast disabled state (empty times)
+        await self._broadcast_timer_status()
+    
+    async def _trigger_system(self, turn_on: bool, trigger_id: str):
+        """Trigger system ON/OFF with retries"""
         action = "ON" if turn_on else "OFF"
+        endpoint = f"{self.api_url}/api/toggle_system"
+        payload = {"isSystemOn": turn_on}
         
         for attempt in range(MAX_API_RETRIES):
             try:
-                async with httpx. AsyncClient(timeout=API_TIMEOUT) as client:
-                    response = await client.post(
-                        f"{self.api_url}/api/toggle_system",
-                        json={"isSystemOn": turn_on}
-                    )
-                    
+                async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
+                    response = await client.post(endpoint, json=payload)
                     if response.status_code == 200:
                         logger.info(
-                            f"Timer triggered: System set to {action}", 
-                            timer_id=timer_id,
+                            f"Timer {action} triggered successfully",
+                            trigger_id=trigger_id,
                             attempt=attempt + 1
                         )
-                        
-                        # Update metrics
                         self.metrics["triggers_total"] += 1
-                        self.metrics["last_trigger_time"] = datetime. now(). isoformat()
-                        
+                        self.metrics["last_trigger_time"] = datetime.now(IST).isoformat()
                         return True
                     else:
                         logger.warning(
-                            f"Timer trigger failed, retrying.. .",
-                            timer_id=timer_id,
+                            "Timer trigger failed",
+                            trigger_id=trigger_id,
                             attempt=attempt + 1,
                             status=response.status_code,
                             response=response.text
                         )
-                        
             except Exception as e:
                 logger.error(
                     f"Timer trigger error, attempt {attempt + 1}/{MAX_API_RETRIES}",
-                    timer_id=timer_id,
+                    trigger_id=trigger_id,
+                    action=action,
                     error=str(e),
                     exc_info=True
                 )
             
-            # Exponential backoff before retry (except on last attempt)
+            # Backoff except last attempt
             if attempt < MAX_API_RETRIES - 1:
-                backoff_time = 2 ** attempt  # 1s, 2s, 4s... 
-                logger.debug(f"Backing off for {backoff_time}s before retry", timer_id=timer_id)
-                await asyncio.sleep(backoff_time)
+                await asyncio.sleep(2 ** attempt)
         
-        # All retries failed
-        logger.error(
-            f"Timer trigger failed after {MAX_API_RETRIES} attempts",
-            timer_id=timer_id,
-            action=action
-        )
-        
-        # Update metrics
+        # All retries failed -> critical error
         self.metrics["triggers_failed"] += 1
-        
+        await self._safe_disable(f"Failed to trigger {action} after {MAX_API_RETRIES} attempts")
         return False
-            
-    async def run_timer_loop(self):
-        """
-        Main timer loop - checks for timers to trigger at configurable intervals
-        
-        This loop:
-        1. Runs at intervals defined by TIMER_CHECK_INTERVAL for responsiveness
-        2. Checks all enabled timers continuously every day
-        3. Triggers immediately if current time >= scheduled time
-        4. Prevents duplicate triggers on the same day
-        5. Automatically resets trigger state at midnight for next day
-        6. Timers remain active daily until manually disabled
-        7. Handles each timer's ON and OFF independently
-        """
-        self._running = True
-        logger.info(f"Timer loop started - checking every {TIMER_CHECK_INTERVAL} seconds")
-        
-        while self._running:
+    
+    def _schedule_jobs(self):
+        """(Re)schedule ON and OFF jobs based on current timer config"""
+        # Remove existing jobs
+        for job_id in [self.on_job_id, self.off_job_id]:
             try:
-                # Update last check time for health monitoring
-                self.metrics["last_check_time"] = datetime. now().isoformat()
-                
-                # Check if timer system is enabled
-                if not self. is_enabled or not self.timers:
-                    await asyncio.sleep(TIMER_CHECK_INTERVAL)
-                    continue
-                    
-                # Get current time
-                now = datetime. now()
-                today_str = now.strftime("%Y-%m-%d")
-                current_time_str = now.strftime("%H:%M")
-                
-                # Load trigger state from Redis
-                triggers_data = await self.redis_client.get("timer:triggers")
-                if triggers_data:
-                    triggers = json.loads(triggers_data)
-                else:
-                    triggers = {}
-                    
-                # Reset triggers if it's a new day (automatic daily recurrence)
-                if triggers. get("date") != today_str:
-                    triggers = {"date": today_str, "triggered": {}}
-                    await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                    logger.info("New day detected - timer triggers reset for daily recurrence", date=today_str)
-                    
-                triggered_count = 0
-                triggers_changed = False  # Track if we need to write to Redis
-                    
-                # Check each timer (single loop - no nesting)
-                for idx, timer in enumerate(self.timers):
-                    # Skip disabled timers
-                    if not timer. get("enabled", True):
-                        continue
-                        
-                    on_time = timer["on"]
-                    off_time = timer["off"]
-                    
-                    # Create unique identifiers for this timer's triggers TODAY
-                    on_trigger_id = f"timer_{idx}_on_{today_str}"
-                    off_trigger_id = f"timer_{idx}_off_{today_str}"
-                    
-                    # Check if already triggered today
-                    on_already_triggered = triggers["triggered"].get(on_trigger_id)
-                    off_already_triggered = triggers["triggered"].get(off_trigger_id)
-                    
-                    # Check if current time has reached scheduled times
-                    on_should_trigger = current_time_str >= on_time
-                    off_should_trigger = current_time_str >= off_time
-                    
-                    # Trigger ON independently at its scheduled time
-                    if on_should_trigger and not on_already_triggered:
-                        logger.info(
-                            "Timer ON trigger activated", 
-                            timer_index=idx, 
-                            scheduled_time=on_time, 
-                            current_time=current_time_str, 
-                            date=today_str
-                        )
-                        
-                        if await self._trigger_system(True, on_trigger_id):
-                            triggers["triggered"][on_trigger_id] = now.isoformat()
-                            triggers_changed = True
-                            triggered_count += 1
-                    
-                    # Trigger OFF independently at its scheduled time
-                    # Note: Not 'elif' - both can trigger in the same check cycle
-                    if off_should_trigger and not off_already_triggered:
-                        logger.info(
-                            "Timer OFF trigger activated", 
-                            timer_index=idx,
-                            scheduled_time=off_time, 
-                            current_time=current_time_str, 
-                            date=today_str
-                        )
-                        
-                        if await self._trigger_system(False, off_trigger_id):
-                            triggers["triggered"][off_trigger_id] = now.isoformat()
-                            triggers_changed = True
-                            triggered_count += 1
-                
-                # Write to Redis once after all triggers (batch write for performance)
-                if triggers_changed:
-                    await self.redis_client.set("timer:triggers", json.dumps(triggers))
-                    logger.info(
-                        "Timer triggers executed - will recur daily", 
-                        triggered_today=triggered_count,
-                        total_triggered=len(triggers["triggered"]),
-                        date=today_str
-                    )
-                    # Broadcast timer status after triggers to keep UI in sync
-                    await self._broadcast_timer_status()
-                    
-            except Exception as e:
-                logger.error("Error in timer loop", error=str(e), exc_info=True)
-                
-            # Wait before next check
-            await asyncio.sleep(TIMER_CHECK_INTERVAL)
+                self.scheduler.remove_job(job_id)
+            except JobLookupError:
+                pass
+        
+        if not self.is_enabled or not self.on_time or not self.off_time:
+            return
+        
+        try:
+            hour_on, minute_on = map(int, self.on_time.split(":"))
+            hour_off, minute_off = map(int, self.off_time.split(":"))
             
-        logger.info("Timer loop stopped")
+            # Schedule ON
+            self.scheduler.add_job(
+                self._trigger_system,
+                CronTrigger(hour=hour_on, minute=minute_on, timezone=IST),
+                id=self.on_job_id,
+                args=(True, self.on_job_id),
+                misfire_grace_time=60,  # Allow immediate trigger if missed
+                coalesce=True
+            )
+            
+            # Schedule OFF
+            self.scheduler.add_job(
+                self._trigger_system,
+                CronTrigger(hour=hour_off, minute=minute_off, timezone=IST),
+                id=self.off_job_id,
+                args=(False, self.off_job_id),
+                misfire_grace_time=60,
+                coalesce=True
+            )
+            
+            logger.info("Timer jobs scheduled", on=self.on_time, off=self.off_time)
+        except ValueError as e:
+            logger.error("Invalid time format when scheduling", error=str(e))
+            asyncio.create_task(self._safe_disable("Invalid time format"))
+    
+    async def initialize(self):
+        """Load timer state from Redis on startup"""
+        try:
+            timers_data = await self.redis_client.get("timer:timers")
+            if timers_data:
+                timers = json.loads(timers_data)
+                # Expect single timer
+                if timers:
+                    timer = timers[0]
+                    self.on_time = timer.get("on")
+                    self.off_time = timer.get("off")
+            
+            enabled_data = await self.redis_client.get("timer:enabled")
+            if enabled_data:
+                self.is_enabled = json.loads(enabled_data)
+            
+            logger.info("Timer state loaded from Redis", on=self.on_time, off=self.off_time, enabled=self.is_enabled)
+            
+            # Start scheduler and schedule jobs
+            self.scheduler.start()
+            self._schedule_jobs()
+            
+            # Broadcast initial status
+            await self._broadcast_timer_status()
+        except Exception as e:
+            logger.error("Failed to initialize timer service", error=str(e))
+            await self._safe_disable("Initialization failure")
+    
+    async def set_timers(self, data: SetTimerData) -> Dict:
+        """Set the single system timer"""
+        try:
+            if len(data.timers) != 1:
+                return {"status": "error", "error": "Only one timer supported"}
+            
+            timer = data.timers[0]
+            on_time = timer.on.strip()
+            off_time = timer.off.strip()
+            
+            # Basic validation
+            if not on_time or not off_time:
+                return {"status": "error", "error": "ON and OFF times required"}
+            
+            try:
+                datetime.strptime(on_time, "%H:%M")
+                datetime.strptime(off_time, "%H:%M")
+            except ValueError:
+                return {"status": "error", "error": "Invalid time format. Use HH:MM"}
+            
+            if on_time == off_time:
+                return {"status": "error", "error": "ON and OFF times cannot be the same"}
+            
+            # Update state
+            self.on_time = on_time
+            self.off_time = off_time
+            self.is_enabled = True  # Setting timer enables the system
+            
+            # Persist
+            await self.redis_client.set("timer:timers", json.dumps([{"on": on_time, "off": off_time}]))
+            await self.redis_client.set("timer:enabled", json.dumps(True))
+            
+            # Clean old trigger tracking key with TTL
+            await self.redis_client.delete("timer:triggers")
+            await self.redis_client.set("timer:triggers", json.dumps({"date": "", "triggered": {}}), ex=TRIGGERS_TTL_SECONDS)
+            
+            # Reschedule jobs
+            self._schedule_jobs()
+            
+            # Broadcast
+            await self._broadcast_timer_status()
+            
+            logger.info("Timer set successfully", on=on_time, off=off_time)
+            return {
+                "status": "success",
+                "message": "Timer set",
+                "isTimerEnabled": True,
+                "timers": [{"on": on_time, "off": off_time}]
+            }
+        except Exception as e:
+            logger.error("Failed to set timer", error=str(e), exc_info=True)
+            await self._safe_disable("Set timer failure")
+            return {"status": "error", "error": str(e)}
+    
+    async def get_timers(self) -> Dict:
+        """Get current timer configuration"""
+        broadcast_on = self.on_time if self.is_enabled else ""
+        broadcast_off = self.off_time if self.is_enabled else ""
+        return {
+            "timers": [{"on": broadcast_on, "off": broadcast_off}],
+            "isTimerEnabled": self.is_enabled
+        }
+    
+    async def toggle_timers(self, enable: bool) -> Dict:
+        """Enable or disable the timer system"""
+        try:
+            if enable and (not self.on_time or not self.off_time):
+                return {"status": "error", "error": "No timer configured to enable"}
+            
+            self.is_enabled = enable
+            
+            await self.redis_client.set("timer:enabled", json.dumps(enable))
+            
+            if enable:
+                self._schedule_jobs()
+                logger.info("Timer system enabled")
+            else:
+                self.scheduler.remove_all_jobs()
+                await self.redis_client.delete("timer:triggers")
+                logger.info("Timer system disabled")
+            
+            await self._broadcast_timer_status()
+            
+            return {
+                "status": "success",
+                "message": f"Timer system {'enabled' if enable else 'disabled'}",
+                "isTimerEnabled": enable,
+                "timers": [{"on": self.on_time or "", "off": self.off_time or ""}]
+            }
+        except Exception as e:
+            logger.error("Failed to toggle timer", error=str(e))
+            await self._safe_disable("Toggle failure")
+            return {"status": "error", "error": str(e)}
+    
+    async def reset_timers(self) -> Dict:
+        """Reset timer - clear config and disable"""
+        try:
+            self.on_time = None
+            self.off_time = None
+            self.is_enabled = False
+            
+            self.scheduler.remove_all_jobs()
+            await self.redis_client.delete("timer:timers", "timer:enabled", "timer:triggers")
+            
+            await self._broadcast_timer_status()
+            
+            logger.info("Timers fully reset")
+            return {"status": "success", "message": "Timers reset"}
+        except Exception as e:
+            logger.error("Failed to reset timers", error=str(e))
+            return {"status": "error", "error": str(e)}
     
     async def stop(self):
-        """Stop the timer loop gracefully"""
-        self._running = False
-        logger.info("Timer loop stopping...")
-        
+        """Stop the scheduler gracefully"""
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+        logger.info("APScheduler stopped")
+    
     async def health_check(self) -> Dict:
-        """
-        Get health status of timer service
-        
-        Returns:
-            Dict with health information
-        """
+        """Health check including scheduler status"""
         return {
-            "status": "healthy" if self._running else "stopped",
-            "running": self._running,
+            "status": "healthy" if self.scheduler.running else "stopped",
+            "running": self.scheduler.running,
             "enabled": self.is_enabled,
-            "timer_count": len(self.timers),
-            "metrics": self.metrics,
-            "check_interval_seconds": TIMER_CHECK_INTERVAL
+            "timer_configured": bool(self.on_time and self.off_time),
+            "metrics": self.metrics
         }

@@ -79,12 +79,11 @@ timer_task: asyncio.Task = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan - startup and shutdown"""
-    global timer_ops, timer_task
+    """Manage application lifespan"""
+    global timer_ops
     
     logger.info("Starting timer-service...")
     
-    # Initialize Redis connection
     try:
         redis_client = await aioredis.from_url(
             f"redis://{REDIS_HOST}:{REDIS_PORT}",
@@ -93,37 +92,23 @@ async def lifespan(app: FastAPI):
             socket_connect_timeout=5
         )
         await redis_client.ping()
-        logger.info("Redis connection established", host=REDIS_HOST, port=REDIS_PORT)
+        logger.info("Redis connection established")
     except Exception as e:
         logger.error("Failed to connect to Redis", error=str(e))
         raise
-        
-    # Initialize timer operations
+    
     timer_ops = TimerOperations(redis_client, API_SERVICE_URL)
-    await timer_ops.initialize()
+    await timer_ops.initialize()  # This now starts APScheduler internally
     
-    # Start timer loop in background
-    timer_task = asyncio.create_task(timer_ops.run_timer_loop())
-    logger.info("Timer loop started in background")
-    
-    logger.info("Timer-service started successfully", port=SERVICE_PORT)
+    logger.info("Timer-service started successfully")
     
     yield
     
     # Shutdown
     logger.info("Shutting down timer-service...")
     await timer_ops.stop()
-    
-    if timer_task and not timer_task.done():
-        timer_task.cancel()
-        try:
-            await timer_task
-        except asyncio.CancelledError:
-            pass
-            
     await redis_client.close()
     logger.info("Timer-service shutdown complete")
-
 
 # Initialize FastAPI app
 app = FastAPI(
