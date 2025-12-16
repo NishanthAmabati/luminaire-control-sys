@@ -259,11 +259,15 @@ const App = () => {
       updateSystemState({ auto_mode: true })
 
       const sceneToRestore = lastAutoSceneRef.current
+      console.log(`sceneToRestore value when switch to auto: ${sceneToRestore}`)
 
       if (sceneToRestore) {
+        console.log("a prev running scene was found, load scene will be executed")
         sendCommand({ type: "load_scene", scene: sceneToRestore })
 
         setTimeout(() => {
+
+          console.log("a prev running scene was found, run scene will be executed")
           sendCommand({ type: "activate_scene", scene: sceneToRestore })
 
           updateSystemState({
@@ -306,9 +310,6 @@ const App = () => {
     setVerticalLinePosition(0)
     setLocalCct(manualCct)
     setLocalIntensity(manualIntensity)
-
-    sendCommand({ type: "set_cct", cct: localCct });
-    sendCommand({ type: "set_intensity", intensity: localIntensity });
 
     setTimeout(() => {
       const minCct = 3500
