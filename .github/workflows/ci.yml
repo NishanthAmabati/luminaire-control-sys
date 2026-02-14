@@ -6,7 +6,7 @@ on:
       commit_sha:
         description: 'Git SHA to checkout for testing'
         required: true
-        default: copilot/fix-real-time-ui-updates
+        default: feat/asyncio-tcp
 
 jobs:
   build:
