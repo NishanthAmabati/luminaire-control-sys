@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=deps /install /usr/local
 ARG APP_PORT
+COPY config.yaml /app/config.yaml
 COPY . /app/api_service
 EXPOSE $APP_PORT
 CMD ["python", "-m", "api_service.main"]

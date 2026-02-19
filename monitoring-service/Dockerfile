@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=deps /install /usr/local
 ARG APP_PORT
+COPY config.yaml /app/config.yaml
 COPY . /app/monitoring_service
 EXPOSE $APP_PORT
 CMD ["python", "-m", "monitoring_service.main"]

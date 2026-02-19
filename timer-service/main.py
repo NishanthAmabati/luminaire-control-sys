@@ -28,7 +28,7 @@ from timer_service.models import SetTimerData, ToggleTimerData, TimersResponse, 
 from timer_service.timer_operations import TimerOperations
 
 # Load configuration from config.yaml
-with open("config.yaml", "r") as f:
+with open("/app/config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 # Get timer service config
