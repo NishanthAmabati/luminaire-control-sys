@@ -18,13 +18,6 @@ group "default" {
   ]
 }
 
-*/
-group "default" {
-  targets = [
-    "timer",
-  ]
-}*/
-
 # Common settings inherited by all services
 target "common" {
   platforms = ["linux/amd64", "linux/arm64"]
@@ -33,7 +26,6 @@ target "common" {
   cache-to   = ["type=gha,mode=max"]
 }
 
-/*
 target "luminaire" {
   inherits = ["common"]
   context  = "./luminaire-service"
@@ -87,7 +79,6 @@ target "webapp" {
     "${DOCKERHUB_USERNAME}/webapp:${GIT_SHA}",
   ]
 }
-*/
 
 target "timer" {
   inherits = ["common"]
