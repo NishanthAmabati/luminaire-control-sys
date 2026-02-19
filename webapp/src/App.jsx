@@ -769,17 +769,14 @@ const App = () => {
               updateDevices(data.data.devices);
             } else if (data.data.ip) {
               // Individual device update
-              updateDevices({
-                ...devices,
-                [data.data.ip]: {
+              updateDevices(data.data.ip, {
                   cw: data.data.cw,
                   ww: data.data.ww,
                   connected: data.data.connected,
                   last_seen: data.data.last_seen,
-                },
-              });
-            }
-          } else if (data.type === "live_update") {
+                });
+              }
+            } else if (data.type === "live_update") {
               // Make isTimerEnabled optional — default to current UI state
               if (data.data.isTimerEnabled !== undefined) {
                 if (typeof data.data.isTimerEnabled === "boolean") {
@@ -1854,8 +1851,8 @@ const App = () => {
               </ul>
               <div className="device-summary">
                 {deviceSearchQuery
-                  ? `Showing ${filteredDevices.length} of ${Object.keys(devices).length} luminaires`
-                  : `Total Luminaires: ${Object.keys(devices).length}`}
+                  ? `Showing ${filteredDevices.length} of ${Object.values(devices).filter(d => d.connected).length} luminaires`
+                  : `Total Luminaires: ${Object.values(devices).filter(d => d.connected).length}`}
               </div>
             </div>
           </div>

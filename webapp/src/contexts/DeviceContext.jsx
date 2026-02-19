@@ -19,27 +19,26 @@ export const DeviceProvider = ({ children }) => {
       [ip]: {
         ...prev[ip],
         ...deviceData,
+        connected: deviceData.connected !== undefined ? deviceData.connected : (prev[ip]?.connected ?? false),
       },
     }))
   }, [])
 
   const updateDevices = useCallback((devicesData) => {
-    setDevices(devicesData)
+    setDevices((prev) => {
+      if (Array.isArray(devicesData)) {
+        const obj = {}
+        devicesData.forEach(d => { if(d.ip) obj[d.ip] = d })
+        return { ...prev, ...obj }
+      }
+      return { ...prev, ...devicesData }
+    })
   }, [])
 
-  const clearDevices = useCallback(() => {
-    setDevices({})
-  }, [])
+  const clearDevices = useCallback(() => setDevices({}), [])
 
   return (
-    <DeviceContext.Provider
-      value={{
-        devices,
-        updateDevice,
-        updateDevices,
-        clearDevices,
-      }}
-    >
+    <DeviceContext.Provider value={{ devices, updateDevice, updateDevices, clearDevices }}>
       {children}
     </DeviceContext.Provider>
   )
