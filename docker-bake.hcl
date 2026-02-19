@@ -5,7 +5,7 @@ variable "DOCKERHUB_USERNAME" {
 variable "GIT_SHA" {
   default = ""
 }
-/*
+
 group "default" {
   targets = [
     "luminaire",
@@ -17,13 +17,13 @@ group "default" {
     "webapp",
   ]
 }
-*/
 
+*/
 group "default" {
   targets = [
     "timer",
   ]
-}
+}*/
 
 # Common settings inherited by all services
 target "common" {
