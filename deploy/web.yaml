@@ -1,0 +1,13 @@
+services:  
+  webapp:
+    image: nishanthambati/webapp
+    container_name: webapp
+    ports:
+      - 80:80
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://webapp/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s

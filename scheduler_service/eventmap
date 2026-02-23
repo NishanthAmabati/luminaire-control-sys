@@ -1,0 +1,53 @@
+input events:
+system:power
+system:mode
+manual:update
+scheduler:scene_activated
+scheduler:scene_stopped
+timer:*
+
+output event:
+scheduler:state
+scheduler:available_scenes
+scheduler:runtime
+scheduler:scene_completed
+
+scheduler:available_scenes   (once on startup)
+scheduler:state              (on mode/scene transitions)
+scheduler:runtime            (periodic updates)
+
+event: "scheduler:state"
+payload:
+{
+  "system_on": true,
+  "mode": "AUTO",
+  "available_scenes": ["office", "lab"],
+  "loaded_scene": "office",
+  "running_scene": "office",
+  "progress": 62.5,
+  "cct": 4800,
+  "lux": 520
+}
+
+event: "scheduler:runtime"
+paylod:
+{
+  "cct": 4800,
+  "lux": 520,
+  "progress": 62.5
+}
+
+event: "scheduler:scene_loaded"
+{
+  "scene": "office",
+  "points": [
+    {"time": "00:00", "cct": 3000, "lux": 100},
+    ...
+  ]
+}
+
+event: "scheduler:scene_activated"
+payload:
+{
+  "scene": "office"
+}

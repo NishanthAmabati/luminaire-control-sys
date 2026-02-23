@@ -1,0 +1,747 @@
+@import "tailwindcss";
+
+:root {
+  --font-ui: "SF Pro Display", "Segoe UI", "Inter", sans-serif;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 8px;
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --elevation-2: 0 6px 20px rgba(0, 0, 0, 0.16);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --page-bg: #e7e9ed;
+  --card-bg: #f6f7f9;
+  --card-bg-soft: #f0f2f5;
+  --border-color: #dde1e8;
+  --text-primary: #1d2129;
+  --text-secondary: #4f5663;
+  --text-muted: #7e8796;
+  --accent-blue: #2f8de8;
+  --accent-orange: #f97316;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --slider-track: #d7dce5;
+  --action-strong-bg: color-mix(in oklab, var(--accent-blue) 70%, black 7%);
+  --action-strong-text: #ffffff;
+  --action-neutral-bg: color-mix(in oklab, var(--card-bg-soft) 90%, black 4%);
+  --action-neutral-text: var(--text-secondary);
+}
+
+.dark {
+  --page-bg: #07090d;
+  --card-bg: #17191e;
+  --card-bg-soft: #1f2228;
+  --border-color: #262a33;
+  --text-primary: #f3f4f6;
+  --text-secondary: #c3c8d1;
+  --text-muted: #7a818f;
+  --accent-blue: #3ba0ff;
+  --accent-orange: #f59e0b;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --slider-track: #2f3440;
+  --action-strong-bg: color-mix(in oklab, var(--accent-blue) 16%, white 84%);
+  --action-strong-text: #1f2937;
+  --action-neutral-bg: color-mix(in oklab, var(--card-bg-soft) 46%, white 54%);
+  --action-neutral-text: #121722;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    transition: background-color var(--duration-base) var(--ease-standard), color var(--duration-base) var(--ease-standard);
+  }
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.05), transparent 36%),
+    linear-gradient(transparent 31px, color-mix(in oklab, var(--border-color) 50%, transparent) 32px),
+    linear-gradient(90deg, transparent 31px, color-mix(in oklab, var(--border-color) 45%, transparent) 32px),
+    var(--page-bg);
+  background-size: auto, 32px 32px, 32px 32px, auto;
+}
+
+.header-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--card-bg) 88%, white 8%) 0%, color-mix(in oklab, var(--card-bg) 92%, black 8%) 54%, color-mix(in oklab, var(--card-bg) 86%, white 6%) 100%);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in oklab, white 45%, transparent), inset 0 -1px 0 color-mix(in oklab, black 25%, transparent);
+}
+
+.app-title-gradient {
+  color: var(--text-secondary);
+  font-size: clamp(1.7rem, 3vw, 3rem);
+}
+
+.system-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--card-bg-soft);
+}
+
+.theme-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.34rem 0.42rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--card-bg-soft);
+}
+
+.theme-selector-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+
+.theme-selector-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  padding: 0 0.35rem;
+  min-width: 172px;
+  height: 32px;
+}
+
+.theme-selector-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.theme-selector-input {
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  cursor: pointer;
+}
+
+.toggle-label {
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+  color: var(--text-secondary);
+}
+
+.toggle-pill {
+  width: 44px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: background-color 180ms ease;
+  cursor: pointer;
+}
+
+.toggle-pill.on {
+  background: color-mix(in oklab, var(--success) 78%, black 8%);
+}
+
+.toggle-pill.off {
+  background: color-mix(in oklab, var(--text-muted) 40%, white 10%);
+}
+
+.toggle-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 180ms ease;
+}
+
+.toggle-pill.on .toggle-knob {
+  transform: translateX(20px);
+}
+
+.icon-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--card-bg-soft);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.icon-toggle:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent-blue) 40%, var(--border-color));
+}
+
+.panel {
+  background:
+    linear-gradient(155deg, color-mix(in oklab, var(--card-bg) 90%, white 8%) 0%, color-mix(in oklab, var(--card-bg) 94%, black 8%) 52%, color-mix(in oklab, var(--card-bg) 88%, white 6%) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in oklab, white 35%, transparent), inset 0 -1px 0 color-mix(in oklab, black 18%, transparent);
+  animation: panel-enter 280ms var(--ease-standard);
+}
+
+.panel-header {
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.68rem 0.9rem;
+}
+
+.panel-content {
+  padding: 0.9rem;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 1.34rem;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.panel-title-icon {
+  color: var(--accent-blue);
+}
+
+.soft-inset {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--card-bg-soft);
+}
+
+.tab-shell {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: color-mix(in oklab, var(--card-bg-soft) 95%, black 3%);
+  padding: 4px;
+}
+
+.tab-btn {
+  border: 0;
+  border-radius: var(--radius-sm);
+  height: 36px;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  background: transparent;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.tab-btn.active {
+  color: var(--text-primary);
+  background: color-mix(in oklab, white 8%, transparent);
+}
+
+.field-label {
+  font-size: 0.81rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+
+.metric-chip {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--card-bg-soft);
+}
+
+.status-chip {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: color-mix(in oklab, var(--card-bg-soft) 85%, black 2%);
+  transition: border-color var(--duration-base) var(--ease-standard), background-color var(--duration-base) var(--ease-standard);
+}
+
+.timer-shell {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.6rem;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--card-bg-soft) 90%, white 6%),
+      color-mix(in oklab, var(--card-bg) 95%, black 8%)
+    );
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 22%, transparent);
+}
+
+.timer-shell.enabled {
+  border-color: color-mix(in oklab, var(--success) 34%, var(--border-color) 66%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 24%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--success) 12%, transparent);
+}
+
+.chart-shell {
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(155deg, color-mix(in oklab, var(--card-bg) 90%, white 8%) 0%, color-mix(in oklab, var(--card-bg) 94%, black 7%) 52%, color-mix(in oklab, var(--card-bg) 88%, white 6%) 100%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1), inset 0 1px 0 color-mix(in oklab, white 40%, transparent);
+}
+
+.scene-progress-shell {
+  position: relative;
+  height: 14px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--card-bg-soft) 97%, white 3%), color-mix(in oklab, var(--card-bg) 95%, black 10%));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.scene-progress-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent-blue) 70%, black 5%), color-mix(in oklab, var(--accent-blue) 82%, white 8%));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+.scene-progress-fill::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 55%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04));
+}
+
+.data-text {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.motion-soft {
+  transition: all var(--duration-base) var(--ease-standard);
+}
+
+input[type='time'],
+select,
+button,
+input[type='text'] {
+  font-family: inherit;
+}
+
+button:not(:disabled),
+.tab-btn:not(:disabled),
+select:not(:disabled),
+.theme-selector-input:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+.tab-btn:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+.time-select-pair {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--card-bg-soft) 92%, white 6%),
+      color-mix(in oklab, var(--card-bg) 95%, black 6%)
+    );
+  padding: 4px 6px;
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 25%, transparent);
+}
+
+.time-trigger {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--card-bg-soft) 92%, white 6%),
+      color-mix(in oklab, var(--card-bg) 95%, black 8%)
+    );
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 20%, transparent);
+}
+
+.time-palette {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 420px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--card-bg-soft) 94%, white 5%),
+      color-mix(in oklab, var(--card-bg) 96%, black 8%)
+    );
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 color-mix(in oklab, white 18%, transparent);
+  padding: 14px;
+}
+
+.time-palette-title {
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.time-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.time-edit-label {
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.time-dial {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px 8px;
+  background: color-mix(in oklab, var(--card-bg-soft) 88%, black 5%);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  justify-items: center;
+  gap: 7px;
+}
+
+.time-dial-step {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--action-neutral-bg);
+  color: var(--action-neutral-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-dial-core {
+  position: relative;
+  width: 126px;
+  height: 126px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--accent-blue) 35%, var(--border-color) 65%);
+  background:
+    radial-gradient(circle at 30% 25%, color-mix(in oklab, white 20%, transparent), transparent 48%),
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--card-bg) 88%, white 8%),
+      color-mix(in oklab, var(--card-bg-soft) 92%, black 8%)
+    );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 25%, transparent);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.time-dial-track {
+  position: absolute;
+  width: 98px;
+  height: 98px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--accent-blue) 35%, var(--border-color) 65%);
+  opacity: 0.8;
+}
+
+.time-dial-thumb-wrap {
+  position: absolute;
+  width: 98px;
+  height: 98px;
+  transform-origin: center;
+}
+
+.time-dial-thumb {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--card-bg) 80%, transparent);
+}
+
+.time-dial-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.time-dial-value {
+  margin-top: 2px;
+  font-size: 1.6rem;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-number-input {
+  width: 100%;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.time-palette-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.time-action-btn {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg-soft);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.time-action-btn.primary {
+  background: var(--action-strong-bg);
+  border-color: color-mix(in oklab, var(--action-strong-bg) 75%, var(--border-color) 25%);
+  color: var(--action-strong-text);
+}
+
+.toast-error button {
+  cursor: pointer;
+}
+
+.toast-success button {
+  cursor: pointer;
+}
+
+.time-action-btn:disabled {
+  opacity: 0.55;
+}
+
+.toast-error {
+  min-width: 380px;
+}
+
+.toast-success {
+  min-width: 380px;
+}
+
+.toast-error-progress {
+  position: absolute;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #fca5a5, #ef4444);
+  transform-origin: right;
+  animation-name: toast-progress-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.toast-success-progress {
+  position: absolute;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #a7f3d0, #34d399);
+  transform-origin: right;
+  animation-name: toast-progress-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.time-select {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.time-separator {
+  color: var(--text-muted);
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+input[type='range'].slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 7px;
+  border-radius: 999px;
+  outline: none;
+}
+
+input[type='range'].slider-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f8fafc;
+  border: 2px solid;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.24);
+}
+
+.dark input[type='range'].slider-thumb::-webkit-slider-thumb {
+  background: #e5e7eb;
+}
+
+input[type='range'].slider-thumb.accent-blue-500::-webkit-slider-thumb {
+  border-color: var(--accent-blue);
+}
+
+input[type='range'].slider-thumb.accent-orange-500::-webkit-slider-thumb {
+  border-color: var(--accent-orange);
+}
+
+input[type='range'].slider-thumb::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f8fafc;
+  border: 2px solid;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.24);
+}
+
+.dark input[type='range'].slider-thumb::-moz-range-thumb {
+  background: #e5e7eb;
+}
+
+input[type='range'].slider-thumb.accent-blue-500::-moz-range-thumb {
+  border-color: var(--accent-blue);
+}
+
+input[type='range'].slider-thumb.accent-orange-500::-moz-range-thumb {
+  border-color: var(--accent-orange);
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-progress-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

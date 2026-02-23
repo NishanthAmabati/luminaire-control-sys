@@ -1,0 +1,16 @@
+src/
+├── api/              # HTTP client (Axios/Fetch) and API endpoint definitions
+├── assets/           # Images, logos, and global fonts
+├── components/       # "Dumb" UI components (Buttons, Inputs, Cards)
+├── config/           # App constants, chart themes, and API URLs
+├── features/         # "Smart" feature modules (e.g., ControlPanel, StatusBoard)
+│   ├── controls/     # Components & logic for the Control Panel
+│   ├── monitoring/   # Components & logic for Charts and Status
+├── hooks/            # Global custom hooks (e.g., useApi, usePolling)
+├── layouts/          # Page layout structures (e.g., DashboardLayout)
+├── types/            # TypeScript interfaces and type definitions
+├── utils/            # Helper functions (e.g., unit converters, date formatters)
+├── App.tsx           # Main entry point
+└── main.tsx          # React mounting point
+
+futre chart feature: Mission-control style: dark graphite with neon accents, live ticks, sparkline strips.

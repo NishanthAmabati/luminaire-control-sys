@@ -1,0 +1,31 @@
+    async def tick(self):
+        if not self.runtime.system_on:
+            return
+
+        if self.runtime.mode == "MANUAL":
+            result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
+            if result:
+                self.runtime.cw, self.runtime.ww = result["cw"], result["ww"]
+                log.debug(f"recived: CW={result['cw']}, WW={result['ww']}")
+            await self.luminaire_client.send(self.runtime.cw, self.runtime.ww)
+            await self.publish_runtime()
+
+        if self.runtime.mode == "AUTO" and self.runtime.running_scene:
+            prev = (self.runtime.cct, self.runtime.lux, self.runtime.progress)            
+            await self.interpolator.compute_current_values()
+            result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
+            if result:
+                self.runtime.cw = result["cw"]
+                self.runtime.ww = result["ww"]
+                log.debug(f"received: CW={result['cw']}, WW={result['ww']}")
+            await self.luminaire_client.send(self.runtime.cw, self.runtime.ww)
+            curr = (self.runtime.cct, self.runtime.lux, self.runtime.progress)
+            '''
+            if (
+                abs(curr[0] - prev[0]) > 0.5 or
+                abs(curr[1] - prev[1]) > 0.5 or
+                abs(curr[2] - prev[2]) > 0.1
+            ):
+            '''
+            if curr != prev:
+                await self.publish_runtime()

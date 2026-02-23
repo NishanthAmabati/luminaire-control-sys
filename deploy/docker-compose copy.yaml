@@ -1,0 +1,179 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    volumes:
+      - redis-data:/data
+    environment:
+      - TZ=Asia/Kolkata
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  api-service:
+    image: nishanthambati/api-service
+    container_name: api-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - 8000:8000
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://api-service:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      luminaire-service:
+        condition: service_healthy
+      scheduler-service:
+        condition: service_healthy
+      timer-service:
+        condition: service_healthy
+    restart: always
+
+  luminaire-service:
+    image: nishanthambati/luminaire-service
+    container_name: luminaire-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - 5250:5250
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+    restart: always
+
+  scheduler-service:
+    image: nishanthambati/scheduler-service
+    container_name: scheduler-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./scenes:/app/scenes:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://scheduler-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+    restart: always
+
+  timer-service:
+    image: nishanthambati/timer-service
+    container_name: timer-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://timer-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+    restart: always
+
+  monitoring-service:
+    image: nishanthambati/monitoring-service
+    container_name: monitoring-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://monitoring-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+        redis:
+          condition: service_healthy
+    restart: always
+
+  websocket-service:
+    image: nishanthambati/websocket-service
+    container_name: websocket-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - 5001:5001
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+        redis:
+          condition: service_healthy
+    restart: always
+
+  webapp:
+    image: nishanthambati/webapp
+    container_name: webapp
+    ports:
+      - 80:80
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://webapp/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      websocket-service:
+        condition: service_started
+    restart: always
+
+  watchdog-service:
+    image: nishanthambati/watchdog-service
+    container_name: watchdog-service
+    environment:
+      - TZ=Asia/Kolkata
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # - ./watchdog-service/config.yaml:/app/config.yaml:ro
+    # depends_on:
+    #   - redis
+    #   - scheduler-service
+    #   - luminaire-service
+    #   - timer-service
+    #   - monitoring-service
+    #   - websocket-service
+    restart: always
+
+volumes:
+   redis-data:

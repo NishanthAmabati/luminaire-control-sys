@@ -1,0 +1,27 @@
+    async def compute_current_values(self):
+        if not self.runtime.running_scene:
+            return
+        
+        scene = self.scenes.get(self.runtime.running_scene)
+        if not scene:
+            return
+        
+        now = dt.now(self.tz).time()
+        now_sec = now.hour * 3600 + now.minute * 60 + now.second
+        for i in range(len(scene)):
+            curr = scene[i]
+            next_ = scene[(i + 1) % len(scene)]
+
+            t1 = curr["time"].hour * 60 + curr["time"].minute
+            t2 = next_["time"].hour * 60 + next_["time"].minute
+
+            if t1 <= now_sec < t2 or (t2 < t1 and now_sec >= t1):
+                span = (t2 - t1) % 1440
+                elapsed = (now_sec - t1) % 1440
+                factor = elapsed / span if span else 0
+
+                self.runtime.cct = curr["cct"] + (next_["cct"] - curr["cct"]) * factor
+                self.runtime.lux = curr["lux"] + (next_["lux"] - curr["lux"]) * factor
+                self.runtime.progress = (now_sec / 1440) * 100
+                log.info(f"computed scene values: cct: {self.runtime.cct}, lux: {self.runtime.lux}, scene progress: {self.runtime.progress}")
+                return

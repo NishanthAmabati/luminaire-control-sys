@@ -1,0 +1,115 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  luminaire-service:
+    build:
+      context: ..
+      dockerfile: luminaire_service/Dockerfile
+    container_name: luminaire-service
+    env_file:
+      - ../.env
+    ports:
+      - "5250:5250"
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  state-service:
+    build:
+      context: ..
+      dockerfile: state_service/Dockerfile
+    container_name: state-service
+    env_file:
+      - ../.env
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  scheduler-service:
+    build:
+      context: ..
+      dockerfile: scheduler_service/Dockerfile
+    container_name: scheduler-service
+    env_file:
+      - ../.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  timer-service:
+    build:
+      context: ..
+      dockerfile: timer_service/Dockerfile
+    container_name: timer-service
+    env_file:
+      - ../.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  metrics-service:
+    build:
+      context: ..
+      dockerfile: metrics_service/Dockerfile
+    container_name: metrics-service
+    env_file:
+      - ../.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  event-gateway:
+    build:
+      context: ..
+      dockerfile: event_gateway/Dockerfile
+    container_name: event-gateway
+    env_file:
+      - ../.env
+    ports:
+      - "8088:8088"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  webapp:
+    build:
+      context: ..
+      dockerfile: webapp/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_EVENT_GATEWAY_URL: ${VITE_EVENT_GATEWAY_URL}
+        VITE_UI_CONFIG_URL: ${VITE_UI_CONFIG_URL}
+    container_name: webapp
+    env_file:
+      - ../.env
+    ports:
+      - "80:80"
+    depends_on:
+      event-gateway:
+        condition: service_started
+    restart: always
+
+volumes:
+  redis-data:
