@@ -81,7 +81,6 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
     : [];
 
   const currentY = hasProfile ? Number(interpolate(currentHour).toFixed(2)) : currentVal;
-  const trailingWindow = Math.max(4, Math.floor(denseData.length / 10));
   // const rollingMean: [number, number][] = hasProfile
   //   ? denseData.map((point, idx) => {
   //       const from = Math.max(0, idx - trailingWindow);
@@ -98,7 +97,6 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
   //       return [point[0], Number(y.toFixed(2))];
   //     })
   //   : [];
-  const profileSample = hasProfile ? denseData.filter((_, idx) => idx % 4 === 0) : [];
   const manualTrace: [number, number][] = !hasProfile && !clearAll
     ? Array.from({ length: 25 }, (_, i) => [i, currentVal] as [number, number])
     : [];
@@ -350,14 +348,6 @@ const getIntensityGradient = () =>
       //   smooth: 0.25,
       //   symbol: 'none',
       //   lineStyle: { color: `${tokens.accentOrange}`, width: 1.2, type: 'dotted', opacity: hasProfile && !clearAll ? 0.7 : 0 },
-      //   emphasis: { disabled: true },
-      // },
-      // {
-      //   name: 'Sample Points',
-      //   type: 'scatter',
-      //   data: profileSample,
-      //   symbolSize: 4,
-      //   itemStyle: { color: tokens.textMuted, opacity: hasProfile && !clearAll ? 0.65 : 0 },
       //   emphasis: { disabled: true },
       // },
       {
