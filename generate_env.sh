@@ -13,7 +13,12 @@ need_cmd() {
 get_yaml() {
   local query="$1"
   if need_cmd yq; then
-    yq -r "$query // \"\"" "$CONFIG_PATH"
+    local val
+    val="$(yq -r "$query" "$CONFIG_PATH")"
+    if [ "$val" = "null" ]; then
+      val=""
+    fi
+    echo "$val"
     return
   fi
 
@@ -39,6 +44,43 @@ if isinstance(value, (dict, list)):
     print("")
 else:
     print(value)
+PY
+}
+
+get_yaml_list() {
+  local query="$1"
+  if need_cmd yq; then
+    local val
+    val="$(yq -r "$query | join(\",\")" "$CONFIG_PATH")"
+    if [ "$val" = "null" ]; then
+      val=""
+    fi
+    echo "$val"
+    return
+  fi
+
+  python3 - <<PY
+import yaml
+path = "$CONFIG_PATH"
+query = "$query"
+
+def get_value(obj, parts):
+    cur = obj
+    for part in parts:
+        if not isinstance(cur, dict):
+            return []
+        cur = cur.get(part, [])
+    return cur if cur is not None else []
+
+with open(path, "r") as f:
+    data = yaml.safe_load(f) or {}
+
+parts = [p for p in query.strip('.').split('.') if p]
+value = get_value(data, parts)
+if isinstance(value, list):
+    print(",".join(str(v) for v in value if v is not None))
+else:
+    print("")
 PY
 }
 
@@ -93,7 +135,7 @@ STATE_API_PORT="$(get_yaml '.services.state.fastAPI.port')"
 STATE_API_LOOP="$(get_yaml '.services.state.fastAPI.loop')"
 STATE_API_LOG_LEVEL="$(get_yaml '.services.state.fastAPI.log_level')"
 STATE_API_ACCESS_LOG="$(get_yaml '.services.state.fastAPI.access_log')"
-STATE_CORS_ORIGINS="$(get_yaml '.services.state.cors_origins | join(\",\")')"
+STATE_CORS_ORIGINS="$(get_yaml_list '.services.state.cors_origins')"
 STATE_REDIS_PUB="$(get_yaml '.services.state.redis.pub')"
 SCHEDULER_REDIS_PUB="$(get_yaml '.services.scheduler.redis.pub')"
 METRICS_REDIS_PUB="$(get_yaml '.services.metrics.redis.pub')"
