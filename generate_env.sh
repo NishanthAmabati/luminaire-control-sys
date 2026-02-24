@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG_PATH="./config.yaml"
 ENV_PATH="$ROOT_DIR/.env"
-BUILD_ARGS_PATH="$ROOT_DIR/deploy/build-args.env"
+BUILD_ARGS_PATH="$ROOT_DIR/build-args.env"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1
