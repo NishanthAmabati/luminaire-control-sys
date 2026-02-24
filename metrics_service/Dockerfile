@@ -24,6 +24,14 @@ COPY --from=deps /install /usr/local
 COPY metrics_service /app/metrics_service
 WORKDIR /app/metrics_service
 
+ARG REDIS_URL
+ARG METRICS_INTERVAL
+ARG METRICS_REDIS_PUB
+
+ENV REDIS_URL=$REDIS_URL \
+    METRICS_INTERVAL=$METRICS_INTERVAL \
+    METRICS_REDIS_PUB=$METRICS_REDIS_PUB
+
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "main.py"]
