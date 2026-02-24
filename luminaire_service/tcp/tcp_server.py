@@ -52,6 +52,9 @@ class TCPServer:
 
     async def stop(self):
         log.info("stopping TCP server...")
+        if not hasattr(self, "server") or self.server is None:
+            log.info("TCP server was not started")
+            return
         self.server.close()
         await self.server.wait_closed()
         log.info("stopped TCP server")

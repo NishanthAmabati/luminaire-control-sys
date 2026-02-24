@@ -25,7 +25,7 @@ async def startFastAPI(app):
         port=int(require_env("LUMINAIRE_API_PORT")),
         loop=require_env("LUMINAIRE_API_LOOP"),
         log_level=require_env("LUMINAIRE_API_LOG_LEVEL"),
-        access_log=parse_bool(require_env("LUMINAIRE_API_ACCESS_LOG")),
+        access_log=parse_bool(os.getenv("LUMINAIRE_API_ACCESS_LOG", "false")),
     )
     server = uvicorn.Server(fastAPIconfig)
     await server.serve()
