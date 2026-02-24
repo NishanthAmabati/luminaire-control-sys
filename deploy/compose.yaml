@@ -1,0 +1,95 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  luminaire-service:
+    image: ${DOCKERHUB_USERNAME}/luminaire-service:latest
+    container_name: luminaire-svc
+    ports:
+      - "5250:5250"
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  state-service:
+    image: ${DOCKERHUB_USERNAME}/state-api:latest
+    container_name: state-api
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://state-service:8001/state || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  scheduler-service:
+    image: ${DOCKERHUB_USERNAME}/scheduler-service:latest
+    container_name: scheduler-svc
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  timer-service:
+    image: ${DOCKERHUB_USERNAME}/timer-service:latest
+    container_name: timer-svc
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  metrics-service:
+    image: ${DOCKERHUB_USERNAME}/metrics-service:latest
+    container_name: metrics-svc
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  event-gateway:
+    image: ${DOCKERHUB_USERNAME}/event-gw:latest
+    container_name: event-gw
+    ports:
+      - "8088:8088"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  webapp:
+    image: ${DOCKERHUB_USERNAME}/web:latest
+    container_name: webapp
+    ports:
+      - "80:80"
+    depends_on:
+      event-gateway:
+        condition: service_started
+    restart: always
+
+volumes:
+  redis-data:

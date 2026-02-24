@@ -1,0 +1,155 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  luminaire-service:
+    build:
+      context: ..
+      dockerfile: luminaire_service/Dockerfile
+      args:
+        REDIS_URL: ${REDIS_URL}
+        LUMINAIRE_TCP_HOST: ${LUMINAIRE_TCP_HOST}
+        LUMINAIRE_TCP_PORT: ${LUMINAIRE_TCP_PORT}
+        LUMINAIRE_REDIS_PUB: ${LUMINAIRE_REDIS_PUB}
+        LUMINAIRE_API_HOST: ${LUMINAIRE_API_HOST}
+        LUMINAIRE_API_PORT: ${LUMINAIRE_API_PORT}
+        LUMINAIRE_API_LOOP: ${LUMINAIRE_API_LOOP}
+        LUMINAIRE_API_LOG_LEVEL: ${LUMINAIRE_API_LOG_LEVEL}
+        LUMINAIRE_API_ACCESS_LOG: ${LUMINAIRE_API_ACCESS_LOG}
+    container_name: luminaire-service
+    ports:
+      - "5250:5250"
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  state-service:
+    build:
+      context: ..
+      dockerfile: state_service/Dockerfile
+      args:
+        REDIS_URL: ${REDIS_URL}
+        STATE_API_HOST: ${STATE_API_HOST}
+        STATE_API_PORT: ${STATE_API_PORT}
+        STATE_API_LOOP: ${STATE_API_LOOP}
+        STATE_API_LOG_LEVEL: ${STATE_API_LOG_LEVEL}
+        STATE_API_ACCESS_LOG: ${STATE_API_ACCESS_LOG}
+        STATE_REDIS_PUB: ${STATE_REDIS_PUB}
+        SCHEDULER_REDIS_PUB: ${SCHEDULER_REDIS_PUB}
+        METRICS_REDIS_PUB: ${METRICS_REDIS_PUB}
+    container_name: state-service
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  scheduler-service:
+    build:
+      context: ..
+      dockerfile: scheduler_service/Dockerfile
+      args:
+        REDIS_URL: ${REDIS_URL}
+        TIMEZONE: ${TIMEZONE}
+        SCHEDULER_SCENES_DIR: ${SCHEDULER_SCENES_DIR}
+        SCHEDULER_INTERVAL: ${SCHEDULER_INTERVAL}
+        SCHEDULER_REDIS_PUB: ${SCHEDULER_REDIS_PUB}
+        STATE_REDIS_PUB: ${STATE_REDIS_PUB}
+        SCHEDULER_LUMINAIRE_URL: ${SCHEDULER_LUMINAIRE_URL}
+        SCALES_CCT_MIN: ${SCALES_CCT_MIN}
+        SCALES_CCT_MAX: ${SCALES_CCT_MAX}
+        SCALES_LUX_MIN: ${SCALES_LUX_MIN}
+        SCALES_LUX_MAX: ${SCALES_LUX_MAX}
+    container_name: scheduler-service
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  timer-service:
+    build:
+      context: ..
+      dockerfile: timer_service/Dockerfile
+      args:
+        REDIS_URL: ${REDIS_URL}
+        TIMEZONE: ${TIMEZONE}
+        TIMER_REDIS_PUB: ${TIMER_REDIS_PUB}
+        STATE_REDIS_PUB: ${STATE_REDIS_PUB}
+        TIMER_STATE_SERVICE_URL: ${TIMER_STATE_SERVICE_URL}
+    container_name: timer-service
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  metrics-service:
+    build:
+      context: ..
+      dockerfile: metrics_service/Dockerfile
+      args:
+        REDIS_URL: ${REDIS_URL}
+        METRICS_INTERVAL: ${METRICS_INTERVAL}
+        METRICS_REDIS_PUB: ${METRICS_REDIS_PUB}
+    container_name: metrics-service
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  event-gateway:
+    build:
+      context: ..
+      dockerfile: event_gateway/Dockerfile
+      args:
+        GATEWAY_PORT: ${GATEWAY_PORT}
+        GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL}
+        GATEWAY_STATE_SERVICE_URL: ${GATEWAY_STATE_SERVICE_URL}
+        GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL}
+        GATEWAY_REDIS_RECONNECT_MS: ${GATEWAY_REDIS_RECONNECT_MS}
+        GATEWAY_CHANNEL_SCHEDULER: ${GATEWAY_CHANNEL_SCHEDULER}
+        GATEWAY_CHANNEL_LUMINAIRES: ${GATEWAY_CHANNEL_LUMINAIRES}
+        GATEWAY_CHANNEL_TIMER: ${GATEWAY_CHANNEL_TIMER}
+        GATEWAY_CHANNEL_METRICS: ${GATEWAY_CHANNEL_METRICS}
+        GATEWAY_HEARTBEAT_MS: ${GATEWAY_HEARTBEAT_MS}
+        GATEWAY_LATENCY_INTERVAL_MS: ${GATEWAY_LATENCY_INTERVAL_MS}
+    container_name: event-gateway
+    ports:
+      - "8088:8088"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  webapp:
+    build:
+      context: ..
+      dockerfile: webapp/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_EVENT_GATEWAY_URL: ${VITE_EVENT_GATEWAY_URL}
+        VITE_UI_CONFIG_URL: ${VITE_UI_CONFIG_URL}
+    container_name: webapp
+    ports:
+      - "80:80"
+    depends_on:
+      event-gateway:
+        condition: service_started
+    restart: always
+
+volumes:
+  redis-data:
