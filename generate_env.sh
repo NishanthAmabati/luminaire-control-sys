@@ -93,6 +93,7 @@ STATE_API_PORT="$(get_yaml '.services.state.fastAPI.port')"
 STATE_API_LOOP="$(get_yaml '.services.state.fastAPI.loop')"
 STATE_API_LOG_LEVEL="$(get_yaml '.services.state.fastAPI.log_level')"
 STATE_API_ACCESS_LOG="$(get_yaml '.services.state.fastAPI.access_log')"
+STATE_CORS_ORIGINS="$(get_yaml '.services.state.cors_origins | join(\",\")')"
 STATE_REDIS_PUB="$(get_yaml '.services.state.redis.pub')"
 SCHEDULER_REDIS_PUB="$(get_yaml '.services.scheduler.redis.pub')"
 METRICS_REDIS_PUB="$(get_yaml '.services.metrics.redis.pub')"
@@ -103,6 +104,7 @@ lines+=(
   "STATE_API_LOOP=$STATE_API_LOOP"
   "STATE_API_LOG_LEVEL=$STATE_API_LOG_LEVEL"
   "STATE_API_ACCESS_LOG=$STATE_API_ACCESS_LOG"
+  "CORS_ORIGINS=$STATE_CORS_ORIGINS"
   "STATE_REDIS_PUB=$STATE_REDIS_PUB"
   "SCHEDULER_REDIS_PUB=$SCHEDULER_REDIS_PUB"
   "METRICS_REDIS_PUB=$METRICS_REDIS_PUB"
@@ -169,8 +171,8 @@ lines+=(
   "GATEWAY_LATENCY_INTERVAL_MS=$GATEWAY_LATENCY_INTERVAL_MS"
 )
 
-VITE_API_URL="http://127.0.0.1:$STATE_API_PORT"
-VITE_EVENT_GATEWAY_URL="http://127.0.0.1:$GATEWAY_PORT"
+VITE_API_URL="http://localhost:$STATE_API_PORT"
+VITE_EVENT_GATEWAY_URL="http://localhost:$GATEWAY_PORT"
 VITE_UI_CONFIG_URL="/config.yaml"
 
 lines+=(
