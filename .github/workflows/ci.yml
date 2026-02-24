@@ -36,6 +36,7 @@ jobs:
         run: |
           pwd
           bash generate_env.sh
+          cat ../build-args.env
           cat ../build-args.env >> $GITHUB_ENV
 
       - name: login to registry dockerhub
