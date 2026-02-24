@@ -14,6 +14,15 @@ bash deploy/generate_env.sh
 docker compose -f deploy/docker-compose.yaml up --build
 ```
 
+**CI: Select Targets to Build**
+Manual workflow runs can build only selected services by setting `targets`.
+Examples:
+```bash
+targets=web,event-gw
+targets=python
+targets=default
+```
+
 **Ports**
 - `webapp` → `80:80`
 - `state-service` → `8001:8001`

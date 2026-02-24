@@ -7,6 +7,10 @@ on:
         description: "git commit sha to checkout"
         required: true
         default: feature/redis-pubsub
+      targets:
+        description: "bake targets (comma-separated), or group name (e.g. default, python)"
+        required: false
+        default: default
 
 jobs:
   build:
@@ -38,6 +42,18 @@ jobs:
           bash generate_env.sh
           cat ../vars.json
 
+      - name: resolve bake targets
+        id: targets
+        shell: bash
+        run: |
+          raw="${{ github.event.inputs.targets }}"
+          trimmed="$(echo "${raw}" | tr -d '[:space:]')"
+          if [ -z "$trimmed" ] || [ "$trimmed" = "default" ]; then
+            echo "list=default" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "list=$trimmed" >> "$GITHUB_OUTPUT"
+
       - name: login to registry dockerhub
         uses: docker/login-action@v3
         with:
@@ -51,6 +67,7 @@ jobs:
             docker-bake.hcl
             ../vars.json
           push: true
+          targets: ${{ steps.targets.outputs.list }}
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           GIT_SHA: ${{ env.GIT_SHA }}
