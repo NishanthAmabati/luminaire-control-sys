@@ -34,6 +34,7 @@ jobs:
 
       - name: generate build args
         run: |
+          pwd
           bash generate_env.sh
           cat build-args.env >> $GITHUB_ENV
 
