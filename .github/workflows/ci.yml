@@ -36,7 +36,9 @@ jobs:
         run: |
           pwd
           bash generate_env.sh
+          pwd
           cat build-args.env >> $GITHUB_ENV
+          pwd
 
       - name: login to registry dockerhub
         uses: docker/login-action@v3
