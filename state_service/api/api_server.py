@@ -14,6 +14,8 @@ def createAPI(state_service: StateService) -> FastAPI:
     cors_origins = [origin.strip() for origin in cors_origins_raw.split(',') if origin.strip()]
     if not cors_origins:
         cors_origins = [
+            'http://localhost',
+            'http://127.0.0.1',
             'http://localhost:8080',
             'http://127.0.0.1:8080',
         ]
