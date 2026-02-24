@@ -54,6 +54,8 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    volumes:
+      - ./scenes:/app/scheduler_service/scenes
 
   timer-service:
     image: ${DOCKERHUB_USERNAME}/timer-service:latest
