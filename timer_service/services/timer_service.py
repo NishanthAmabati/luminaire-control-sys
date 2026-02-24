@@ -45,8 +45,8 @@ class TimerService:
     async def sync_from_redis(self):
         raw = await self.redis.get("system:state")
         if not raw:
-            # need to raise exception and fail cause unable to sync with Redis
-            pass
+            log.warning("timer sync skipped: system:state not found in redis")
+            return
         state = json.loads(raw)
         timer_state = state.get("timer", {})
         self.runtime.timer_enabled = timer_state.get("enabled")
