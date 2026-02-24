@@ -15,13 +15,17 @@ services:
     restart: always
 
   luminaire-service:
-    image: ${DOCKERHUB_USERNAME}/luminaire-service:latest
+    image: nishanthambati/luminaire-service:latest
     container_name: luminaire-svc
+    networks:
+      default:
+        aliases:
+          - luminaire-svc
     ports:
       - "5250:5250"
       - "8000:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://luminaire-svc:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -31,13 +35,13 @@ services:
         condition: service_healthy
     restart: always
 
-  state-service:
-    image: ${DOCKERHUB_USERNAME}/state-api:latest
+  state-api:
+    image: nishanthambati/state-api:latest
     container_name: state-api
     ports:
       - "8001:8001"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://state-service:8001/state || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://state-api:8001/state || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -48,7 +52,7 @@ services:
     restart: always
 
   scheduler-service:
-    image: ${DOCKERHUB_USERNAME}/scheduler-service:latest
+    image: nishanthambati/scheduler-service:latest
     container_name: scheduler-svc
     depends_on:
       redis:
@@ -58,7 +62,7 @@ services:
       - ./scenes:/app/scheduler_service/scenes
 
   timer-service:
-    image: ${DOCKERHUB_USERNAME}/timer-service:latest
+    image: nishanthambati/timer-service:latest
     container_name: timer-svc
     depends_on:
       redis:
@@ -66,7 +70,7 @@ services:
     restart: always
 
   metrics-service:
-    image: ${DOCKERHUB_USERNAME}/metrics-service:latest
+    image: nishanthambati/metrics-service:latest
     container_name: metrics-svc
     depends_on:
       redis:
@@ -74,7 +78,7 @@ services:
     restart: always
 
   event-gateway:
-    image: ${DOCKERHUB_USERNAME}/event-gw:latest
+    image: nishanthambati/event-gw:latest
     container_name: event-gw
     ports:
       - "8088:8088"
@@ -84,7 +88,7 @@ services:
     restart: always
 
   webapp:
-    image: ${DOCKERHUB_USERNAME}/web:latest
+    image: nishanthambati/web:latest
     container_name: webapp
     ports:
       - "80:80"
