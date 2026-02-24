@@ -17,18 +17,18 @@ scales:
 
 services:
   redis:
-    redis_url: "redis://redis:6379/0"
+    redis_url: "redis://localhost:6379/0"
 
   tcp:
     tcpserver:
-      host: "luminaire-svc"
+      host: "0.0.0.0"
       port: 5250
 
     redis:
       pub: "devices:luminaires"
 
     fastAPI:
-      host: "luminaire-svc"
+      host: "0.0.0.0"
       port: 8000
       loop: "asyncio"
       log_level: "info"
@@ -39,22 +39,22 @@ services:
       pub: "system:events"
 
     fastAPI:
-      host: "state-api"
+      host: "0.0.0.0"
       port: 8001
       loop: "asyncio"
       log_level: "info"
       access_log: False
 
   scheduler:
-    scenes_dir: "/app/scheduler_service/scenes"
+    scenes_dir: "/home/nishanth/dev/sss-tech/luminaire-control/scheduler_service/scenes"
     interval: 1 #seconds
-    luminaire_service_url: "http://luminaire-svc:8000/devices/luminaires/set"
+    luminaire_service_url: "http://0.0.0.0:8000/devices/luminaires/set"
 
     redis:
       pub: "scheduler:events"
 
   timer:
-    state_service_url: "http://state-api:8001/system/power"    
+    state_service_url: "http://0.0.0.0:8001/system/power"    
     
     redis:
       pub: "timer:events"
@@ -69,9 +69,9 @@ event_gateway:
     name: event-gateway
     port: 8088
     log_level: info
-    state_service_url: http://state-api:8001/state
+    state_service_url: http://127.0.0.1:8001/state
   redis:
-    url: redis://redis:6379/0
+    url: redis://127.0.0.1:6379/0
     reconnect_strategy_ms: 5000
   channels:
     scheduler: scheduler:events
