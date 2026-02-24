@@ -179,6 +179,23 @@ lines+=(
   "VITE_UI_CONFIG_URL=$VITE_UI_CONFIG_URL"
 )
 
+echo "{" > "../vars.json"
+for i in "${!lines[@]}"; do
+  line="${lines[$i]}"
+  key=$(echo "$line" | cut -d'=' -f1)
+  value=$(echo "$line" | cut -d'=' -f2-)
+  
+  # Escape backslashes and double quotes for valid JSON
+  clean_value=$(echo "$value" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  
+  if [ $i -eq $(( ${#lines[@]} - 1 )) ]; then
+    echo "  \"$key\": \"$clean_value\"" >> "../vars.json"
+  else
+    echo "  \"$key\": \"$clean_value\"," >> "../vars.json"
+  fi
+done
+echo "}" >> "../vars.json"
+
 printf "%s\n" "${lines[@]}" > "$ENV_PATH"
 printf "%s\n" "${lines[@]}" > "$BUILD_ARGS_PATH"
 
