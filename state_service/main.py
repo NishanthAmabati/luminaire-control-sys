@@ -26,7 +26,7 @@ async def startFastAPI(app):
         port=int(require_env("STATE_API_PORT")),
         loop=require_env("STATE_API_LOOP"),
         log_level=require_env("STATE_API_LOG_LEVEL"),
-        access_log=parse_bool(require_env("STATE_API_ACCESS_LOG")),
+        access_log=parse_bool(os.getenv("STATE_API_ACCESS_LOG", "false")),
     )
     server = uvicorn.Server(fastAPIconfig)
     await server.serve()
