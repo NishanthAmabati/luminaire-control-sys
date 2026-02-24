@@ -2,6 +2,7 @@
 .gitignore
 .env
 .env.*
+deploy/build-args.env
 
 # Python
 __pycache__/

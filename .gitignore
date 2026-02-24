@@ -1,6 +1,7 @@
 # Env files
 .env
 .env.*
+deploy/build-args.env
 
 # Python
 __pycache__/
@@ -33,3 +34,4 @@ build/
 # Misc
 .cache/
 coverage/
+TODO.md

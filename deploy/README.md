@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This project runs fully in Docker with env-only configuration. Runtime config is generated from `config.yaml` into a `.env` file that Compose loads.
+This project runs fully in Docker with env-only configuration. Build-time config is generated from `config.yaml` into `deploy/build-args.env` and baked into images. Runtime env is optional for overrides.
 
 **Prereqs**
 - Docker
@@ -9,7 +9,7 @@ This project runs fully in Docker with env-only configuration. Runtime config is
 
 **Build and Run**
 ```bash
-python3 deploy/generate_env.py
+bash deploy/generate_env.sh
 
 docker compose -f deploy/docker-compose.yaml up --build
 ```
@@ -33,8 +33,10 @@ docker compose -f deploy/docker-compose.yaml up --build
 - `webapp`
 
 **Config Flow**
-- `config.yaml` → `deploy/generate_env.py` → `.env` → containers
+- `config.yaml` → `deploy/generate_env.sh` → `deploy/build-args.env`
+- Build args are baked into images
 - Webapp uses `VITE_*` build args and embeds `config.yaml` into the build output
+
 
 **Env Var Reference**
 - Shared: `REDIS_URL`
@@ -50,3 +52,11 @@ docker compose -f deploy/docker-compose.yaml up --build
 - Missing env vars: service exits early with a "missing required env var" error
 - Redis connectivity: ensure `redis` is healthy and `REDIS_URL` points to it
 - SSE latency or heartbeat: verify `GATEWAY_HEARTBEAT_MS` and `GATEWAY_LATENCY_INTERVAL_MS`
+
+**Deploy-Only Compose**
+- `deploy/compose.yaml` is for running pre-built images with baked config
+- No build args or env_file are required at runtime
+- Usage:
+```bash
+docker compose -f deploy/compose.yaml up
+```
