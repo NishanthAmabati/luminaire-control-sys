@@ -361,22 +361,11 @@ const getIntensityGradient = () =>
       },
     ],
     graphic: clearAll
-      ? [
-          {
-            type: 'text',
-            left: 'center',
-            top: 'middle',
-            style: {
-              text: 'System is OFF',
-              fill: tokens.textMuted,
-              font: '700 14px "SF Pro Display", "Segoe UI", sans-serif',
-            },
-          },
-        ]
+      ? []
       : [],
   };
 
-  return (
+  return (  
     <div className="chart-shell p-2 md:p-3 h-[350px]">
       <ReactECharts option={option} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'canvas' }} />
     </div>
