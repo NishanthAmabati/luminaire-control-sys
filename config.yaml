@@ -23,6 +23,10 @@ services:
     tcpserver:
       host: "luminaire-service"
       port: 5250
+      keepalive_enabled: true
+      keepalive_idle_s: 5
+      keepalive_interval_s: 2
+      keepalive_count: 3
 
     redis:
       pub: "devices:luminaires"
