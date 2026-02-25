@@ -235,10 +235,23 @@ async function bootstrapFromStateService() {
     applyStateSnapshot(state);
     if (state?.mode === 'AUTO') {
       const base = STATE_SERVICE_URL.replace(/\/state$/, '');
+      const sceneToLoad = state?.auto?.running_scene || state?.auto?.loaded_scene;
       try {
         await fetch(`${base}/scene/available`);
       } catch (err) {
         logger.warn({ err }, 'failed to refresh available scenes');
+      }
+      if (sceneToLoad) {
+        try {
+          // Trigger scheduler to publish scheduler:scene_load with full profile points.
+          await fetch(`${base}/scene/load`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ scene: sceneToLoad }),
+          });
+        } catch (err) {
+          logger.warn({ err, scene: sceneToLoad }, 'failed to refresh scene profile');
+        }
       }
     }
     logger.info('state service snapshot loaded');
