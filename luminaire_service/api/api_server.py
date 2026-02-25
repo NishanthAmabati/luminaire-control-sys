@@ -4,8 +4,8 @@ from fastapi import FastAPI, HTTPException
 def createAPI(luminaire_service):
     app = FastAPI()
 
-    @app.get("/healthy")
-    async def health():
+    @app.get("/health")
+    async def health_alias():
         health = await luminaire_service.health()
         return health
 
