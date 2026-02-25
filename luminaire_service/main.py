@@ -18,6 +18,24 @@ def require_env(name: str) -> str:
 def parse_bool(value: str) -> bool:
     return value.lower() in ("1", "true", "yes", "on")
 
+def parse_bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    return parse_bool(value)
+
+def parse_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise RuntimeError(f"invalid integer env var: {name}") from exc
+    if parsed < 0:
+        raise RuntimeError(f"invalid negative integer env var: {name}")
+    return parsed
+
 async def startFastAPI(app):
     fastAPIconfig = uvicorn.Config(
         app,
@@ -39,7 +57,11 @@ async def main():
     tcp_server = TCPServer(
         host=require_env("LUMINAIRE_TCP_HOST"),
         port=int(require_env("LUMINAIRE_TCP_PORT")),
-        service=service
+        service=service,
+        keepalive_enabled=parse_bool_env("LUMINAIRE_TCP_KEEPALIVE_ENABLED", True),
+        keepalive_idle_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_IDLE_S", 5),
+        keepalive_interval_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S", 2),
+        keepalive_count=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_COUNT", 3),
     )
 
     app = createAPI(service)
