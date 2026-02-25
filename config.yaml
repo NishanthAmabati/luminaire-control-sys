@@ -21,14 +21,14 @@ services:
 
   tcp:
     tcpserver:
-      host: "luminaire-svc"
+      host: "luminaire-service"
       port: 5250
 
     redis:
       pub: "devices:luminaires"
 
     fastAPI:
-      host: "luminaire-svc"
+      host: "luminaire-service"
       port: 8000
       loop: "asyncio"
       log_level: "info"
@@ -54,7 +54,7 @@ services:
   scheduler:
     scenes_dir: "/app/scheduler_service/scenes"
     interval: 1 #seconds
-    luminaire_service_url: "http://luminaire-svc:8000/devices/luminaires/set"
+    luminaire_service_url: "http://luminaire-service:8000/devices/luminaires/set"
 
     redis:
       pub: "scheduler:events"
@@ -78,7 +78,7 @@ event_gateway:
     state_service_url: http://state-api:8001/state
   redis:
     url: redis://redis:6379/0
-    reconnect_strategy_ms: 5000
+    reconnect_strategy_ms: 9000
   channels:
     scheduler: scheduler:events
     luminaires: devices:luminaires
