@@ -27,6 +27,7 @@ services:
       keepalive_idle_s: 5
       keepalive_interval_s: 2
       keepalive_count: 3
+      tcp_user_timeout_ms: 3000
 
     redis:
       pub: "devices:luminaires"

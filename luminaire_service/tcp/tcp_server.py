@@ -17,6 +17,7 @@ class TCPServer:
         keepalive_idle_s=5,
         keepalive_interval_s=2,
         keepalive_count=3,
+        tcp_user_timeout_ms=3000,
     ):
         self.host = host
         self.port = port
@@ -25,6 +26,7 @@ class TCPServer:
         self.keepalive_idle_s = keepalive_idle_s
         self.keepalive_interval_s = keepalive_interval_s
         self.keepalive_count = keepalive_count
+        self.tcp_user_timeout_ms = tcp_user_timeout_ms
 
     def _configure_keepalive(self, writer):
         if not self.keepalive_enabled:
@@ -43,11 +45,14 @@ class TCPServer:
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, self.keepalive_interval_s)
             if hasattr(socket, "TCP_KEEPCNT"):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, self.keepalive_count)
+            if hasattr(socket, "TCP_USER_TIMEOUT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, self.tcp_user_timeout_ms)
             log.info(
-                "tcp keepalive configured idle=%ss interval=%ss count=%s",
+                "tcp socket configured idle=%ss interval=%ss count=%s user_timeout_ms=%s",
                 self.keepalive_idle_s,
                 self.keepalive_interval_s,
                 self.keepalive_count,
+                self.tcp_user_timeout_ms,
             )
         except Exception as exc:
             log.warning("failed to configure tcp keepalive: %s", exc)

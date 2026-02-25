@@ -62,6 +62,7 @@ async def main():
         keepalive_idle_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_IDLE_S", 5),
         keepalive_interval_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S", 2),
         keepalive_count=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_COUNT", 3),
+        tcp_user_timeout_ms=parse_int_env("LUMINAIRE_TCP_USER_TIMEOUT_MS", 3000),
     )
 
     app = createAPI(service)
