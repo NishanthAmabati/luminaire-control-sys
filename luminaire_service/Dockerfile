@@ -15,6 +15,7 @@ FROM python:3.11-slim-bookworm AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    tzdata \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +26,7 @@ COPY luminaire_service /app/luminaire_service
 WORKDIR /app/luminaire_service
 
 ARG REDIS_URL
+ARG TIMEZONE
 ARG LUMINAIRE_TCP_HOST
 ARG LUMINAIRE_TCP_PORT
 ARG LUMINAIRE_TCP_KEEPALIVE_ENABLED
@@ -39,6 +41,8 @@ ARG LUMINAIRE_API_LOG_LEVEL
 ARG LUMINAIRE_API_ACCESS_LOG
 
 ENV REDIS_URL=$REDIS_URL \
+    TIMEZONE=$TIMEZONE \
+    TZ=$TIMEZONE \
     LUMINAIRE_TCP_HOST=$LUMINAIRE_TCP_HOST \
     LUMINAIRE_TCP_PORT=$LUMINAIRE_TCP_PORT \
     LUMINAIRE_TCP_KEEPALIVE_ENABLED=$LUMINAIRE_TCP_KEEPALIVE_ENABLED \

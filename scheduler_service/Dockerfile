@@ -15,6 +15,7 @@ FROM python:3.11-slim-bookworm AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    tzdata \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -38,6 +39,7 @@ ARG SCALES_LUX_MAX
 
 ENV REDIS_URL=$REDIS_URL \
     TIMEZONE=$TIMEZONE \
+    TZ=$TIMEZONE \
     SCHEDULER_SCENES_DIR=$SCHEDULER_SCENES_DIR \
     SCHEDULER_INTERVAL=$SCHEDULER_INTERVAL \
     SCHEDULER_REDIS_PUB=$SCHEDULER_REDIS_PUB \

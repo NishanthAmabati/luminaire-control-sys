@@ -15,6 +15,7 @@ FROM python:3.11-slim-bookworm AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    tzdata \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,10 +26,13 @@ COPY metrics_service /app/metrics_service
 WORKDIR /app/metrics_service
 
 ARG REDIS_URL
+ARG TIMEZONE
 ARG METRICS_INTERVAL
 ARG METRICS_REDIS_PUB
 
 ENV REDIS_URL=$REDIS_URL \
+    TIMEZONE=$TIMEZONE \
+    TZ=$TIMEZONE \
     METRICS_INTERVAL=$METRICS_INTERVAL \
     METRICS_REDIS_PUB=$METRICS_REDIS_PUB
 

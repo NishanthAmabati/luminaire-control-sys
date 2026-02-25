@@ -20,6 +20,12 @@ RUN npm run build
 
 FROM nginx:alpine
 
+ARG TIMEZONE
+
+RUN apk add --no-cache tzdata
+
+ENV TZ=$TIMEZONE
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80

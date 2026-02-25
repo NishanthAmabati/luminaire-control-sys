@@ -15,6 +15,7 @@ FROM python:3.11-slim-bookworm AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    tzdata \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +26,7 @@ COPY state_service /app/state_service
 WORKDIR /app/state_service
 
 ARG REDIS_URL
+ARG TIMEZONE
 ARG STATE_API_HOST
 ARG STATE_API_PORT
 ARG STATE_API_LOOP
@@ -36,6 +38,8 @@ ARG SCHEDULER_REDIS_PUB
 ARG METRICS_REDIS_PUB
 
 ENV REDIS_URL=$REDIS_URL \
+    TIMEZONE=$TIMEZONE \
+    TZ=$TIMEZONE \
     STATE_API_HOST=$STATE_API_HOST \
     STATE_API_PORT=$STATE_API_PORT \
     STATE_API_LOOP=$STATE_API_LOOP \
