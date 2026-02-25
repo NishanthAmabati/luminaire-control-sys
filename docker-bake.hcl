@@ -41,6 +41,7 @@ target "luminaire" {
     dockerfile = "luminaire_service/Dockerfile"
     args = {
         REDIS_URL = "${REDIS_URL}"
+        TIMEZONE = "${TIMEZONE}"
         LUMINAIRE_TCP_HOST = "${LUMINAIRE_TCP_HOST}"
         LUMINAIRE_TCP_PORT = "${LUMINAIRE_TCP_PORT}"
         LUMINAIRE_TCP_KEEPALIVE_ENABLED = "${LUMINAIRE_TCP_KEEPALIVE_ENABLED}"
@@ -106,6 +107,7 @@ target "metrics" {
     dockerfile = "metrics_service/Dockerfile"
     args = {
         REDIS_URL = "${REDIS_URL}"
+        TIMEZONE = "${TIMEZONE}"
         METRICS_INTERVAL = "${METRICS_INTERVAL}"
         METRICS_REDIS_PUB = "${METRICS_REDIS_PUB}"
     }
@@ -121,6 +123,7 @@ target "state-api" {
     dockerfile = "state_service/Dockerfile"
     args = {
         REDIS_URL = "${REDIS_URL}"
+        TIMEZONE = "${TIMEZONE}"
         STATE_API_HOST = "${STATE_API_HOST}"
         STATE_API_PORT = "${STATE_API_PORT}"
         STATE_API_LOOP = "${STATE_API_LOOP}"
@@ -142,6 +145,7 @@ target "event-gw" {
     context = "."
     dockerfile = "event_gateway/Dockerfile"
     args = {
+        TIMEZONE = "${TIMEZONE}"
         GATEWAY_PORT = "${GATEWAY_PORT}"
         GATEWAY_LOG_LEVEL = "${GATEWAY_LOG_LEVEL}"
         GATEWAY_STATE_SERVICE_URL = "${GATEWAY_STATE_SERVICE_URL}"
@@ -165,6 +169,7 @@ target "web" {
     context = "."
     dockerfile = "webapp/Dockerfile"
     args = {
+        TIMEZONE = "${TIMEZONE}"
         VITE_API_URL = "${VITE_API_URL}"
         VITE_EVENT_GATEWAY_URL = "${VITE_EVENT_GATEWAY_URL}"
         VITE_UI_CONFIG_URL = "${VITE_UI_CONFIG_URL}"
