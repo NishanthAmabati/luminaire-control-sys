@@ -7,7 +7,7 @@ import { useUiFeedback } from '../../../context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
 export const useLuminaireControl = () => {
-  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001';
+  const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { config: uiConfig } = useUiConfig();
   const { snapshot } = useEventSnapshot();
   const { pushError, pushSuccess } = useUiFeedback();

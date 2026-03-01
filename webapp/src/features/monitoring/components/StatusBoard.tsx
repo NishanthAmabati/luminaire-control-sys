@@ -8,7 +8,7 @@ import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
 export const StatusBoard: React.FC = () => {
   const { stats, error } = useSystemMonitor();
-  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001';
+  const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { pushError, pushSuccess } = useUiFeedback();
   const [onHour, setOnHour] = useState('');
   const [onMinute, setOnMinute] = useState('');

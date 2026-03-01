@@ -10,7 +10,7 @@ import { readErrorMessage, unknownToMessage } from './utils/apiError';
 import { useEventSnapshot } from './hooks/useEventSnapshot';
 
 const AppShell: React.FC = () => {
-  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001';
+  const apiBase = import.meta.env.VITE_API_URL || '/api';
   const [systemOn, setSystemOn] = useState(true);
   const [powerPending, setPowerPending] = useState(false);
   const { theme, isDark, setThemeById, themeOptions } = useDashboardTheme();

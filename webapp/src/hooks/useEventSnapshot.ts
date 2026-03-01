@@ -49,7 +49,7 @@ const persistSnapshot = (snapshot: EventSnapshot) => {
 };
 
 export const useEventSnapshot = () => {
-  const gatewayHttp = import.meta.env.VITE_EVENT_GATEWAY_URL || 'http://127.0.0.1:8088';
+  const gatewayHttp = import.meta.env.VITE_EVENT_GATEWAY_URL || '';
   const [snapshot, setSnapshot] = useState<EventSnapshot>(() => loadCachedSnapshot());
   const [streamError, setStreamError] = useState<string | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);

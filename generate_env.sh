@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/" && pwd)"
 CONFIG_PATH="./config.yaml"
 ENV_PATH="$ROOT_DIR/.env"
 BUILD_ARGS_PATH="$ROOT_DIR/build-args.env"
@@ -223,8 +223,8 @@ lines+=(
   "GATEWAY_LATENCY_INTERVAL_MS=$GATEWAY_LATENCY_INTERVAL_MS"
 )
 
-VITE_API_URL="http://localhost:$STATE_API_PORT"
-VITE_EVENT_GATEWAY_URL="http://localhost:$GATEWAY_PORT"
+VITE_API_URL="/api"
+VITE_EVENT_GATEWAY_URL=""
 VITE_UI_CONFIG_URL="/config.yaml"
 
 lines+=(
