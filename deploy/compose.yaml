@@ -16,7 +16,7 @@ services:
 
   luminaire-service:
     image: nishanthambati/luminaire-service:latest
-    container_name: luminaire-svc
+    container_name: luminaire-service
     networks:
       default:
         aliases:
@@ -25,7 +25,7 @@ services:
       - "5250:5250"
       - "8000:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://luminaire-svc:8000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -53,9 +53,11 @@ services:
 
   scheduler-service:
     image: nishanthambati/scheduler-service:latest
-    container_name: scheduler-svc
+    container_name: scheduler-service
     depends_on:
       redis:
+        condition: service_healthy
+      luminaire-service:
         condition: service_healthy
     restart: always
     volumes:
@@ -63,15 +65,17 @@ services:
 
   timer-service:
     image: nishanthambati/timer-service:latest
-    container_name: timer-svc
+    container_name: timer-service
     depends_on:
       redis:
+        condition: service_healthy
+      state-api:
         condition: service_healthy
     restart: always
 
   metrics-service:
     image: nishanthambati/metrics-service:latest
-    container_name: metrics-svc
+    container_name: metrics-service
     depends_on:
       redis:
         condition: service_healthy
