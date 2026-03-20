@@ -42,3 +42,41 @@ class LightChanneler:
             "cw": max(0.0, min(cw, 100.0)),
             "ww": max(0.0, min(ww, 100.0))
         }
+
+    def resolve_cct(self, cw: int, ww: int) -> int:
+        """
+        caclulates cct from passed in cw, ww
+
+        range: since cw, ww are passed in as int the possible range of values
+        for cw, ww would be between 0, 99(cause we are capping at 99) the possible range of cct
+        would be between 3530 (cw: 1, ww: 99) and 6470 (cw: 99, ww: 1).
+        """
+        if cw is None or ww is None:
+            return
+        safe_cw = max(0, min(cw, 99))
+        safe_ww = max(0, min(ww, 99))
+        
+        try:
+            sum = safe_cw + safe_ww
+            ratio = safe_cw / sum
+            cct_range = self.cct_max - self.cct_min
+
+            cct = self.cct_min + ratio * cct_range
+            return {
+                "cct": int(cct)
+            }
+        except ZeroDivisionError:
+            return {"cct": "NA"}
+    
+"""lh = LightChanneler(
+    cct_min=3500,
+    cct_max=6500,
+    lux_min=0,
+    lux_max=500
+)
+while True:
+    cw_test = int(input("enter cw: "))
+    ww_test = int(input("enter ww: "))
+    cct_test = lh.resolve_cct(cw_test, ww_test)
+    print(cct_test)
+    print("\n")"""
