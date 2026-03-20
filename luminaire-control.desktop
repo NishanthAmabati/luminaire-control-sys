@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Luminaire Control
+Exec=firefox --new-window http://localhost
+Icon=web-browser
+Terminal=false
+Type=Application
+Categories=Network;

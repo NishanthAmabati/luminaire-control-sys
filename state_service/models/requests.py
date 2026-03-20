@@ -12,9 +12,12 @@ class ModeRequest(BaseModel):
 class SceneRequest(BaseModel):
     scene: str
 
-class ManualSliderRequest(BaseModel):
-    cct: float
-    lux: float
+class ManualRequest(BaseModel):
+    medium: Literal["sliders", "buttons"]
+    cct: Optional[float] = None
+    lux: Optional[float] = None
+    cw: Optional[int] = None
+    ww: Optional[int] = None
 
 class TimerToggleRequest(BaseModel):
     enabled: bool

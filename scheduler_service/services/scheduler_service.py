@@ -77,6 +77,8 @@ class Scheduler:
             #"mode": self.runtime.mode,
             "cct": self.runtime.cct,
             "lux": self.runtime.lux,
+            "cw": self.runtime.cw,
+            "ww": self.runtime.ww,
             "progress": self.runtime.progress
         }
         await self.redis.publish(
@@ -172,7 +174,22 @@ class Scheduler:
 
         if self.runtime.mode == "MANUAL":
             await self.deactivate_scene()
-            await self.apply_manual(manual.get("cct", 0), manual.get("lux", 0))
+            manual_lux = manual.get("lux", 0)
+            self.runtime.lux = manual_lux
+            manual_cw = manual.get("cw")
+            manual_ww = manual.get("ww")
+            if manual_cw is not None and manual_ww is not None:
+                await self.apply_manual(
+                    "buttons",
+                    cw=manual_cw,
+                    ww=manual_ww,
+                )
+            else:
+                await self.apply_manual(
+                    "sliders",
+                    cct=manual.get("cct", 0),
+                    lux=manual_lux,
+                )
 
         elif self.runtime.mode == "AUTO":
             self.runtime.loaded_scene = auto.get("loaded_scene")
@@ -245,13 +262,36 @@ class Scheduler:
         #await self.publish_runtime()
         await self.publish_state()
 
-    async def apply_manual(self, cct: float, lux: float):
-        self.runtime.cct = cct
-        self.runtime.lux = lux
-        self.runtime.progress = 0.0
-
-        result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
-        if not result:
-            return
-        self.runtime.cw = result["cw"]
-        self.runtime.ww = result["ww"]
+    # async def apply_manual(self, cct: float, lux: float):
+    async def apply_manual(self,
+                            medium: str,
+                            cct: float | None = None,
+                            lux: float | None = None,
+                            cw: int | None = None,
+                            ww: int | None = None
+                            ):
+        if medium == "sliders":
+            if cct is None or lux is None:
+                return
+            self.runtime.cct = cct
+            self.runtime.lux = lux
+            self.runtime.progress = 0.0
+            result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
+            if not result:
+                return
+            self.runtime.cw = result["cw"]
+            self.runtime.ww = result["ww"]
+        elif medium == "buttons":
+            if cw is None or ww is None:
+                return
+            result = self.channeler.resolve_cct(cw, ww)
+            if not result:
+                return
+            self.runtime.cct = result["cct"]
+            self.runtime.progress = 0.0
+            # keep existing lux
+            result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
+            if not result:
+                return
+            self.runtime.cw = result["cw"]
+            self.runtime.ww = result["ww"]

@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.requests import *
@@ -88,8 +88,22 @@ def createAPI(state_service: StateService) -> FastAPI:
         return {'status': 'ok'}
 
     @app.post('/set/manual')
-    async def set_manual_values(req: ManualSliderRequest):
-        await state_service.set_manual_values(req.cct, req.lux)
-        return {'status': 'ok', 'manual': {'cct': req.cct, 'lux': req.lux}}
+    async def set_manual_values(req: ManualRequest):
+        if req.medium == "sliders":
+            if req.cct is None or req.lux is None:
+                raise HTTPException(status_code=400, detail="cct and lux are required for sliders mode")
+        elif req.medium == "buttons":
+            if req.cw is None or req.ww is None:
+                raise HTTPException(status_code=400, detail="cw and ww are required for buttons mode")
+        await state_service.set_manual_values(
+            medium=req.medium,
+            cct=req.cct,
+            lux=req.lux,
+            cw=req.cw,
+            ww=req.ww,
+        )
+        if req.medium == "sliders":
+            return {'status': 'ok', 'manual': {'cct': req.cct, 'lux': req.lux}}
+        return {'status': 'ok', 'manual': {'cw': req.cw, 'ww': req.ww}}
 
     return app

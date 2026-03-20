@@ -48,7 +48,14 @@ class RedisListener:
 
         elif event == "manual:update":
             log.info(f"event triggered: {event}")
-            await self.scheduler.apply_manual(payload["cct"], payload["lux"])
+            medium = payload.get("medium", "sliders")
+            await self.scheduler.apply_manual(
+                medium,
+                cct=payload.get("cct"),
+                lux=payload.get("lux"),
+                cw=payload.get("cw"),
+                ww=payload.get("ww"),
+            )
 
         elif event == "scheduler:available_scenes":
             log.info(f"event triggered: {event}")

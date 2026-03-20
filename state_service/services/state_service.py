@@ -87,20 +87,36 @@ class StateService:
         except Exception as e:
             log.exception(f"failed to update metrics.* cpu, memory, temperature. err: {e}")
 
-    async def set_manual_values(self, cct: float, lux: float):
+    async def set_manual_values(self,
+                                medium: str,
+                                cct: float | None = None,
+                                lux: float | None = None,
+                                cw: int | None = None,
+                                ww: int | None = None
+                                ):
         try:
             async with self.lock:
-                self.state.manual.cct = cct
-                self.state.manual.lux = lux
-                log.info(f"manual update: cct: {cct}, lux: {lux}")
+                if medium == "sliders":
+                    self.state.manual.cct = cct
+                    self.state.manual.lux = lux
+                    pub_message = {"medium": "sliders", "cct": cct, "lux": lux}
+                    log.info(f"manual update: cct: {cct}, lux: {lux}")
+                elif medium == "buttons":
+                    self.state.manual.cw = cw
+                    self.state.manual.ww = ww
+                    pub_message = {"medium": "buttons", "cw": cw, "ww": ww}
+                    log.info(f"manual update: cw: {cw}, ww: {ww}")
+                else:
+                    log.warning(f"ignored manual update with unknown medium: {medium}")
+                    return
                 self.state.touch()
                 await self.persist()
             await self.publish(
                 "manual:update",
-                {"cct": cct, "lux": lux}
+                pub_message
             )
         except Exception as e:
-            log.exception(f"failed manual update: cct: {cct}, lux: {lux}. err: {e}")
+            log.exception(f"failed manual update: {pub_message}. err: {e}")
 
     async def update_auto_runtime(self, cct: float, lux: float, progress: float):
         async with self.lock:

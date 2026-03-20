@@ -17,6 +17,8 @@ class SchedulerRuntime:
     cct: float = 0.0
     lux: float = 0.0
     progress: float = 0.0
+    cw: float = 0.0
+    ww: float = 0.0
 
     def reset_scene(self):
         self.running_scene = None

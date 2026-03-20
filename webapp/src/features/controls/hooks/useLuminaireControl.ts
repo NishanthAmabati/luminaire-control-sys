@@ -45,6 +45,21 @@ export const useLuminaireControl = () => {
     editingTimer: null,
     editing: false,
   });
+  const manualButtonsSyncRef = useRef<{
+    timer: number | null;
+    inflight: boolean;
+    queued: boolean;
+    lastValues: { cw: number; ww: number };
+    editingTimer: number | null;
+    editing: boolean;
+  }>({
+    timer: null,
+    inflight: false,
+    queued: false,
+    lastValues: { cw: 50, ww: 50 },
+    editingTimer: null,
+    editing: false,
+  });
   const configSeededRef = useRef(false);
   const sceneStateRef = useRef<{ loadedScene: string; runningScene: string }>({
     loadedScene: '',
@@ -74,11 +89,13 @@ export const useLuminaireControl = () => {
         ? (scheduler.available_scenes.filter((s): s is string => typeof s === 'string'))
         : [];
       setAvailableScenes(scenes);
-      if (!manualSyncRef.current.editing && !pending.manual) {
+      if (!manualSyncRef.current.editing && !manualButtonsSyncRef.current.editing && !pending.manual) {
         setValues((prev) => ({
           ...prev,
           cct: Number(runtime?.cct ?? prev.cct),
           intensity: Number(runtime?.lux ?? prev.intensity),
+          cw: Math.round(Number(runtime?.cw ?? prev.cw)),
+          ww: Math.round(Number(runtime?.ww ?? prev.ww)),
         }));
       }
     };
@@ -115,7 +132,11 @@ export const useLuminaireControl = () => {
       const response = await fetch(`${apiBase}/set/manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cct: sync.lastValues.cct, lux: sync.lastValues.intensity }),
+        body: JSON.stringify({
+          medium: 'sliders',
+          cct: sync.lastValues.cct,
+          lux: sync.lastValues.intensity,
+        }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
     } catch (err) {
@@ -126,6 +147,40 @@ export const useLuminaireControl = () => {
       if (sync.queued) {
         sync.queued = false;
         void flushManualUpdate();
+      } else {
+        setPending((prev) => ({ ...prev, manual: false }));
+      }
+    }
+  };
+
+  const flushManualButtonsUpdate = async () => {
+    const sync = manualButtonsSyncRef.current;
+    if (sync.inflight) {
+      sync.queued = true;
+      return;
+    }
+    sync.inflight = true;
+    setPending((prev) => ({ ...prev, manual: true }));
+
+    try {
+      const response = await fetch(`${apiBase}/set/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medium: 'buttons',
+          cw: sync.lastValues.cw,
+          ww: sync.lastValues.ww,
+        }),
+      });
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+    } catch (err) {
+      console.error('Failed to sync manual button values with backend:', err);
+      pushError(`Failed to set manual values. ${unknownToMessage(err)}`);
+    } finally {
+      sync.inflight = false;
+      if (sync.queued) {
+        sync.queued = false;
+        void flushManualButtonsUpdate();
       } else {
         setPending((prev) => ({ ...prev, manual: false }));
       }
@@ -161,12 +216,29 @@ export const useLuminaireControl = () => {
       let newWw = prev.ww;
 
       if (lightType === 'cw') {
-        newCw = Math.max(0, Math.min(100, prev.cw + delta));
+        newCw = Math.max(0, Math.min(100, Math.round(prev.cw + delta)));
         newWw = 100 - newCw;
       } else {
-        newWw = Math.max(0, Math.min(100, prev.ww + delta));
+        newWw = Math.max(0, Math.min(100, Math.round(prev.ww + delta)));
         newCw = 100 - newWw;
       }
+
+      manualButtonsSyncRef.current.lastValues = { cw: newCw, ww: newWw };
+      manualButtonsSyncRef.current.editing = true;
+      if (manualButtonsSyncRef.current.editingTimer) {
+        window.clearTimeout(manualButtonsSyncRef.current.editingTimer);
+      }
+      manualButtonsSyncRef.current.editingTimer = window.setTimeout(() => {
+        manualButtonsSyncRef.current.editing = false;
+      }, 400);
+
+      if (manualButtonsSyncRef.current.timer) {
+        window.clearTimeout(manualButtonsSyncRef.current.timer);
+      }
+      manualButtonsSyncRef.current.timer = window.setTimeout(() => {
+        manualButtonsSyncRef.current.timer = null;
+        void flushManualButtonsUpdate();
+      }, 150);
 
       return { ...prev, cw: newCw, ww: newWw };
     });
@@ -177,6 +249,9 @@ export const useLuminaireControl = () => {
       const sync = manualSyncRef.current;
       if (sync.timer) window.clearTimeout(sync.timer);
       if (sync.editingTimer) window.clearTimeout(sync.editingTimer);
+      const buttonsSync = manualButtonsSyncRef.current;
+      if (buttonsSync.timer) window.clearTimeout(buttonsSync.timer);
+      if (buttonsSync.editingTimer) window.clearTimeout(buttonsSync.editingTimer);
       const sceneRevert = sceneRevertRef.current;
       if (sceneRevert.timer) window.clearTimeout(sceneRevert.timer);
     };
