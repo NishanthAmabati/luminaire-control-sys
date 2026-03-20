@@ -2,7 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/" && pwd)"
-CONFIG_PATH="./config.yaml"
+CONFIG_PATH="${CONFIG_PATH:-./config-dev.yaml}"
+HOST_REWRITE="${HOST_REWRITE:-1}"
+if [[ "$CONFIG_PATH" == *"config-dev.yaml"* ]]; then
+  HOST_REWRITE=0
+fi
 ENV_PATH="$ROOT_DIR/.env"
 BUILD_ARGS_PATH="$ROOT_DIR/build-args.env"
 
@@ -87,6 +91,10 @@ PY
 replace_host() {
   local url="$1"
   local host="$2"
+  if [ "$HOST_REWRITE" -eq 0 ]; then
+    echo "$url"
+    return
+  fi
   if [[ "$url" =~ ^(http|https|redis)://([^/]+)(.*)$ ]]; then
     local proto="${BASH_REMATCH[1]}"
     local hostport="${BASH_REMATCH[2]}"
@@ -206,6 +214,7 @@ GATEWAY_CHANNEL_SCHEDULER="$(get_yaml '.event_gateway.channels.scheduler')"
 GATEWAY_CHANNEL_LUMINAIRES="$(get_yaml '.event_gateway.channels.luminaires')"
 GATEWAY_CHANNEL_TIMER="$(get_yaml '.event_gateway.channels.timer')"
 GATEWAY_CHANNEL_METRICS="$(get_yaml '.event_gateway.channels.metrics')"
+GATEWAY_CHANNEL_SYSTEM="$(get_yaml '.event_gateway.channels.system')"
 GATEWAY_HEARTBEAT_MS="$(get_yaml '.event_gateway.sse.heartbeat_interval_ms')"
 GATEWAY_LATENCY_INTERVAL_MS="$(get_yaml '.event_gateway.sse.latency_interval_ms')"
 
@@ -219,6 +228,7 @@ lines+=(
   "GATEWAY_CHANNEL_LUMINAIRES=$GATEWAY_CHANNEL_LUMINAIRES"
   "GATEWAY_CHANNEL_TIMER=$GATEWAY_CHANNEL_TIMER"
   "GATEWAY_CHANNEL_METRICS=$GATEWAY_CHANNEL_METRICS"
+  "GATEWAY_CHANNEL_SYSTEM=$GATEWAY_CHANNEL_SYSTEM"
   "GATEWAY_HEARTBEAT_MS=$GATEWAY_HEARTBEAT_MS"
   "GATEWAY_LATENCY_INTERVAL_MS=$GATEWAY_LATENCY_INTERVAL_MS"
 )

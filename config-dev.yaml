@@ -1,10 +1,3 @@
-# scheduler:
-#   system: "system:events"
-#   pub: "scheduler:events"
-#   state: "scheduler:state"
-#   scene_load: "scheduler:scene_loaded"
-#   scene_activate: "scheduler:scene_activated"
-
 timezone: "Asia/Kolkata"
 
 scales:
@@ -89,6 +82,7 @@ event_gateway:
     luminaires: devices:luminaires
     timer: timer:events
     metrics: metrics:events
+    system: system:events
   sse:
     heartbeat_interval_ms: 20000
     client_write_timeout_ms: 5000
@@ -96,14 +90,14 @@ event_gateway:
 
 ui:
   cct:
-    min: 2000
-    max: 7000
+    min: 3500
+    max: 6500
     default: 5000
     unit: "K"
     color: "#10b981"
   intensity:
     min: 0
-    max: 700
+    max: 500
     default: 250
     unit: "lux"
     color: "#f97316"
