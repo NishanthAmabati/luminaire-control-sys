@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/" && pwd)"
-CONFIG_PATH="${CONFIG_PATH:-./config-dev.yaml}"
+CONFIG_PATH="${CONFIG_PATH:-./config.yaml}"
 HOST_REWRITE="${HOST_REWRITE:-1}"
 if [[ "$CONFIG_PATH" == *"config-dev.yaml"* ]]; then
   HOST_REWRITE=0
