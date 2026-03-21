@@ -136,6 +136,12 @@ function applyScheduler(event, payload) {
       sch.scene_profile = mapScenePoints(Array.isArray(payload?.points) ? payload.points : []);
     }
 
+    if (event === 'scheduler:scene_stopped') {
+      sch.running_scene = '';
+      sch.loaded_scene = '';
+      sch.scene_profile = { cct: [], intensity: [] };
+    }
+
     if (event === 'scheduler:available_scenes') {
       sch.available_scenes = Array.isArray(payload?.scenes)
         ? payload.scenes
