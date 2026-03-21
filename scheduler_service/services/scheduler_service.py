@@ -77,8 +77,8 @@ class Scheduler:
             #"mode": self.runtime.mode,
             "cct": self.runtime.cct,
             "lux": self.runtime.lux,
-            "cw": self.runtime.cw,
-            "ww": self.runtime.ww,
+            # "cw": self.runtime.cw,
+            # "ww": self.runtime.ww,
             "progress": self.runtime.progress
         }
         await self.redis.publish(
