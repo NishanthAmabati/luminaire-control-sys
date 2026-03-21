@@ -25,8 +25,11 @@ class TimerState:
 
 @dataclass
 class ManualState:
+    last_toggle: Optional[str] = None
     cct: Optional[float] = None
     lux: Optional[float] = None
+    cw: Optional[float] = None
+    ww: Optional[float] = None
 
 @dataclass
 class AutoState:

@@ -97,11 +97,13 @@ class StateService:
         try:
             async with self.lock:
                 if medium == "sliders":
+                    self.state.manual.last_toggle = "sliders"
                     self.state.manual.cct = cct
                     self.state.manual.lux = lux
                     pub_message = {"medium": "sliders", "cct": cct, "lux": lux}
                     log.info(f"manual update: cct: {cct}, lux: {lux}")
                 elif medium == "buttons":
+                    self.state.manual.last_toggle = "buttons"
                     self.state.manual.cw = cw
                     self.state.manual.ww = ww
                     pub_message = {"medium": "buttons", "cw": cw, "ww": ww}
