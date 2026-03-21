@@ -61,6 +61,7 @@ const snapshot = {
     loaded_scene: '',
     running_scene: '',
     runtime: { cct: 5000, lux: 250, progress: 0 },
+    manual_input: { cw: null, ww: null },
     scene_profile: { cct: [], intensity: [] },
   },
   timer: { enabled: false, start: '', end: '' },
@@ -210,6 +211,8 @@ function applyStateSnapshot(state) {
     if (state?.manual && typeof state.manual === 'object' && scheduler.mode === 'MANUAL') {
       if (typeof state.manual.cct === 'number') scheduler.runtime.cct = state.manual.cct;
       if (typeof state.manual.lux === 'number') scheduler.runtime.lux = state.manual.lux;
+      if (typeof state.manual.cw === 'number') scheduler.manual_input.cw = state.manual.cw;
+      if (typeof state.manual.ww === 'number') scheduler.manual_input.ww = state.manual.ww;
     }
 
     if (state?.timer && typeof state.timer === 'object') {
