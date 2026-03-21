@@ -32,6 +32,7 @@ export const LuminaireList: React.FC = () => {
     <Card
       title="Connected Luminaires"
       icon={Network}
+      headerClassName="accent-blue"
       className="h-full"
       headerAction={
         <button
@@ -91,9 +92,9 @@ export const LuminaireList: React.FC = () => {
                   <span
                     className="h-7 w-7 rounded-md inline-flex items-center justify-center shrink-0"
                     style={{
-                      border: '1px solid var(--border-color)',
-                      background: 'var(--card-bg-soft)',
-                      color: 'var(--text-secondary)',
+                      border: '1px solid color-mix(in oklab, var(--accent-blue) 30%, var(--border-color))',
+                      background: 'color-mix(in oklab, var(--accent-blue) 8%, var(--card-bg-soft))',
+                      color: 'var(--accent-blue)',
                     }}
                     title="Connected device"
                   >

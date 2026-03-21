@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Moon, Palette, Sun } from 'lucide-react';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { useDashboardTheme } from './hooks/useDashboardTheme';
 import logo from './SSS.png';
-import type { DashboardTheme } from './types/theme';
 import { UiFeedbackProvider } from './context/UiFeedbackContext';
 import { useUiFeedback } from './context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from './utils/apiError';
@@ -13,7 +11,8 @@ const AppShell: React.FC = () => {
   const apiBase = import.meta.env.VITE_API_URL || '/api';
   const [systemOn, setSystemOn] = useState(true);
   const [powerPending, setPowerPending] = useState(false);
-  const { theme, isDark, setThemeById, themeOptions } = useDashboardTheme();
+  const [toggleAnimating, setToggleAnimating] = useState(false);
+  const { theme } = useDashboardTheme();
   const { pushError } = useUiFeedback();
   const { snapshot } = useEventSnapshot();
 
@@ -28,6 +27,7 @@ const AppShell: React.FC = () => {
     if (powerPending) return;
     const next = !systemOn;
     setPowerPending(true);
+    setToggleAnimating(true);
 
     try {
       const response = await fetch(`${apiBase}/system/power`, {
@@ -42,6 +42,7 @@ const AppShell: React.FC = () => {
       pushError(`Failed to toggle system power. ${unknownToMessage(err)}`);
     } finally {
       setPowerPending(false);
+      setTimeout(() => setToggleAnimating(false), 200);
     }
   };
 
@@ -55,41 +56,17 @@ const AppShell: React.FC = () => {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="system-toggle-wrap">
-            <span className="toggle-label">SYSTEM</span>
-            <button
-              type="button"
-              onClick={handleSystemToggle}
-              className={`toggle-pill ${systemOn ? 'on' : 'off'}`}
-              aria-label="Toggle system"
-              disabled={powerPending}
-            >
-              <span className="toggle-knob" />
-            </button>
-          </div>
-
-          <div className="theme-selector-wrap">
-            <div className="theme-selector-label">
-              <Palette size={13} />
-              THEME
-            </div>
-            <div className="theme-selector-input-wrap">
-              <span className="theme-selector-icon">{isDark ? <Moon size={14} /> : <Sun size={14} />}</span>
-              <select
-                value={theme}
-                onChange={(e) => setThemeById(e.target.value as DashboardTheme)}
-                className="theme-selector-input data-text"
-                aria-label="Choose color theme"
-              >
-                {themeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div className="system-toggle-wrap">
+          <span className="toggle-label">SYSTEM</span>
+          <button
+            type="button"
+            onClick={handleSystemToggle}
+            className={`toggle-pill ${systemOn ? 'on' : 'off'} ${toggleAnimating ? 'toggle-feedback' : ''}`}
+            aria-label="Toggle system"
+            disabled={powerPending}
+          >
+            <span className="toggle-knob" />
+          </button>
         </div>
       </header>
 

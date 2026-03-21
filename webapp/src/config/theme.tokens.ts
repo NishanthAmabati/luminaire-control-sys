@@ -1,5 +1,10 @@
 import type { DashboardTheme, ThemeTone } from '../types/theme';
 
+export interface ChartGradients {
+  cct: [string, string, string, string, string];
+  intensity: [string, string, string];
+}
+
 export interface ThemeTokenSet {
   pageBg: string;
   cardBg: string;
@@ -17,6 +22,7 @@ export interface ThemeTokenSet {
   chartAxis: string;
   chartBadgeBg: string;
   chartBadgeText: string;
+  chartGradients: ChartGradients;
 }
 
 export interface ThemeOption {
@@ -50,6 +56,20 @@ export const THEME_TOKENS: Record<DashboardTheme, ThemeTokenSet> = {
     chartAxis: '#8c8378',
     chartBadgeBg: 'rgba(255, 252, 246, 0.95)',
     chartBadgeText: '#3b342d',
+    chartGradients: {
+      cct: [
+        '#3a7fcb',
+        '#5ba3e0',
+        '#8ec4ed',
+        '#b8dcf0',
+        '#e8f4fc',
+      ],
+      intensity: [
+        '#da8a34ee',
+        '#e8a850bb',
+        '#e8a85010',
+      ],
+    },
   },
   'dark-obsidian': {
     pageBg: '#090809',
@@ -68,5 +88,19 @@ export const THEME_TOKENS: Record<DashboardTheme, ThemeTokenSet> = {
     chartAxis: '#a69bb8',
     chartBadgeBg: 'rgba(252, 246, 255, 0.86)',
     chartBadgeText: '#2a2332',
+    chartGradients: {
+      cct: [
+        '#5aa7ff',
+        '#4d95e8',
+        '#3a7fcb',
+        '#2d68a8',
+        '#1a2635',
+      ],
+      intensity: [
+        '#f6a24eee',
+        '#f6b555bb',
+        '#f6b55510',
+      ],
+    },
   },
 };

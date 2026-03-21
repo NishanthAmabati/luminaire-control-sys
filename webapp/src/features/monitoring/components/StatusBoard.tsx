@@ -6,7 +6,11 @@ import { useSystemMonitor } from '../../../hooks/useSystemMonitor';
 import { useUiFeedback } from '../../../context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
-export const StatusBoard: React.FC = () => {
+interface StatusBoardProps {
+  systemOn: boolean;
+}
+
+export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
   const { stats, error } = useSystemMonitor();
   const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { pushError, pushSuccess } = useUiFeedback();
@@ -244,6 +248,7 @@ export const StatusBoard: React.FC = () => {
     <Card
       title="Status & Timer"
       icon={Timer}
+      headerClassName="accent-orange"
       className="h-full overflow-visible"
       contentClassName="gap-3 overflow-visible"
     >
@@ -254,21 +259,23 @@ export const StatusBoard: React.FC = () => {
         <StatItem icon={Thermometer} label="Temperature" value={stats?.temperature ?? '--'} unit="°C" />
       </div>
 
-      <div className="status-chip motion-soft p-3 flex items-center gap-3">
+      <div className={`status-chip motion-soft p-3 flex items-center gap-3 ${!systemOn || error ? 'status-offline-glow' : 'status-active-glow'}`}>
         <div
-          className="h-10 w-10 rounded-full flex items-center justify-center"
-          style={{ background: error ? 'var(--danger)' : 'var(--success)', color: '#fff' }}
+          className={`h-10 w-10 rounded-full flex items-center justify-center ${systemOn && !error ? 'status-indicator-pulse' : ''}`}
+          style={{ background: !systemOn || error ? 'var(--danger)' : 'var(--success)', color: '#fff' }}
         >
           <Zap size={18} />
         </div>
         <div>
           <p className="font-extrabold text-2xl data-text" style={{ color: 'var(--text-primary)' }}>
-            {error ? 'System Offline' : 'System Active'}
+            {!systemOn ? 'System OFF' : error ? 'System Offline' : 'System Active'}
           </p>
           <p className="text-sm data-text" style={{ color: 'var(--text-secondary)' }}>
-            {error
-              ? 'Attempting to reconnect...'
-              : `CCT: ${Math.round(stats?.currentCct ?? 5000)}K, Intensity: ${Math.round(stats?.currentLux ?? 250)}lux, ${currentTime}`}
+            {!systemOn
+              ? 'Power is disabled'
+              : error
+                ? 'Attempting to reconnect...'
+                : `CCT: ${Math.round(stats?.currentCct ?? 5000)}K, Intensity: ${Math.round(stats?.currentLux ?? 250)}lux, ${currentTime}`}
           </p>
         </div>
       </div>
@@ -276,7 +283,7 @@ export const StatusBoard: React.FC = () => {
       <div className={`timer-shell space-y-3 ${isTimerEnabled ? 'enabled' : ''}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 field-label">
-            <Clock size={16} />
+            <Clock size={16} className={isTimerEnabled ? 'timer-icon-active' : ''} />
             SYSTEM TIMER
           </div>
           <div className="tab-shell max-w-[220px] w-full">
@@ -324,7 +331,7 @@ export const StatusBoard: React.FC = () => {
                 <div className="time-edit-grid">
                   <div className="time-dial">
                     <div
-                      className="time-dial-core"
+                      className="time-dial-core dial-press"
                       onPointerDown={(e) => startDialDrag('hour', e)}
                       role="slider"
                       aria-label="Hour dial"
@@ -339,7 +346,7 @@ export const StatusBoard: React.FC = () => {
                   </div>
                   <div className="time-dial">
                     <div
-                      className="time-dial-core"
+                      className="time-dial-core dial-press"
                       onPointerDown={(e) => startDialDrag('minute', e)}
                       role="slider"
                       aria-label="Minute dial"
@@ -381,7 +388,7 @@ export const StatusBoard: React.FC = () => {
                 <div className="time-edit-grid">
                   <div className="time-dial">
                     <div
-                      className="time-dial-core"
+                      className="time-dial-core dial-press"
                       onPointerDown={(e) => startDialDrag('hour', e)}
                       role="slider"
                       aria-label="Hour dial"
@@ -396,7 +403,7 @@ export const StatusBoard: React.FC = () => {
                   </div>
                   <div className="time-dial">
                     <div
-                      className="time-dial-core"
+                      className="time-dial-core dial-press"
                       onPointerDown={(e) => startDialDrag('minute', e)}
                       role="slider"
                       aria-label="Minute dial"
@@ -424,7 +431,7 @@ export const StatusBoard: React.FC = () => {
           <button
             onClick={() => void handleSetTimer()}
             disabled={!isTimerEnabled || !onTime || !offTime || timerSetPending || timerClearPending || timerTogglePending}
-            className="h-10 rounded-lg text-sm font-black motion-soft data-text cursor-pointer disabled:cursor-not-allowed"
+            className="h-10 rounded-lg text-sm font-black motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press"
             style={{
               border: '1px solid var(--border-color)',
               background: 'var(--action-neutral-bg)',
@@ -436,7 +443,7 @@ export const StatusBoard: React.FC = () => {
           <button
             onClick={() => void handleClearTimer()}
             disabled={!isTimerEnabled || (!onTime && !offTime) || timerSetPending || timerClearPending || timerTogglePending}
-            className="h-10 rounded-lg text-sm font-black motion-soft data-text cursor-pointer disabled:cursor-not-allowed"
+            className="h-10 rounded-lg text-sm font-black motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press"
             style={{
               border: '1px solid var(--border-color)',
               background: 'var(--action-neutral-bg)',

@@ -32,7 +32,7 @@ export const useSystemMonitor = () => {
       status: systemOn ? 'ACTIVE' : 'INACTIVE',
       lastSync: typeof snapshot?.last_updated === 'string' ? snapshot.last_updated : new Date().toISOString(),
     };
-  }, [snapshot]);
+  }, [snapshot, latencyMs]);
 
   return { stats, error: streamError };
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import { Settings2, Sun, Thermometer } from 'lucide-react';
 import { Card } from '../../../components/Card';
 import { ControlSlider } from '../../../components/ControlSlider';
@@ -24,12 +24,32 @@ export const ControlPanel: React.FC = () => {
   } = useLuminaireControl();
   const { config: uiConfig } = useUiConfig();
   const [pendingActivation, setPendingActivation] = useState(false);
+  const [modePulseClass, setModePulseClass] = useState('');
+  const [scenePulseKey, setScenePulseKey] = useState(0);
+  const prevRunningSceneRef = useRef<string | null>(null);
+  
   const schedulerStatus: 'idle' | 'pending' | 'running' = runningScene
     ? 'running'
     : pendingActivation
       ? 'pending'
       : 'idle';
   const progress = Number.isFinite(sceneProgress) ? Math.max(0, Math.min(100, sceneProgress)) : 0;
+
+  useEffect(() => {
+    if (runningScene && runningScene !== prevRunningSceneRef.current) {
+      startTransition(() => {
+        setScenePulseKey(k => k + 1);
+      });
+    }
+    prevRunningSceneRef.current = runningScene;
+  }, [runningScene]);
+
+  const handleModeToggle = (m: 'MANUAL' | 'AUTO') => {
+    const pulseClass = m === 'AUTO' ? 'mode-pulse-auto' : 'mode-pulse';
+    setModePulseClass(pulseClass);
+    toggleMode(m);
+    setTimeout(() => setModePulseClass(''), 300);
+  };
 
   const activateScene = async () => {
     if (!loadedScene || pending.sceneActivate) return;
@@ -45,16 +65,20 @@ export const ControlPanel: React.FC = () => {
   };
 
   return (
-    <Card title="Control Panel" icon={Settings2} className="h-full" contentClassName="gap-2">
-      <div className="tab-shell">
+    <Card title="Control Panel" icon={Settings2} headerClassName="accent-blue" className="h-full" contentClassName="gap-2">
+      <div className={`tab-shell ${modePulseClass}`}>
         {(['MANUAL', 'AUTO'] as const).map((m) => (
           <button
             key={m}
-            onClick={() => toggleMode(m)}
+            onClick={() => handleModeToggle(m)}
             className={`tab-btn ${mode === m ? 'active' : ''}`}
             disabled={pending.mode || !systemOn}
           >
-            {pending.mode ? 'LOADING...' : m}
+            {pending.mode && mode === m ? (
+              <span className="loading-dot" />
+            ) : (
+              m
+            )}
           </button>
         ))}
       </div>
@@ -67,7 +91,14 @@ export const ControlPanel: React.FC = () => {
       {mode === 'AUTO' ? (
         <>
           <div className="soft-inset motion-soft p-2.5">
-            <div className="field-label mb-1.5">SCENE SELECTION</div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="field-label">SCENE SELECTION</div>
+              {loadedScene && (
+                <span className="scene-loaded-badge">
+                  {loadedScene}
+                </span>
+              )}
+            </div>
             <select
               value={loadedScene}
               onChange={(e) => {
@@ -98,7 +129,7 @@ export const ControlPanel: React.FC = () => {
 
           <div className="soft-inset motion-soft p-2.5">
             <p className="text-[0.82rem] font-semibold data-text" style={{ color: 'var(--text-secondary)' }}>
-              Loaded {loadedScene || 'None'}, Running {runningScene || 'None'}
+              Running: <span>{runningScene || 'None'}</span>
             </p>
 
             <div className="mt-1.5 inline-flex items-center px-3 py-1 rounded-md text-[0.68rem] font-bold uppercase tracking-wide status-chip data-text">
@@ -119,28 +150,29 @@ export const ControlPanel: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-2">
             <button
+              key={scenePulseKey}
               onClick={activateScene}
               disabled={!loadedScene || pendingActivation || pending.sceneActivate || pending.sceneLoad || !systemOn}
-              className="h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed"
+              className={`h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press ${runningScene ? 'scene-feedback' : ''}`}
               style={{
                 background: 'var(--action-strong-bg)',
                 color: 'var(--action-strong-text)',
                 border: '1px solid color-mix(in oklab, var(--action-strong-bg) 72%, var(--border-color) 28%)',
               }}
             >
-              {pending.sceneActivate ? 'Loading...' : 'Activate'}
+              {pending.sceneActivate ? <span className="loading-dot" /> : 'Activate'}
             </button>
             <button
               onClick={deactivateScene}
               disabled={pending.sceneDeactivate || !systemOn}
-              className="h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed"
+              className="h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press"
               style={{
                 background: 'var(--action-neutral-bg)',
                 color: 'var(--action-neutral-text)',
                 border: '1px solid var(--border-color)',
               }}
             >
-              {pending.sceneDeactivate ? 'Loading...' : 'Deactivate'}
+              {pending.sceneDeactivate ? <span className="loading-dot" /> : 'Deactivate'}
             </button>
           </div>
         </>
@@ -198,7 +230,7 @@ export const ControlPanel: React.FC = () => {
                 <button
                   onClick={() => adjustLight('cw', -1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft"
+                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   -
@@ -206,7 +238,7 @@ export const ControlPanel: React.FC = () => {
                 <button
                   onClick={() => adjustLight('cw', 1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft"
+                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   +
@@ -223,7 +255,7 @@ export const ControlPanel: React.FC = () => {
                 <button
                   onClick={() => adjustLight('ww', -1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft"
+                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   -
@@ -231,7 +263,7 @@ export const ControlPanel: React.FC = () => {
                 <button
                   onClick={() => adjustLight('ww', 1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft"
+                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   +
@@ -240,8 +272,8 @@ export const ControlPanel: React.FC = () => {
             </div>
           </div>
           {pending.manual ? (
-            <p className="text-[0.68rem] font-bold data-text text-right" style={{ color: 'var(--text-muted)' }}>
-              Syncing manual values...
+            <p className="text-right" style={{ color: 'var(--text-muted)' }}>
+              <span className="loading-dot"></span>
             </p>
           ) : null}
         </>

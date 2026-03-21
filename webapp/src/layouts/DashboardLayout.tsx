@@ -106,40 +106,44 @@ export const DashboardLayout = ({ theme }: DashboardLayoutProps) => {
   return (
     <main className="max-w-[2350px] mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-        <ProfileChart
-          theme={theme}
-          title="CCT"
-          data={cctData}
-          color={uiConfig.cct.color}
-          unit={uiConfig.cct.unit}
-          yMin={uiConfig.cct.min}
-          yMax={uiConfig.cct.max}
-          currentVal={currentCct}
-          currentHour={currentHour}
-          clearAll={hasSystemOnFlag && !systemOn}
-        />
-        <ProfileChart
-          theme={theme}
-          title="Intensity"
-          data={intensityData}
-          color={uiConfig.intensity.color}
-          unit={uiConfig.intensity.unit}
-          yMin={uiConfig.intensity.min}
-          yMax={uiConfig.intensity.max}
-          currentVal={currentLux}
-          currentHour={currentHour}
-          clearAll={hasSystemOnFlag && !systemOn}
-        />
+        <div className="panel-stagger-1">
+          <ProfileChart
+            theme={theme}
+            title="CCT"
+            data={cctData}
+            color={uiConfig.cct.color}
+            unit={uiConfig.cct.unit}
+            yMin={uiConfig.cct.min}
+            yMax={uiConfig.cct.max}
+            currentVal={currentCct}
+            currentHour={currentHour}
+            clearAll={hasSystemOnFlag && !systemOn}
+          />
+        </div>
+        <div className="panel-stagger-2">
+          <ProfileChart
+            theme={theme}
+            title="Intensity"
+            data={intensityData}
+            color={uiConfig.intensity.color}
+            unit={uiConfig.intensity.unit}
+            yMin={uiConfig.intensity.min}
+            yMax={uiConfig.intensity.max}
+            currentVal={currentLux}
+            currentHour={currentHour}
+            clearAll={hasSystemOnFlag && !systemOn}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-stretch">
-        <div className="xl:col-span-4 xl:h-[460px]">
+        <div className="xl:col-span-4 xl:h-[460px] panel-stagger-3">
           <ControlPanel />
         </div>
-        <div className="xl:col-span-4 xl:h-[460px]">
-          <StatusBoard />
+        <div className="xl:col-span-4 xl:h-[460px] panel-stagger-4">
+          <StatusBoard systemOn={systemOn} />
         </div>
-        <div className="xl:col-span-4 xl:h-[460px]">
+        <div className="xl:col-span-4 xl:h-[460px] panel-stagger-5">
           <LuminaireList />
         </div>
       </div>

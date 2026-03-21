@@ -69,6 +69,19 @@ export const useLuminaireControl = () => {
     timer: null,
     targetScene: null,
   });
+  const manualSyncCooldownRef = useRef(false);
+  const prevPendingManualRef = useRef(pending.manual);
+
+  useEffect(() => {
+    if (prevPendingManualRef.current && !pending.manual) {
+      manualSyncCooldownRef.current = true;
+      const t = window.setTimeout(() => {
+        manualSyncCooldownRef.current = false;
+      }, 500);
+      return () => clearTimeout(t);
+    }
+    prevPendingManualRef.current = pending.manual;
+  }, [pending.manual]);
 
   useEffect(() => {
     if (!snapshot) return;
@@ -89,7 +102,7 @@ export const useLuminaireControl = () => {
         ? (scheduler.available_scenes.filter((s): s is string => typeof s === 'string'))
         : [];
       setAvailableScenes(scenes);
-      if (!manualSyncRef.current.editing && !manualButtonsSyncRef.current.editing && !pending.manual) {
+      if (!manualSyncRef.current.editing && !manualButtonsSyncRef.current.editing && !pending.manual && !manualSyncCooldownRef.current) {
         setValues((prev) => ({
           ...prev,
           cct: Number(runtime?.cct ?? prev.cct),
@@ -199,13 +212,13 @@ export const useLuminaireControl = () => {
     if (sync.editingTimer) window.clearTimeout(sync.editingTimer);
     sync.editingTimer = window.setTimeout(() => {
       sync.editing = false;
-    }, 400);
+    }, 200);
 
     if (sync.timer) window.clearTimeout(sync.timer);
     sync.timer = window.setTimeout(() => {
       sync.timer = null;
       void flushManualUpdate();
-    }, 150);
+    }, 200);
   };
 
   const adjustLight = async (lightType: 'cw' | 'ww', delta: number) => {
@@ -230,7 +243,7 @@ export const useLuminaireControl = () => {
       }
       manualButtonsSyncRef.current.editingTimer = window.setTimeout(() => {
         manualButtonsSyncRef.current.editing = false;
-      }, 400);
+      }, 200);
 
       if (manualButtonsSyncRef.current.timer) {
         window.clearTimeout(manualButtonsSyncRef.current.timer);
@@ -238,7 +251,7 @@ export const useLuminaireControl = () => {
       manualButtonsSyncRef.current.timer = window.setTimeout(() => {
         manualButtonsSyncRef.current.timer = null;
         void flushManualButtonsUpdate();
-      }, 150);
+      }, 200);
 
       return { ...prev, cw: newCw, ww: newWw };
     });
