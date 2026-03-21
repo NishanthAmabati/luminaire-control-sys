@@ -271,7 +271,26 @@ async function bootstrapFromStateService() {
 
 const clients = new Set();
 
-function broadcast(data) {
+async function broadcast(data) {
+  if (STATE_SERVICE_URL) {
+    try {
+      const response = await fetch(STATE_SERVICE_URL);
+      if (response.ok) {
+        const state = await response.json();
+        // Update manual_input from state service
+        if (state?.manual && snapshot.scheduler.mode === 'MANUAL') {
+          if (typeof state.manual.cw === 'number') {
+            snapshot.scheduler.manual_input.cw = state.manual.cw;
+          }
+          if (typeof state.manual.ww === 'number') {
+            snapshot.scheduler.manual_input.ww = state.manual.ww;
+          }
+        }
+      }
+    } catch (err) {
+      // Silently fail - use existing values
+    }
+  }
   const msg = `data: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) {
     try {
