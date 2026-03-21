@@ -174,17 +174,23 @@ class Scheduler:
 
         if self.runtime.mode == "MANUAL":
             await self.deactivate_scene()
+            
             manual_lux = manual.get("lux", 0)
             self.runtime.lux = manual_lux
             manual_cw = manual.get("cw")
             manual_ww = manual.get("ww")
-            if manual_cw is not None and manual_ww is not None:
-                await self.apply_manual(
-                    "buttons",
-                    cw=manual_cw,
-                    ww=manual_ww,
-                )
-            else:
+            last_toggle = manual.get("last_toggle")
+            
+            if last_toggle == "buttons":
+                if manual_cw is not None and manual_ww is not None:
+                    await self.apply_manual(
+                        "buttons",
+                        cw=manual_cw,
+                        ww=manual_ww,
+                    )
+                else:
+                    log.exception(f"unable to switch mode with values: cw: {manual_cw}, ww: {manual_ww}")
+            elif last_toggle == "sliders":
                 await self.apply_manual(
                     "sliders",
                     cct=manual.get("cct", 0),
