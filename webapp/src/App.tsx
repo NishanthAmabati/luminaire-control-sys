@@ -50,7 +50,15 @@ const AppShell: React.FC = () => {
     <div className="app-shell min-h-screen px-2 py-3 md:px-4 md:py-4">
       <header className="header-panel mb-3">
         <div className="flex items-center gap-4 md:gap-6">
-          <img src={logo} alt="SSS" className="h-12 md:h-16 w-auto select-none" draggable={false} />
+          {/* <img src={logo} alt="SSS" className="h-12 md:h-16 w-auto select-none" draggable={false} /> */}
+          <a href="https://ssstec.in/" target="_blank" rel="noopener noreferrer">
+            <img 
+              src={logo} 
+              alt="SSS" 
+              className="h-12 md:h-16 w-auto select-none cursor-pointer" 
+              draggable={false} 
+            />
+          </a>
           <h1 className="text-2xl md:text-5xl font-black uppercase tracking-[0.04em] leading-none app-title-gradient">
             Luminaire Control System
           </h1>

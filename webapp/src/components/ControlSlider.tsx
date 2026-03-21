@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 
 interface SliderProps {
   label: string;
@@ -12,7 +12,7 @@ interface SliderProps {
   onChange: (val: number) => void;
 }
 
-export const ControlSlider: React.FC<SliderProps> = ({
+export const ControlSlider: React.FC<SliderProps> = memo<SliderProps>(({
   label,
   value,
   min,
@@ -23,7 +23,15 @@ export const ControlSlider: React.FC<SliderProps> = ({
   disabled = false,
   onChange,
 }) => {
-  const pct = ((value - min) / (max - min)) * 100;
+  const pct = useMemo(() => {
+    return ((value - min) / (max - min)) * 100;
+  }, [value, min, max]);
+
+  const style = useMemo(() => ({
+    background: `linear-gradient(to right, ${trackHex} 0%, ${trackHex} ${pct}%, var(--slider-track) ${pct}%, var(--slider-track) 100%)`,
+    opacity: disabled ? 0.65 : 1,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  }), [trackHex, pct, disabled]);
 
   return (
     <div className="mb-2">
@@ -35,13 +43,9 @@ export const ControlSlider: React.FC<SliderProps> = ({
         disabled={disabled}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
         className={`w-full slider-thumb slider-thumb-hover ${colorClass}`}
-        style={{
-          background: `linear-gradient(to right, ${trackHex} 0%, ${trackHex} ${pct}%, var(--slider-track) ${pct}%, var(--slider-track) 100%)`,
-          opacity: disabled ? 0.65 : 1,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
+        style={style}
         aria-label={label || unit}
       />
     </div>
   );
-};
+});

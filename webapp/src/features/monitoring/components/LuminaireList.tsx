@@ -32,7 +32,7 @@ export const LuminaireList: React.FC = () => {
     <Card
       title="Connected Luminaires"
       icon={Network}
-      headerClassName="accent-blue"
+      headerClassName="accent-green"
       className="h-full"
       headerAction={
         <button
@@ -85,7 +85,7 @@ export const LuminaireList: React.FC = () => {
                     <span className="data-text text-sm font-semibold block truncate" style={{ color: 'var(--text-primary)' }}>
                       {luminaire.name}
                     </span>
-                    <span className="data-text text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="data-text text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
                       CW {luminaire.cw.toFixed(2)} | WW {luminaire.ww.toFixed(2)}
                     </span>
                   </div>

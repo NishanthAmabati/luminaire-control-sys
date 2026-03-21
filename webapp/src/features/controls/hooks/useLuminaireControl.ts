@@ -87,6 +87,7 @@ export const useLuminaireControl = () => {
     if (!snapshot) return;
     const scheduler = (snapshot?.scheduler as Record<string, unknown> | undefined) ?? {};
     const runtime = (scheduler?.runtime as Record<string, unknown> | undefined) ?? {};
+    const manualInput = (scheduler?.manual_input as Record<string, unknown> | undefined) ?? {};
     const nextMode: ControlMode = scheduler?.mode === 'AUTO' ? 'AUTO' : 'MANUAL';
 
     const apply = () => {
@@ -107,8 +108,8 @@ export const useLuminaireControl = () => {
           ...prev,
           cct: Number(runtime?.cct ?? prev.cct),
           intensity: Number(runtime?.lux ?? prev.intensity),
-          cw: Math.round(Number(runtime?.cw ?? prev.cw)),
-          ww: Math.round(Number(runtime?.ww ?? prev.ww)),
+          cw: Math.round(Number(manualInput?.cw ?? prev.cw)),
+          ww: Math.round(Number(manualInput?.ww ?? prev.ww)),
         }));
       }
     };

@@ -248,7 +248,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
     <Card
       title="Status & Timer"
       icon={Timer}
-      headerClassName="accent-orange"
+      headerClassName="accent-green"
       className="h-full overflow-visible"
       contentClassName="gap-3 overflow-visible"
     >
@@ -262,12 +262,12 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
       <div className={`status-chip motion-soft p-3 flex items-center gap-3 ${!systemOn || error ? 'status-offline-glow' : 'status-active-glow'}`}>
         <div
           className={`h-10 w-10 rounded-full flex items-center justify-center ${systemOn && !error ? 'status-indicator-pulse' : ''}`}
-          style={{ background: !systemOn || error ? 'var(--danger)' : 'var(--success)', color: '#fff' }}
+          style={{ background: !systemOn || error ? 'var(--danger)' : 'var(--success)', color: 'var(--card-bg)' }}
         >
           <Zap size={18} />
         </div>
         <div>
-          <p className="font-extrabold text-2xl data-text" style={{ color: 'var(--text-primary)' }}>
+          <p className="font-extrabold text-xl data-text" style={{ color: 'var(--text-primary)' }}>
             {!systemOn ? 'System OFF' : error ? 'System Offline' : 'System Active'}
           </p>
           <p className="text-sm data-text" style={{ color: 'var(--text-secondary)' }}>
@@ -288,23 +288,14 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
           </div>
           <div className="tab-shell max-w-[220px] w-full">
             <button
-              className={`tab-btn ${isTimerEnabled ? 'active' : ''}`}
+              className={`tab-btn ${isTimerEnabled ? 'active-green' : ''}`}
               onClick={() => void handleTimerToggle(true)}
               disabled={timerTogglePending}
-              style={
-                isTimerEnabled
-                  ? {
-                      background: 'color-mix(in oklab, var(--success) 24%, var(--card-bg-soft) 76%)',
-                      color: 'color-mix(in oklab, var(--success) 72%, var(--text-primary) 28%)',
-                      border: '1px solid color-mix(in oklab, var(--success) 30%, var(--border-color) 70%)',
-                    }
-                  : undefined
-              }
             >
               {timerTogglePending && !isTimerEnabled ? 'LOADING...' : 'ENABLED'}
             </button>
             <button
-              className={`tab-btn ${!isTimerEnabled ? 'active' : ''}`}
+              className={`tab-btn ${!isTimerEnabled ? 'active-green' : ''}`}
               onClick={() => void handleTimerToggle(false)}
               disabled={timerTogglePending}
             >

@@ -65,13 +65,13 @@ export const ControlPanel: React.FC = () => {
   };
 
   return (
-    <Card title="Control Panel" icon={Settings2} headerClassName="accent-blue" className="h-full" contentClassName="gap-2">
+    <Card title="Control Panel" icon={Settings2} headerClassName="accent-green" className="h-full" contentClassName="gap-2">
       <div className={`tab-shell ${modePulseClass}`}>
         {(['MANUAL', 'AUTO'] as const).map((m) => (
           <button
             key={m}
             onClick={() => handleModeToggle(m)}
-            className={`tab-btn ${mode === m ? 'active' : ''}`}
+            className={`tab-btn ${mode === m ? 'active-green' : ''}`}
             disabled={pending.mode || !systemOn}
           >
             {pending.mode && mode === m ? (
@@ -83,7 +83,7 @@ export const ControlPanel: React.FC = () => {
         ))}
       </div>
       {!systemOn ? (
-        <p className="text-[0.72rem] font-bold data-text text-right" style={{ color: 'var(--danger)' }}>
+        <p className="text-sm font-bold data-text text-right" style={{ color: 'var(--danger)' }}>
           System is OFF. Control options are disabled.
         </p>
       ) : null}
@@ -121,18 +121,18 @@ export const ControlPanel: React.FC = () => {
               ))}
             </select>
             {pending.sceneLoad ? (
-              <p className="mt-1 text-[0.68rem] font-bold data-text" style={{ color: 'var(--text-muted)' }}>
+              <p className="mt-1 text-sm font-bold data-text" style={{ color: 'var(--text-muted)' }}>
                 Loading scene...
               </p>
             ) : null}
           </div>
 
           <div className="soft-inset motion-soft p-2.5">
-            <p className="text-[0.82rem] font-semibold data-text" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm font-semibold data-text" style={{ color: 'var(--text-secondary)' }}>
               Running: <span>{runningScene || 'None'}</span>
             </p>
 
-            <div className="mt-1.5 inline-flex items-center px-3 py-1 rounded-md text-[0.68rem] font-bold uppercase tracking-wide status-chip data-text">
+            <div className={`mt-1.5 inline-flex items-center px-3 py-1 rounded-md text-sm font-bold uppercase tracking-wide data-text ${schedulerStatus === 'idle' ? 'status-chip status-idle' : schedulerStatus === 'pending' ? 'status-chip status-pending' : 'status-chip status-running'}`}>
               {schedulerStatus === 'idle' ? 'Idle' : schedulerStatus === 'pending' ? 'Pending' : 'Running'}
             </div>
 
@@ -141,7 +141,7 @@ export const ControlPanel: React.FC = () => {
                 <div className="scene-progress-shell">
                   <div className="scene-progress-fill" style={{ width: `${progress}%` }} />
                 </div>
-                <p className="text-[0.7rem] mt-1 font-semibold data-text" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-sm mt-1 font-semibold data-text" style={{ color: 'var(--text-muted)' }}>
                   Progress {progress.toFixed(2)}%
                 </p>
               </div>
@@ -153,7 +153,7 @@ export const ControlPanel: React.FC = () => {
               key={scenePulseKey}
               onClick={activateScene}
               disabled={!loadedScene || pendingActivation || pending.sceneActivate || pending.sceneLoad || !systemOn}
-              className={`h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press ${runningScene ? 'scene-feedback' : ''}`}
+              className={`h-9 rounded-md text-sm font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press ${runningScene ? 'scene-feedback' : ''}`}
               style={{
                 background: 'var(--action-strong-bg)',
                 color: 'var(--action-strong-text)',
@@ -165,7 +165,7 @@ export const ControlPanel: React.FC = () => {
             <button
               onClick={deactivateScene}
               disabled={pending.sceneDeactivate || !systemOn}
-              className="h-9 rounded-md text-[0.76rem] font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press"
+              className="h-9 rounded-md text-sm font-black uppercase tracking-wide disabled:opacity-45 motion-soft data-text cursor-pointer disabled:cursor-not-allowed btn-press"
               style={{
                 background: 'var(--action-neutral-bg)',
                 color: 'var(--action-neutral-text)',
@@ -220,25 +220,32 @@ export const ControlPanel: React.FC = () => {
             </div>
           </div>
 
+          {!systemOn ? (
+            <div className="soft-inset p-3 text-center">
+              <p className="text-sm font-bold data-text" style={{ color: 'var(--danger)' }}>
+                Manual controls are disabled. System is OFF.
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-2 min-h-0">
             <div className="soft-inset p-2.5 text-center min-w-0">
               <div className="field-label">Cool White</div>
-              <div className="text-2xl font-black mt-1 mb-2 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
+              <div className="text-2xl font-black mt-1 mb-3 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
                 {values.cw.toFixed(1)}%
               </div>
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-center gap-3">
                 <button
                   onClick={() => adjustLight('cw', -1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
+                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
-                  -
+                  −
                 </button>
                 <button
                   onClick={() => adjustLight('cw', 1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
+                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   +
@@ -248,22 +255,22 @@ export const ControlPanel: React.FC = () => {
 
             <div className="soft-inset p-2.5 text-center min-w-0">
               <div className="field-label">Warm White</div>
-              <div className="text-2xl font-black mt-1 mb-2 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
+              <div className="text-2xl font-black mt-1 mb-3 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
                 {values.ww.toFixed(1)}%
               </div>
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-center gap-3">
                 <button
                   onClick={() => adjustLight('ww', -1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
+                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
-                  -
+                  −
                 </button>
                 <button
                   onClick={() => adjustLight('ww', 1)}
                   disabled={!systemOn}
-                  className="h-7 w-7 rounded-md font-black motion-soft btn-press"
+                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
                   style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
                 >
                   +
@@ -271,6 +278,7 @@ export const ControlPanel: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
           {pending.manual ? (
             <p className="text-right" style={{ color: 'var(--text-muted)' }}>
               <span className="loading-dot"></span>

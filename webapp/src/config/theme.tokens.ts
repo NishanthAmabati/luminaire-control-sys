@@ -15,8 +15,11 @@ export interface ThemeTokenSet {
   textMuted: string;
   accentBlue: string;
   accentOrange: string;
+  accentPrimary: string;
+  accentSecondary: string;
   success: string;
   danger: string;
+  statIconColor: string;
   currentLine: string;
   chartGrid: string;
   chartAxis: string;
@@ -40,34 +43,37 @@ export const DEFAULT_THEME: DashboardTheme = 'light-ivory';
 
 export const THEME_TOKENS: Record<DashboardTheme, ThemeTokenSet> = {
   'light-ivory': {
-    pageBg: '#eeede9',
-    cardBg: '#f8f7f3',
-    cardBgSoft: '#f2f0ea',
-    border: '#ddd8cb',
-    textPrimary: '#2a2723',
-    textSecondary: '#5b544c',
-    textMuted: '#8c8378',
-    accentBlue: '#3a7fcb',
-    accentOrange: '#da8a34',
-    success: '#3ea75f',
-    danger: '#d76456',
-    currentLine: '#f45b4f',
-    chartGrid: 'rgba(213, 205, 190, 0.6)',
-    chartAxis: '#8c8378',
-    chartBadgeBg: 'rgba(255, 252, 246, 0.95)',
-    chartBadgeText: '#3b342d',
+    pageBg: '#f9f7f3',
+    cardBg: '#fffefb',
+    cardBgSoft: '#f5f1ea',
+    border: '#e3dbd0',
+    textPrimary: '#2a2622',
+    textSecondary: '#635c54',
+    textMuted: '#8f8579',
+    accentBlue: '#4a90b8',
+    accentOrange: '#cd853f',
+    accentPrimary: '#4a90b8',
+    accentSecondary: '#cd853f',
+    success: '#6b8e6b',
+    danger: '#bc6c5c',
+    statIconColor: '#6b8e6b',
+    currentLine: '#4a90b8',
+    chartGrid: 'rgba(227, 219, 208, 0.6)',
+    chartAxis: '#8f8579',
+    chartBadgeBg: 'rgba(255, 254, 251, 0.95)',
+    chartBadgeText: '#2a2622',
     chartGradients: {
       cct: [
-        '#3a7fcb',
-        '#5ba3e0',
-        '#8ec4ed',
-        '#b8dcf0',
-        '#e8f4fc',
+        '#4a90b8',
+        '#6ba8c9',
+        '#8ec0da',
+        '#b1d8eb',
+        '#d4f0fc',
       ],
       intensity: [
-        '#da8a34ee',
-        '#e8a850bb',
-        '#e8a85010',
+        '#c49a6cee',
+        '#d4b08cbb',
+        '#d4b08c10',
       ],
     },
   },
@@ -81,9 +87,12 @@ export const THEME_TOKENS: Record<DashboardTheme, ThemeTokenSet> = {
     textMuted: '#887f96',
     accentBlue: '#5aa7ff',
     accentOrange: '#f6a24e',
+    accentPrimary: '#5aa7ff',
+    accentSecondary: '#f6a24e',
     success: '#32be74',
     danger: '#f1635a',
-    currentLine: '#ff5a4f',
+    statIconColor: '#32be74',
+    currentLine: '#5aa7ff',
     chartGrid: 'rgba(75, 68, 84, 0.42)',
     chartAxis: '#a69bb8',
     chartBadgeBg: 'rgba(252, 246, 255, 0.86)',

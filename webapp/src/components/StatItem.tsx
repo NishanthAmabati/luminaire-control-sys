@@ -10,16 +10,16 @@ interface StatItemProps {
 
 export const StatItem: React.FC<StatItemProps> = ({ label, value, unit, icon: Icon }) => (
   <div className="metric-chip motion-soft flex items-center gap-3 px-3 py-2">
-    <Icon size={40} style={{ color: 'var(--text-secondary)' }} />
+    <Icon size={40} style={{ color: 'var(--stat-icon-color)' }} />
     <div>
-      <p className="text-[0.72rem] font-semibold uppercase tracking-wide data-text" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-caption font-semibold uppercase tracking-wide">
         {label}
       </p>
       <div className="flex items-baseline gap-1">
-        <span className="text-[1rem] font-extrabold data-text" style={{ color: 'var(--text-primary)' }}>
+        <span className="text-lg font-extrabold" style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
           {value}
         </span>
-        <span className="text-[0.72rem] font-bold data-text" style={{ color: 'var(--text-secondary)' }}>
+        <span className="text-caption font-bold" style={{ color: 'var(--text-secondary)' }}>
           {unit}
         </span>
       </div>
