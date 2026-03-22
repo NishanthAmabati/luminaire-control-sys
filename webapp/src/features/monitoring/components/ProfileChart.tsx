@@ -85,14 +85,16 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       })
     : [];
 
-  const getWavyYAt = (hour: number): number => {
-    if (!hasProfile || denseData.length === 0) return currentVal;
+  const getWavyYAt = (hour: number): { x: number; y: number } => {
+    if (!hasProfile || denseData.length === 0) return { x: hour, y: currentVal };
     const idx = Math.round(hour * 2);
     const clampedIdx = Math.max(0, Math.min(denseData.length - 1, idx));
-    return denseData[clampedIdx][1];
+    const x = clampedIdx * 0.5;
+    const y = denseData[clampedIdx][1];
+    return { x, y };
   };
 
-  const currentY = hasProfile ? getWavyYAt(currentHour) : currentVal;
+  const dotPosition = hasProfile ? getWavyYAt(currentHour) : { x: currentHour, y: currentVal };
   const manualTrace: [number, number][] = !hasProfile && !clearAll
     ? Array.from({ length: 25 }, (_, i) => [i, currentVal] as [number, number])
     : [];
@@ -258,9 +260,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
         data: denseData,
         type: 'line',
         smooth: 0.5,
-        showSymbol: hasProfile,
-        symbol: 'circle',
-        symbolSize: 3,
+        showSymbol: false,
         lineStyle: { color, width: 2.8, opacity: hasProfile ? 0.95 : 0 },
         areaStyle:
           hasProfile
@@ -280,52 +280,35 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
                 data: [[{ xAxis: 8 }, { xAxis: 18 }]],
               }
             : undefined,
-        markLine: clearAll
-          ? undefined
-          : {
-            symbol: 'none',
-            animation: true,
-            animationDuration: 150,
-            animationEasing: 'cubicOut' as const,
-            lineStyle: {
-              color: hasProfile ? tokens.currentLine : tokens.textMuted,
-              width: hasProfile ? 2 : 1.5,
-              type: hasProfile ? 'solid' : 'dashed',
-            },
-            label: { show: false },
-            data: [
-              { xAxis: currentHour },
-              ...(!hasProfile ? [{ yAxis: currentY }] : []),
-            ],
+        markLine: {
+          symbol: ['none', 'none'],
+          animation: true,
+          animationDuration: 150,
+          animationEasing: 'cubicOut' as const,
+          lineStyle: {
+            color: hasProfile ? tokens.currentLine : tokens.textMuted,
+            width: hasProfile ? 2 : 1.5,
+            type: hasProfile ? 'solid' : 'dashed',
           },
-        markPoint: !hasProfile && !clearAll
-          ? {
-              symbol: 'triangle',
-              symbolSize: 14,
-              symbolRotate: 0,
-              data: [{ coord: [currentHour, currentY] }],
-              itemStyle: {
-                color: color,
-              },
-              animation: true,
-              animationDuration: 100,
-              animationDelay: 50,
-              animationEasing: 'cubicOut' as const,
-            }
-          : hasProfile && !clearAll
-          ? {
-              symbol: 'circle',
-              symbolSize: 8,
-              data: [{ coord: [currentHour, currentY] }],
-              itemStyle: {
-                color: tokens.success,
-              },
-              animation: true,
-              animationDuration: 100,
-              animationDelay: 50,
-              animationEasing: 'cubicOut' as const,
-            }
-          : undefined,
+          label: { show: false },
+          data: [
+            { xAxis: dotPosition.x },
+            ...(!hasProfile ? [{ yAxis: dotPosition.y }] : []),
+          ],
+        },
+      },
+      {
+        name: 'Current Dot',
+        type: 'scatter',
+        data: hasProfile && !clearAll ? [[dotPosition.x, dotPosition.y]] : [],
+        symbol: 'circle',
+        symbolSize: 10,
+        itemStyle: {
+          color: tokens.success,
+          shadowBlur: 8,
+          shadowColor: tokens.success,
+        },
+        z: 10,
       },
       {
         name: 'Manual Reference',
