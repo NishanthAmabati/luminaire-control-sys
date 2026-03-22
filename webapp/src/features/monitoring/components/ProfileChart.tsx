@@ -85,7 +85,14 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       })
     : [];
 
-  const currentY = hasProfile ? Number(interpolate(currentHour).toFixed(2)) : currentVal;
+  const getWavyYAt = (hour: number): number => {
+    if (!hasProfile || denseData.length === 0) return currentVal;
+    const idx = Math.round(hour * 2);
+    const clampedIdx = Math.max(0, Math.min(denseData.length - 1, idx));
+    return denseData[clampedIdx][1];
+  };
+
+  const currentY = hasProfile ? getWavyYAt(currentHour) : currentVal;
   const manualTrace: [number, number][] = !hasProfile && !clearAll
     ? Array.from({ length: 25 }, (_, i) => [i, currentVal] as [number, number])
     : [];

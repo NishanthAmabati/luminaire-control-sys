@@ -71,37 +71,39 @@ export const DashboardLayout = ({ theme }: DashboardLayoutProps) => {
   const currentCct = systemOn ? Number(runtime?.cct ?? uiConfig.cct.default) : 0;
   const currentLux = systemOn ? Number(runtime?.lux ?? uiConfig.intensity.default) : 0;
 
+  const hasSceneProfile = useMemo(() => {
+    const profileCct = sceneProfile?.cct;
+    const profileIntensity = sceneProfile?.intensity;
+    const hasCct = Array.isArray(profileCct) && profileCct.length > 0;
+    const hasIntensity = Array.isArray(profileIntensity) && profileIntensity.length > 0;
+    return hasCct || hasIntensity;
+  }, [sceneProfile]);
+
   const cctData = useMemo(() => {
     if (!systemOn) return [] as [number, number][];
     if (mode !== 'AUTO') return [] as [number, number][];
+    if (!hasSceneProfile) return [] as [number, number][];
     const fromProfile =
       sceneProfile?.cct ??
       (statePayload as Record<string, unknown> | null)?.cct_profile;
-    if (fromProfile) return parseSeries(fromProfile, currentCct);
-    return [
-      [0, currentCct],
-      [6, currentCct],
-      [12, currentCct],
-      [18, currentCct],
-      [24, currentCct],
-    ] as [number, number][];
-  }, [systemOn, mode, statePayload, sceneProfile, currentCct]);
+    if (fromProfile && Array.isArray(fromProfile) && fromProfile.length > 0) {
+      return parseSeries(fromProfile, currentCct);
+    }
+    return [] as [number, number][];
+  }, [systemOn, mode, statePayload, sceneProfile, currentCct, hasSceneProfile]);
 
   const intensityData = useMemo(() => {
     if (!systemOn) return [] as [number, number][];
     if (mode !== 'AUTO') return [] as [number, number][];
+    if (!hasSceneProfile) return [] as [number, number][];
     const fromProfile =
       sceneProfile?.intensity ??
       (statePayload as Record<string, unknown> | null)?.intensity_profile;
-    if (fromProfile) return parseSeries(fromProfile, currentLux);
-    return [
-      [0, currentLux],
-      [6, currentLux],
-      [12, currentLux],
-      [18, currentLux],
-      [24, currentLux],
-    ] as [number, number][];
-  }, [systemOn, mode, statePayload, sceneProfile, currentLux]);
+    if (fromProfile && Array.isArray(fromProfile) && fromProfile.length > 0) {
+      return parseSeries(fromProfile, currentLux);
+    }
+    return [] as [number, number][];
+  }, [systemOn, mode, statePayload, sceneProfile, currentLux, hasSceneProfile]);
 
   return (
     <main className="max-w-[2350px] mx-auto">
