@@ -6,6 +6,7 @@ import { UiFeedbackProvider } from './context/UiFeedbackContext';
 import { useUiFeedback } from './context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from './utils/apiError';
 import { useEventSnapshot } from './hooks/useEventSnapshot';
+import { TraceProvider, useTrace } from './context/TraceContext';
 
 const AppShell: React.FC = () => {
   const apiBase = import.meta.env.VITE_API_URL || '/api';
@@ -15,6 +16,7 @@ const AppShell: React.FC = () => {
   const { theme } = useDashboardTheme();
   const { pushError } = useUiFeedback();
   const { snapshot } = useEventSnapshot();
+  const { createTraceHeaders, generateTraceId } = useTrace();
 
   useEffect(() => {
     const scheduler = (snapshot?.scheduler as Record<string, unknown> | undefined) ?? {};
@@ -28,11 +30,12 @@ const AppShell: React.FC = () => {
     const next = !systemOn;
     setPowerPending(true);
     setToggleAnimating(true);
+    generateTraceId();
 
     try {
       const response = await fetch(`${apiBase}/system/power`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ on: next }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -50,7 +53,6 @@ const AppShell: React.FC = () => {
     <div className="app-shell min-h-screen px-2 py-3 md:px-4 md:py-4">
       <header className="header-panel mb-3">
         <div className="flex items-center gap-4 md:gap-6">
-          {/* <img src={logo} alt="SSS" className="h-12 md:h-16 w-auto select-none" draggable={false} /> */}
           <a href="https://ssstec.in/" target="_blank" rel="noopener noreferrer">
             <img 
               src={logo} 
@@ -84,9 +86,11 @@ const AppShell: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <UiFeedbackProvider>
-    <AppShell />
-  </UiFeedbackProvider>
+  <TraceProvider>
+    <UiFeedbackProvider>
+      <AppShell />
+    </UiFeedbackProvider>
+  </TraceProvider>
 );
 
 export default App;

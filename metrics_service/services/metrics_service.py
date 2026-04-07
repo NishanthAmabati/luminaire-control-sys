@@ -1,13 +1,12 @@
 import asyncio
 import json
 import logging
-import os
 import time
-
 import psutil
 from redis.asyncio import Redis
 
-log = logging.getLogger(__name__)
+# using a specific name for easier filtering in grafana/loki
+log = logging.getLogger("services.metrics_service")
 
 class MetricsService:
     def __init__(self, redis_url: str, channel: str, interval_s: float):
@@ -16,53 +15,64 @@ class MetricsService:
         self.interval_s = interval_s
         self.running = True
 
-        # Prime cpu_percent so subsequent reads are non-blocking.
+        # prime cpu_percent for non-blocking reads
         try:
             psutil.cpu_percent(interval=None)
+            log.debug("cpu metrics primed")
         except Exception:
-            log.exception("Failed to prime cpu_percent")
+            log.exception("failed to prime cpu metrics")
 
     def _read_temperature_sys(self):
+        """primary method for raspberry pi soc temperature"""
         try:
             with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
-                return float(f.read()) / 1000.0
+                # convert millidegrees to celsius
+                return float(f.read().strip()) / 1000.0
         except Exception:
             return None
 
     def _read_temperature(self):
+        """fallback method using psutil sensors"""
         try:
+            # check sysfs first (pi specific)
+            temp = self._read_temperature_sys()
+            if temp is not None:
+                return temp
+
+            # fallback to psutil for other linux distros
             temps = psutil.sensors_temperatures()
             if temps:
                 for _, entries in temps.items():
                     for entry in entries:
-                        if entry.current is not None:
+                        if entry.current:
                             return float(entry.current)
         except Exception:
-            log.debug("psutil.sensors_temperatures unavailable")
-        return self._read_temperature_sys()
+            log.debug("temperature sensors unavailable")
+        return None
 
     def collect(self):
-        cpu = None
-        memory = None
-        temperature = None
-
-        try:
-            cpu = float(psutil.cpu_percent(interval=None))
-        except Exception:
-            log.exception("Failed to read cpu percent")
-
-        try:
-            memory = float(psutil.virtual_memory().percent)
-        except Exception:
-            log.exception("Failed to read memory percent")
-
-        temperature = self._read_temperature()
-
-        return {
-            "cpu": cpu,
-            "memory": memory,
-            "temperature": temperature,
+        metrics = {
+            "cpu": None,
+            "memory": None,
+            "temperature": None
         }
+
+        try:
+            metrics["cpu"] = float(psutil.cpu_percent(interval=None))
+        except Exception:
+            log.exception("failed to collect cpu metrics")
+
+        try:
+            metrics["memory"] = float(psutil.virtual_memory().percent)
+        except Exception:
+            log.exception("failed to collect memory metrics")
+
+        try:
+            metrics["temperature"] = self._read_temperature()
+        except Exception:
+            log.debug("failed to collect temperature metrics")
+
+        return metrics
 
     async def publish(self, payload: dict):
         try:
@@ -74,20 +84,27 @@ class MetricsService:
                     "ts": time.time()
                 })
             )
-        except Exception as e:
-            log.exception(f"failed to publish metrics to redis. err: {e}")
+            # using debug to avoid filling loki with heartbeats
+            log.debug(f"metrics published to {self.channel}")
+        except Exception:
+            log.exception(f"failed to publish metrics to channel {self.channel}")
 
     async def run(self):
-        log.info("metrics service started")
+        log.info(f"metrics service started with interval {self.interval_s}s")
         while self.running:
-            payload = self.collect()
-            await self.publish(payload)
+            try:
+                payload = self.collect()
+                await self.publish(payload)
+            except Exception:
+                log.exception("unexpected error in metrics collection loop")
+            
             await asyncio.sleep(self.interval_s)
 
     async def shutdown(self):
+        log.info("shutting down metrics service")
         self.running = False
         try:
             await self.redis.close()
-            await self.redis.connection_pool.disconnect()
+            log.info("metrics service stopped")
         except Exception:
-            log.exception("Failed to close redis")
+            log.exception("failed to close redis connection during shutdown")

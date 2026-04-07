@@ -1,12 +1,15 @@
 import asyncio
-import json
 import logging
+import json
 import time
 
 from redis.asyncio import Redis
 from models.state import SystemState
+from utils.tracing import create_trace_logger
+from utils.trace_context import get_trace_id
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("services.state_service")
+
 
 class StateService:
     def __init__(self, redisURL: str, state_key: str, channel: str):
@@ -17,63 +20,88 @@ class StateService:
         self.state = SystemState()
 
     async def load(self):
-        """Load state from Redis on startup"""
-        state_from_redis = await self.redis.get(self.state_key)
-        if state_from_redis:
-            self.state = SystemState.from_dict(json.loads(state_from_redis))
-            log.info("state restored from redis")
-        else:
-            log.info("no previous state found, using defaults")
-
-    async def persist(self):
         try:
-            await self.redis.set(
-                self.state_key,
-                json.dumps(self.state.to_dict())
-            )
-        except Exception as e:
-            log.exception(f"failed to persist state key={self.state_key}. err: {e}")
+            state_from_redis = await self.redis.get(self.state_key)
+            if state_from_redis:
+                self.state = SystemState.from_dict(json.loads(state_from_redis))
+                log.info("state restored from redis")
+            else:
+                log.info("no previous state found, using default values")
+        except Exception:
+            log.exception(f"failed to load state from key {self.state_key}")
 
-    async def publish(self, event: str, payload: dict):
+    async def persist(self, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
+        try:
+            await self.redis.set(self.state_key, json.dumps(self.state.to_dict()))
+            trace_log.debug("state persisted successfully")
+        except Exception:
+            trace_log.exception(f"failed to persist state to key {self.state_key}")
+
+    async def publish(self, event: str, payload: dict, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             await self.redis.publish(
                 self.channel,
-                json.dumps({
-                    "event": event,
-                    "payload": payload,
-                    "ts": time.time()
-                })
+                json.dumps(
+                    {
+                        "event": event,
+                        "payload": payload,
+                        "trace_id": trace_id,
+                        "ts": time.time(),
+                    }
+                ),
             )
-        except Exception as e:
-            log.exception(f"failed to publish event '{event}' to redis. err: {e}")
+            trace_log.debug("event %s published to %s", event, self.channel)
+        except Exception:
+            trace_log.exception("failed to publish event %s to redis", event)
 
     async def get_state(self) -> SystemState:
         async with self.lock:
             return self.state
 
-    async def set_system_power(self, on: bool):
+    async def set_system_power(self, on: bool, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.system_on = on
-                log.info(f"system power toggled {on}")
+                trace_log.info("system power toggled to %s", on)
                 self.state.touch()
-                await self.persist()
-            await self.publish("system:power", {"on": on})
-        except Exception as e:
-            log.exception(f"failed to toggle system power {on}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("system:power", {"on": on}, trace_id)
+        except Exception:
+            trace_log.exception("failed to toggle system power to %s", on)
 
-    async def set_mode(self, mode: str):
+    async def set_mode(self, mode: str, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.mode = mode
-                log.info(f"system mode switched to {mode}")
+                trace_log.info("system mode switched to %s", mode)
                 self.state.touch()
-                await self.persist()
-            await self.publish("system:mode", {"mode": mode})
-        except Exception as e:
-            log.exception(f"failed to switch system mode to {mode}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("system:mode", {"mode": mode}, trace_id)
+        except Exception:
+            trace_log.exception("failed to switch system mode to %s", mode)
 
-    async def update_metrics(self, cpu: float | None, memory: float | None, temperature: float | None):
+    async def update_metrics(
+        self,
+        cpu: float | None,
+        memory: float | None,
+        temperature: float | None,
+        trace_id=None,
+    ):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 if cpu is not None:
@@ -83,17 +111,24 @@ class StateService:
                 if temperature is not None:
                     self.state.metrics.temperature = temperature
                 self.state.touch()
-                await self.persist()
-        except Exception as e:
-            log.exception(f"failed to update metrics.* cpu, memory, temperature. err: {e}")
+                await self.persist(trace_id)
+            trace_log.debug("system metrics updated in state")
+        except Exception:
+            trace_log.exception("failed to update system metrics")
 
-    async def set_manual_values(self,
-                                medium: str,
-                                cct: float | None = None,
-                                lux: float | None = None,
-                                cw: int | None = None,
-                                ww: int | None = None
-                                ):
+    async def set_manual_values(
+        self,
+        medium: str,
+        cct: float | None = None,
+        lux: float | None = None,
+        cw: int | None = None,
+        ww: int | None = None,
+        trace_id=None,
+    ):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
+        pub_message = {}
         try:
             async with self.lock:
                 if medium == "sliders":
@@ -101,141 +136,142 @@ class StateService:
                     self.state.manual.cct = cct
                     self.state.manual.lux = lux
                     pub_message = {"medium": "sliders", "cct": cct, "lux": lux}
-                    log.info(f"manual update: cct: {cct}, lux: {lux}")
+                    trace_log.info("manual update via sliders: cct %s lux %s", cct, lux)
                 elif medium == "buttons":
                     self.state.manual.last_toggle = "buttons"
                     self.state.manual.cw = cw
                     self.state.manual.ww = ww
                     pub_message = {"medium": "buttons", "cw": cw, "ww": ww}
-                    log.info(f"manual update: cw: {cw}, ww: {ww}")
+                    trace_log.info("manual update via buttons: cw %s ww %s", cw, ww)
                 else:
-                    log.warning(f"ignored manual update with unknown medium: {medium}")
+                    trace_log.warning(
+                        "ignored manual update with unknown medium %s", medium
+                    )
                     return
                 self.state.touch()
-                await self.persist()
-            await self.publish(
-                "manual:update",
-                pub_message
-            )
-        except Exception as e:
-            log.exception(f"failed manual update: {pub_message}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("manual:update", pub_message, trace_id)
+        except Exception:
+            trace_log.exception("failed to process manual update via %s", medium)
 
-    async def update_auto_runtime(self, cct: float, lux: float, progress: float):
+    async def update_auto_runtime(
+        self, cct: float, lux: float, progress: float, trace_id=None
+    ):
+        if not trace_id:
+            trace_id = get_trace_id()
         async with self.lock:
             self.state.auto.cct = cct
             self.state.auto.lux = lux
             self.state.auto.scene_progress = progress
             self.state.touch()
-            await self.persist()
-            '''        await self.publish(
-                        "scheduler:runtime",
-                        {"cct": cct, "lux": lux, "progress": progress}
-                    )'''
-    
-    async def load_scene(self, scene: str):
+            await self.persist(trace_id)
+
+    async def load_scene(self, scene: str, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.auto.loaded_scene = scene
-                log.info(f"scene loaded: {scene}")
+                trace_log.info("scene loaded %s", scene)
                 self.state.touch()
-                await self.persist()
-            await self.publish(
-                "scheduler:scene_loaded",
-                {"scene": scene}
-            )
-        except Exception as e:
-            log.exception(f"failed to load scene {scene}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("scheduler:scene_loaded", {"scene": scene}, trace_id)
+        except Exception:
+            trace_log.exception("failed to load scene %s", scene)
 
-    async def activate_scene(self, scene: str):
+    async def activate_scene(self, scene: str, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.auto.loaded_scene = scene
                 self.state.auto.running_scene = scene
-                log.info(f"scene activated: {scene}")
+                trace_log.info("scene activated %s", scene)
                 self.state.touch()
-                await self.persist()
-            await self.publish(
-                "scheduler:scene_activated",
-                {"scene": scene}
-            )
-        except Exception as e:
-            log.exception(f"failed to activate scene {scene}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("scheduler:scene_activated", {"scene": scene}, trace_id)
+        except Exception:
+            trace_log.exception("failed to activate scene %s", scene)
 
-    async def deactivate_scene(self, scene: str):
+    async def deactivate_scene(self, scene: str, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.auto.loaded_scene = None
                 self.state.auto.running_scene = None
                 self.state.auto.scene_progress = 0.0
-                log.info(f"scene deactivated: {scene}")
+                trace_log.info("scene deactivated %s", scene)
                 self.state.touch()
-                await self.persist()
-            await self.publish(
-                "scheduler:scene_stopped",
-                {}
-            )
-        except Exception as e:
-            log.exception(f"failed to deactivate scene {scene}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("scheduler:scene_stopped", {}, trace_id)
+        except Exception:
+            trace_log.exception("failed to deactivate scene %s", scene)
 
-    async def request_available_scenes(self):
+    async def request_available_scenes(self, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
-            await self.publish(
-                "scheduler:available_scenes",
-                {}
-            )
-        except Exception as e:
-            log.exception(f"failed to request available scenes. err: {e}")
-        
-    async def toggle_timer(self, enabled: bool):
+            await self.publish("scheduler:available_scenes", {}, trace_id)
+            trace_log.debug("requested available scenes from scheduler")
+        except Exception:
+            trace_log.exception("failed to request available scenes")
+
+    async def toggle_timer(self, enabled: bool, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.timer.enabled = enabled
-                log.info(f"timer toggled {enabled}")
+                trace_log.info("timer toggled to %s", enabled)
                 self.state.touch()
-                await self.persist()
-            await self.publish(
-                "timer:toggled",
-                {"enabled": enabled}
-            )
-        except Exception as e:
-            log.exception(f"failed to toggle system timer {enabled}. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("timer:toggled", {"enabled": enabled}, trace_id)
+        except Exception:
+            trace_log.exception("failed to toggle timer to %s", enabled)
 
-    async def configure_timer(self, start: time, end: time):
+    async def configure_timer(self, start, end, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.timer.start = start
                 self.state.timer.end = end
-                log.info(f"timer configured, start: {start}, end: {end}")
+                trace_log.info("timer configured from %s to %s", start, end)
                 self.state.touch()
-                await self.persist()
+                await self.persist(trace_id)
             await self.publish(
-                "timer:configured",
-                {
-                    "start": start,
-                    "end": end
-                    }
+                "timer:configured", {"start": str(start), "end": str(end)}, trace_id
             )
-        except Exception as e:
-            log.exception(f"failed to configure timer: start: {start}, end: {end}. err: {e}")
+        except Exception:
+            trace_log.exception("failed to configure timer for range %s-%s", start, end)
 
-    async def clear_timer(self):
+    async def clear_timer(self, trace_id=None):
+        if not trace_id:
+            trace_id = get_trace_id()
+        trace_log = create_trace_logger(log, trace_id)
         try:
             async with self.lock:
                 self.state.timer.enabled = False
                 self.state.timer.start = None
                 self.state.timer.end = None
-                log.info("timer state cleared")
+                trace_log.info("timer state cleared")
                 self.state.touch()
-                await self.persist()
-            await self.publish("timer:cleared", {})
-        except Exception as e:
-            log.exception(f"failed to clear timer state. err: {e}")
+                await self.persist(trace_id)
+            await self.publish("timer:cleared", {}, trace_id)
+        except Exception:
+            trace_log.exception("failed to clear timer state")
 
     async def shutdown(self):
         try:
-            log.info("stopping redis...")
+            log.info("shutting down state service redis connection")
             await self.redis.close()
-            await self.redis.connection_pool.disconnect()
-            log.info("stopped redis")
+            log.info("state service stopped")
         except Exception:
-            log.exception("failed to close redis")
+            log.exception("failed to close redis during state service shutdown")

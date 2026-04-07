@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Clock, X } from 'lucide-react';
 import { useSystemMonitor } from '../../../hooks/useSystemMonitor';
 import { useUiFeedback } from '../../../context/useUiFeedback';
+import { useTrace } from '../../../context/TraceContext';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
 export const TimerSection: React.FC = () => {
   const { stats } = useSystemMonitor();
   const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { pushError, pushSuccess } = useUiFeedback();
+  const { createTraceHeaders, generateTraceId } = useTrace();
   const [onHour, setOnHour] = useState('');
   const [onMinute, setOnMinute] = useState('');
   const [offHour, setOffHour] = useState('');
@@ -150,15 +152,19 @@ export const TimerSection: React.FC = () => {
   const handleTimerToggle = async (enabled: boolean) => {
     if (timerTogglePending) return;
     setTimerTogglePending(true);
+    generateTraceId();
     try {
       const response = await fetch(`${apiBase}/timer/toggle?enabled=${enabled}`, {
         method: 'POST',
+        headers: createTraceHeaders(),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
       setSuppressTimerSyncUntil(Date.now() + 1200);
       pushSuccess(`Timer ${enabled ? 'enabled' : 'disabled'}.`);
       if (!enabled) {
-        const clearResponse = await fetch(`${apiBase}/timer/clear`);
+        const clearResponse = await fetch(`${apiBase}/timer/clear`, {
+          headers: createTraceHeaders(),
+        });
         if (!clearResponse.ok) throw new Error(await readErrorMessage(clearResponse));
         setOnHour('');
         setOnMinute('');
@@ -179,10 +185,11 @@ export const TimerSection: React.FC = () => {
     if (!onTime || !offTime) return;
     if (timerSetPending) return;
     setTimerSetPending(true);
+    generateTraceId();
     try {
       const response = await fetch(`${apiBase}/timer/configure`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ start: onTime, end: offTime }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -198,8 +205,11 @@ export const TimerSection: React.FC = () => {
   const handleClearTimer = async () => {
     if (timerClearPending) return;
     setTimerClearPending(true);
+    generateTraceId();
     try {
-      const response = await fetch(`${apiBase}/timer/clear`);
+      const response = await fetch(`${apiBase}/timer/clear`, {
+        headers: createTraceHeaders(),
+      });
       if (!response.ok) throw new Error(await readErrorMessage(response));
       setOnHour('');
       setOnMinute('');

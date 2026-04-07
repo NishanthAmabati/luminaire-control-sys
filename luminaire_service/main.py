@@ -2,17 +2,31 @@ import asyncio
 import logging
 import os
 import uvicorn
+import traceback
+from pythonjsonlogger import jsonlogger
 
 from api.api_server import createAPI
 from tcp.tcp_server import TCPServer
 from services.luminaire_service import LuminaireService
 
-logging.basicConfig(level=logging.INFO)
+# 1. configure json logging for docker/loki
+log_handler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    '%(levelname)s %(name)s %(message)s %(asctime)s'
+)
+log_handler.setFormatter(formatter)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(log_handler)
+
+log = logging.getLogger("main")
 
 def require_env(name: str) -> str:
     value = os.getenv(name)
     if value is None or value == "":
-        raise RuntimeError(f"missing required env var: {name}")
+        log.error(f"missing required env var {name}")
+        raise RuntimeError(f"missing required env var {name}")
     return value
 
 def parse_bool(value: str) -> bool:
@@ -20,65 +34,91 @@ def parse_bool(value: str) -> bool:
 
 def parse_bool_env(name: str, default: bool) -> bool:
     value = os.getenv(name)
-    if value is None or value == "":
+    if not value:
         return default
     return parse_bool(value)
 
 def parse_int_env(name: str, default: int) -> int:
     value = os.getenv(name)
-    if value is None or value == "":
+    if not value:
         return default
     try:
         parsed = int(value)
-    except ValueError as exc:
-        raise RuntimeError(f"invalid integer env var: {name}") from exc
-    if parsed < 0:
-        raise RuntimeError(f"invalid negative integer env var: {name}")
-    return parsed
+        if parsed < 0:
+            raise ValueError
+        return parsed
+    except ValueError:
+        log.error(f"invalid integer env var {name}")
+        raise RuntimeError(f"invalid integer env var {name}")
 
-async def startFastAPI(app):
-    fastAPIconfig = uvicorn.Config(
-        app,
-        host=require_env("LUMINAIRE_API_HOST"),
-        port=int(require_env("LUMINAIRE_API_PORT")),
-        loop=require_env("LUMINAIRE_API_LOOP"),
-        log_level=require_env("LUMINAIRE_API_LOG_LEVEL"),
-        access_log=parse_bool(os.getenv("LUMINAIRE_API_ACCESS_LOG", "false")),
-    )
-    server = uvicorn.Server(fastAPIconfig)
-    await server.serve()
+async def start_fastapi(app):
+    try:
+        config = uvicorn.Config(
+            app,
+            host=require_env("LUMINAIRE_API_HOST"),
+            port=int(require_env("LUMINAIRE_API_PORT")),
+            loop=require_env("LUMINAIRE_API_LOOP"),
+            log_level=require_env("LUMINAIRE_API_LOG_LEVEL").lower(),
+            access_log=parse_bool(os.getenv("LUMINAIRE_API_ACCESS_LOG", "false")),
+        )
+        server = uvicorn.Server(config)
+        log.info("starting fastapi server")
+        await server.serve()
+    except Exception:
+        log.exception("critical failure in fastapi server")
+        raise
 
 async def main():
-    service = LuminaireService(
-        require_env("REDIS_URL"),
-        require_env("LUMINAIRE_REDIS_PUB")
-    )
-
-    tcp_server = TCPServer(
-        host=require_env("LUMINAIRE_TCP_HOST"),
-        port=int(require_env("LUMINAIRE_TCP_PORT")),
-        service=service,
-        keepalive_enabled=parse_bool_env("LUMINAIRE_TCP_KEEPALIVE_ENABLED", True),
-        keepalive_idle_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_IDLE_S", 5),
-        keepalive_interval_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S", 2),
-        keepalive_count=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_COUNT", 3),
-        tcp_user_timeout_ms=parse_int_env("LUMINAIRE_TCP_USER_TIMEOUT_MS", 3000),
-    )
-
-    app = createAPI(service)
-
+    log.info("initializing luminaire service architecture")
+    
     try:
+        service = LuminaireService(
+            require_env("REDIS_URL"),
+            require_env("LUMINAIRE_REDIS_PUB")
+        )
+
+        tcp_server = TCPServer(
+            host=require_env("LUMINAIRE_TCP_HOST"),
+            port=int(require_env("LUMINAIRE_TCP_PORT")),
+            service=service,
+            keepalive_enabled=parse_bool_env("LUMINAIRE_TCP_KEEPALIVE_ENABLED", True),
+            keepalive_idle_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_IDLE_S", 5),
+            keepalive_interval_s=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S", 2),
+            keepalive_count=parse_int_env("LUMINAIRE_TCP_KEEPALIVE_COUNT", 3),
+            tcp_user_timeout_ms=parse_int_env("LUMINAIRE_TCP_USER_TIMEOUT_MS", 3000),
+        )
+
+        app = createAPI(service)
+
+        log.info("entering main execution loop")
         await asyncio.gather(
             tcp_server.start(),
-            startFastAPI(app)
+            start_fastapi(app)
         )
+        
     except (asyncio.CancelledError, KeyboardInterrupt):
-        logging.info("shutdown requested")
+        log.info("shutdown requested by user or system")
+    except Exception:
+        log.exception("unhandled exception in main loop")
     finally:
-        logging.info("running cleanup...")
-        await tcp_server.stop()
-        await service.shutdown()
-        logging.info("shutdown complete")
+        log.info("running cleanup and resource teardown")
+        # stop tcp first to stop new connections
+        try:
+            await tcp_server.stop()
+        except NameError:
+            pass 
+        
+        # shutdown service (redis + active luminaires)
+        try:
+            await service.shutdown()
+        except NameError:
+            pass
+            
+        log.info("shutdown process complete")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        # final fallback for absolute startup failures
+        print(f"fatal error {str(e).lower()}")

@@ -6,25 +6,28 @@ from redis.asyncio import Redis
 from utilities.command_builder import CommandBuilder
 from typing import Dict
 
-log = logging.getLogger(__name__)
+# using a named logger for better filtering in loki
+log = logging.getLogger("services.luminaire_service")
 
 class LuminaireService:
     def __init__(self, redisURL, channel):
-        self.luminaires: Dict[str, dict] = {} # dict of lumianire ip -> writer
-        self._tasks = set()  # track background broadcast tasks
+        self.luminaires: Dict[str, dict] = {} 
+        self._tasks = set()  
         self.redis = Redis.from_url(redisURL)
         self.channel = channel
+        log.info(f"luminaire service initialized on channel {channel}")
 
     async def health(self):
         status = {
             "status": "healthy",
             "tcp": "up",
-            "redis connectivity": "succeeded"
+            "redis": "connected"
         }
         try:
             await self.redis.ping()
-        except Exception:
-            status["redis connectivity"] = "failed"
+        except Exception as e:
+            log.error(f"redis health check failed {str(e).lower()}")
+            status["redis"] = "failed"
             status["status"] = "unhealthy"
         return status
 
@@ -35,85 +38,90 @@ class LuminaireService:
         }
         log.info(f"accepted connection from {ip}")
         try:
-            payload = {
-                "event": "connection",
-                "ip": ip
-            }
-            await self.redis.publish(
-                self.channel,
-                json.dumps(payload)
-            )
-            log.info(f"connection event for {ip}, published to redis")
-        except Exception as e:
-            log.exception(f"failed to publish event 'connection' for {ip} to redis. err: {e}")
+            payload = {"event": "connection", "ip": ip}
+            await self.redis.publish(self.channel, json.dumps(payload))
+            log.debug(f"connection event for {ip} published to redis")
+        except Exception:
+            log.exception(f"failed to publish connection event for {ip}")
 
     async def unregister(self, ip: str):
         entry = self.luminaires.pop(ip, None)
-        writer = entry["writer"] if entry else None
+        if not entry:
+            log.debug(f"attempted to unregister unknown ip {ip}")
+            return
+
+        writer = entry.get("writer")
         if writer:
             try:
                 writer.close()
                 await writer.wait_closed()
-                log.info(f"disconnected {ip}")
-            except Exception as e:
-                log.exception(f"failed to close writer for lumianire: {ip}")
+                log.info(f"disconnected and closed writer for {ip}")
+            except Exception:
+                log.exception(f"error closing writer for {ip}")
+
         try:
-            payload = {
-                "event": "disconnection",
-                "ip": ip
-            }
-            await self.redis.publish(
-                self.channel,
-                json.dumps(payload)
-            )
-            log.info(f"disconnection event for {ip}, published to redis")
-        except Exception as e:
-            log.exception(f"failed to publish event 'diconnection' for {ip} to redis. err: {e}")
+            payload = {"event": "disconnection", "ip": ip}
+            await self.redis.publish(self.channel, json.dumps(payload))
+            log.debug(f"disconnection event for {ip} published to redis")
+        except Exception:
+            log.exception(f"failed to publish disconnection event for {ip}")
 
     async def list_luminaires(self):
-        return list(self.luminaires.keys())
+        ips = list(self.luminaires.keys())
+        log.debug(f"active luminaires count {len(ips)}")
+        return ips
 
     async def send_luminaire(self, ip: str, command: str):
+        if not self.luminaires:
+            log.warning("no luminaires connected to send command")
+            return
+
+        entry = self.luminaires.get(ip)
+        if not entry:
+            log.error(f"target luminaire {ip} not found in registry")
+            return
+
         try:
-            if not self.luminaires:
-                log.warning("No luminaires connected")
-                return
-            entry = self.luminaires.get(ip)
-            if not entry:
-                raise RuntimeError(...)
             writer = entry["writer"]
             writer.write(command.encode())
             await writer.drain()
-            log.info(f"sent to luminaiure {ip}: {command}")
-        except Exception as e:
-            log.exception(f"failed to write to luminaire {ip}: {e}")
+            log.info(f"command sent to {ip}")
+            log.debug(f"raw command string {command}")
+        except Exception:
+            log.exception(f"failed to write to luminaire {ip}")
 
     async def _drain_one(self, ip, writer):
         try:
             await writer.drain()
+            log.debug(f"drain successful for {ip}")
         except Exception:
-            log.exception("Drain failed for luminaire %s", ip)
+            log.error(f"drain failed for {ip} - unregistering")
             await self.unregister(ip)
-            raise
 
     async def send_luminaires(self, cw: float, ww: float):
         if not self.luminaires:
-            log.warning("No luminaires connected, broadcast skipped")
+            log.debug("broadcast skipped - no luminaires connected")
             return
+
         cw_ww = CommandBuilder.build_cw_ww(cw, ww)
+        log.info(f"broadcasting values cw {cw} ww {ww}")
+        
         for ip, entry in self.luminaires.items():
             writer = entry["writer"]
             ip34 = entry["ip34"]
             try:
                 command = CommandBuilder.build_command(ip34, cw_ww)
                 writer.write(command.encode())
+                
+                # track background tasks safely
                 task = asyncio.create_task(self._drain_one(ip, writer))
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
-                log.debug(f"broadcast to {ip}: {command}")
+                
             except Exception:
-                log.exception(f"failed to write to luminaire {ip}")
-        log.info(f"broadcasted to {len(self.luminaires)} luminaires: {cw_ww}")
+                log.exception(f"failed to queue broadcast for {ip}")
+        
+        log.debug(f"broadcast command string {cw_ww} sent to {len(self.luminaires)} devices")
     
     async def publish_ack(self, ip: str, cw: float, ww: float):
         try:
@@ -123,33 +131,31 @@ class LuminaireService:
                 "cw": cw,
                 "ww": ww
             }
-            await self.redis.publish(
-                self.channel,
-                json.dumps(payload)
-            )
-            log.info(f"ACK published for {ip}, cw: {cw}, ww: {ww}")
-        except Exception as e:
-            log.exception(f"Failed to publish ACK for {ip} to redis: {e}")
+            await self.redis.publish(self.channel, json.dumps(payload))
+            log.debug(f"ack published for {ip} with cw {cw} ww {ww}")
+        except Exception:
+            log.exception(f"failed to publish ack for {ip}")
 
     async def shutdown(self):
-        log.info("stopping LuminaireService...")
-        for task in list(self._tasks):
-            task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
-        self._tasks.clear()
+        log.info("shutting down luminaire service")
+        
+        # cancel pending drain tasks
+        if self._tasks:
+            log.debug(f"cancelling {len(self._tasks)} pending drain tasks")
+            for task in self._tasks:
+                task.cancel()
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+            self._tasks.clear()
+
+        # close redis
         try:
-            log.info(f"stopping redis..")
             await self.redis.close()
-            await self.redis.connection_pool.disconnect()
-            log.info(f"stopped redis")
+            log.info("redis connection closed")
         except Exception:
-            log.exception("Failed to close Redis")
-        items = list(self.luminaires.items())
-        for ip, writer in items:
-            try:
-                writer.close()
-                await writer.wait_closed()
-            except Exception:
-                log.exception("Failed to close writer for %s", ip)
-        self.luminaires.clear()
-        log.info("stopped LuminaireSerivce")
+            log.exception("error during redis shutdown")
+
+        # close all active sockets
+        for ip in list(self.luminaires.keys()):
+            await self.unregister(ip)
+            
+        log.info("luminaire service stopped")

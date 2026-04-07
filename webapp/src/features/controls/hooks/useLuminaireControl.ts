@@ -4,6 +4,7 @@ import { useUiConfig } from '../../../hooks/useUiConfig';
 import type { ControlMode } from '../../../types/controls';
 import { useEventSnapshot } from '../../../hooks/useEventSnapshot';
 import { useUiFeedback } from '../../../context/useUiFeedback';
+import { useTrace } from '../../../context/TraceContext';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
 export const useLuminaireControl = () => {
@@ -11,6 +12,7 @@ export const useLuminaireControl = () => {
   const { config: uiConfig } = useUiConfig();
   const { snapshot } = useEventSnapshot();
   const { pushError, pushSuccess } = useUiFeedback();
+  const { createTraceHeaders, generateTraceId } = useTrace();
   const [mode, setMode] = useState<ControlMode>('MANUAL');
   const [systemOn, setSystemOn] = useState(true);
   const [values, setValues] = useState({
@@ -141,11 +143,12 @@ export const useLuminaireControl = () => {
     }
     sync.inflight = true;
     setPending((prev) => ({ ...prev, manual: true }));
+    generateTraceId();
 
     try {
       const response = await fetch(`${apiBase}/set/manual`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({
           medium: 'sliders',
           cct: sync.lastValues.cct,
@@ -175,11 +178,12 @@ export const useLuminaireControl = () => {
     }
     sync.inflight = true;
     setPending((prev) => ({ ...prev, manual: true }));
+    generateTraceId();
 
     try {
       const response = await fetch(`${apiBase}/set/manual`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({
           medium: 'buttons',
           cw: sync.lastValues.cw,
@@ -274,9 +278,10 @@ export const useLuminaireControl = () => {
   const toggleMode = (newMode: ControlMode) => {
     if (!systemOn || pending.mode) return;
     setPending((prev) => ({ ...prev, mode: true }));
+    generateTraceId();
     fetch(`${apiBase}/system/mode`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: createTraceHeaders(),
       body: JSON.stringify({ mode: newMode }),
     })
       .then(async (response) => {
@@ -316,10 +321,11 @@ export const useLuminaireControl = () => {
   const loadSceneInternal = async (scene: string, scheduleRevert: boolean) => {
     if (!systemOn || !scene || pending.sceneLoad) return;
     setPending((prev) => ({ ...prev, sceneLoad: true }));
+    generateTraceId();
     try {
       const response = await fetch(`${apiBase}/scene/load`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ scene }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -339,10 +345,11 @@ export const useLuminaireControl = () => {
     if (!systemOn || !scene || pending.sceneActivate) return;
     clearSceneRevert();
     setPending((prev) => ({ ...prev, sceneActivate: true }));
+    generateTraceId();
     try {
       const response = await fetch(`${apiBase}/scene/activate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ scene }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -358,10 +365,11 @@ export const useLuminaireControl = () => {
   const deactivateSceneInternal = async (scene: string, showToast: boolean) => {
     if (!systemOn || !scene || pending.sceneDeactivate) return;
     setPending((prev) => ({ ...prev, sceneDeactivate: true }));
+    generateTraceId();
     try {
       const response = await fetch(`${apiBase}/scene/deactivate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ scene }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));

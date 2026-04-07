@@ -1,16 +1,19 @@
 import { useState } from 'react';
+import { useTrace } from '../context/TraceContext';
 
 export const useControl = (endpoint: string, initialValue: number) => {
   const [value, setValue] = useState(initialValue);
   const [isPending, setIsPending] = useState(false);
+  const { createTraceHeaders, generateTraceId } = useTrace();
 
   const updateValue = async (newValue: number) => {
     setValue(newValue);
     setIsPending(true);
+    generateTraceId();
     try {
       await fetch(`/api/v1/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: createTraceHeaders(),
         body: JSON.stringify({ value: newValue }),
       });
     } catch (error) {
