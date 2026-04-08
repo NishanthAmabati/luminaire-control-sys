@@ -184,6 +184,14 @@ jobs:
           output: ${{ env.DOCKER_BAKE_FILE }}
         env:
           GIT_SHA: ${{ steps.commit.outputs.sha }}
+          run: |
+            echo "=== Generated Bake File Content ==="
+            cat ${{ env.DOCKER_BAKE_FILE }}
+            echo "==================================="
+            echo ""
+            echo "=== File Permissions and Size ==="
+            ls -la ${{ env.DOCKER_BAKE_FILE }}
+            echo "=================================="
 
       - name: Build and push
         uses: docker/bake-action@v5
