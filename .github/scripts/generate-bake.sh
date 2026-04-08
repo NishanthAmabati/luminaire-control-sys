@@ -1,12 +1,54 @@
 #!/usr/bin/env bash
 # Generates Docker bake HCL file for building services
-# Usage: generate-bake.sh <environment> <services> <output_file>
+# Usage: generate-bake.sh <environment> <service_selection> <output_file>
+#
+# Service mappings:
+#   web         -> webapp
+#   gateway     -> event-gateway
+#   state       -> state-service
+#   scheduler   -> scheduler-service
+#   timer       -> timer-service
+#   metrics     -> metrics-service
+#   luminaire   -> luminaire-service
+#   python      -> all-python (all Python services)
+#   all         -> all (all services)
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAP_FILE="${SCRIPT_DIR}/service-map.env"
+
 ENVIRONMENT="${1:-dev}"
-SERVICES="${2:-all}"
+SERVICE_SELECTION="${2:-all}"
 OUTPUT_FILE="${3:-docker-bake.hcl}"
+
+# Load service mapping
+declare -A SERVICE_MAP
+load_map() {
+    if [[ -f "$MAP_FILE" ]]; then
+        while IFS='=' read -r key value; do
+            [[ -z "$key" || "$key" == \#* ]] && continue
+            SERVICE_MAP["$key"]="$value"
+        done < "$MAP_FILE"
+    else
+        # Fallback defaults
+        SERVICE_MAP["web"]="webapp"
+        SERVICE_MAP["gateway"]="event-gateway"
+        SERVICE_MAP["state"]="state-service"
+        SERVICE_MAP["scheduler"]="scheduler-service"
+        SERVICE_MAP["timer"]="timer-service"
+        SERVICE_MAP["metrics"]="metrics-service"
+        SERVICE_MAP["luminaire"]="luminaire-service"
+        SERVICE_MAP["python"]="all-python"
+        SERVICE_MAP["all"]="all"
+    fi
+}
+
+# Get target name for a service selection
+get_target() {
+    local selection="$1"
+    echo "${SERVICE_MAP[$selection]:-$selection}"
+}
 
 # Git info
 GIT_SHA="${GIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'local')}"
@@ -23,11 +65,52 @@ else
     TAG_SUFFIX=""
 fi
 
-cat > "$OUTPUT_FILE" << 'EOF'
+# Load the mapping
+load_map
+
+# Determine which targets to generate
+GENERATE_WEBAPP=false
+GENERATE_GATEWAY=false
+GENERATE_STATE=false
+GENERATE_SCHEDULER=false
+GENERATE_TIMER=false
+GENERATE_METRICS=false
+GENERATE_LUMINAIRE=false
+
+case "$SERVICE_SELECTION" in
+    all)
+        GENERATE_WEBAPP=true
+        GENERATE_GATEWAY=true
+        GENERATE_STATE=true
+        GENERATE_SCHEDULER=true
+        GENERATE_TIMER=true
+        GENERATE_METRICS=true
+        GENERATE_LUMINAIRE=true
+        ;;
+    python)
+        GENERATE_STATE=true
+        GENERATE_SCHEDULER=true
+        GENERATE_TIMER=true
+        GENERATE_METRICS=true
+        GENERATE_LUMINAIRE=true
+        ;;
+    web) GENERATE_WEBAPP=true ;;
+    gateway) GENERATE_GATEWAY=true ;;
+    state) GENERATE_STATE=true ;;
+    scheduler) GENERATE_SCHEDULER=true ;;
+    timer) GENERATE_TIMER=true ;;
+    metrics) GENERATE_METRICS=true ;;
+    luminaire) GENERATE_LUMINAIRE=true ;;
+    *)
+        # Treat as direct target name
+        ;;
+esac
+
+cat > "$OUTPUT_FILE" << 'HEADER'
 # Auto-generated Docker bake file
 # Do not edit manually - regenerate with .github/scripts/generate-bake.sh
 
-EOF
+HEADER
 
 # Common variables
 cat >> "$OUTPUT_FILE" << VARIABLES
@@ -83,7 +166,6 @@ variable "TIMER_REDIS_PUB" { default = "timer:events" }
 variable "TIMER_STATE_SERVICE_URL" { default = "http://state-service:8001" }
 
 # Metrics service variables
-variable "METRICS_REDIS_PUB" { default = "metrics:events" }
 variable "METRICS_INTERVAL" { default = "5" }
 variable "METRICS_LOG_LEVEL" { default = "info" }
 
@@ -104,22 +186,13 @@ variable "LUMINAIRE_API_ACCESS_LOG" { default = "false" }
 
 VARIABLES
 
-# Helper function for tags
-tags_for_service() {
-    local service="$1"
-    cat << TAGS
-        "${REGISTRY}/${USERNAME}/${service}:latest\${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/${service}:\${GIT_SHA}\${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/${service}:\${GIT_BRANCH}\${TAG_SUFFIX}"
-TAGS
-}
+# Build list of targets to include in aggregate targets
+PYTHON_TARGETS=()
+ALL_TARGETS=()
 
 # Webapp service
-should_build_webapp() {
-    [ "$SERVICES" = "all" ] || [ "$SERVICES" = "web" ] || [ "$SERVICES" = "webapp" ]
-}
-
-if should_build_webapp; then
+if $GENERATE_WEBAPP; then
+    ALL_TARGETS+=("webapp")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "webapp" {
     context = "."
@@ -145,7 +218,8 @@ TARGET
 fi
 
 # Event Gateway service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "gateway" ] || [ "$SERVICES" = "event-gw" ] || [ "$SERVICES" = "event_gateway" ]; then
+if $GENERATE_GATEWAY; then
+    ALL_TARGETS+=("event-gateway")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "event-gateway" {
     context = "."
@@ -179,7 +253,9 @@ TARGET
 fi
 
 # State Service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "python" ] || [ "$SERVICES" = "state" ] || [ "$SERVICES" = "state-api" ] || [ "$SERVICES" = "state_service" ]; then
+if $GENERATE_STATE; then
+    ALL_TARGETS+=("state-service")
+    PYTHON_TARGETS+=("state-service")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "state-service" {
     context = "."
@@ -212,7 +288,9 @@ TARGET
 fi
 
 # Scheduler Service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "python" ] || [ "$SERVICES" = "scheduler" ] || [ "$SERVICES" = "scheduler_service" ]; then
+if $GENERATE_SCHEDULER; then
+    ALL_TARGETS+=("scheduler-service")
+    PYTHON_TARGETS+=("scheduler-service")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "scheduler-service" {
     context = "."
@@ -245,7 +323,9 @@ TARGET
 fi
 
 # Timer Service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "python" ] || [ "$SERVICES" = "timer" ] || [ "$SERVICES" = "timer_service" ]; then
+if $GENERATE_TIMER; then
+    ALL_TARGETS+=("timer-service")
+    PYTHON_TARGETS+=("timer-service")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "timer-service" {
     context = "."
@@ -272,7 +352,9 @@ TARGET
 fi
 
 # Metrics Service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "python" ] || [ "$SERVICES" = "metrics" ] || [ "$SERVICES" = "metrics_service" ]; then
+if $GENERATE_METRICS; then
+    ALL_TARGETS+=("metrics-service")
+    PYTHON_TARGETS+=("metrics-service")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "metrics-service" {
     context = "."
@@ -298,7 +380,9 @@ TARGET
 fi
 
 # Luminaire Service
-if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "python" ] || [ "$SERVICES" = "luminaire" ] || [ "$SERVICES" = "luminaire_service" ]; then
+if $GENERATE_LUMINAIRE; then
+    ALL_TARGETS+=("luminaire-service")
+    PYTHON_TARGETS+=("luminaire-service")
     cat >> "$OUTPUT_FILE" << 'TARGET'
 target "luminaire-service" {
     context = "."
@@ -334,5 +418,21 @@ target "luminaire-service" {
 TARGET
 fi
 
-echo "Generated $OUTPUT_FILE for environment: $ENVIRONMENT, services: $SERVICES"
-echo "Tag suffix: $TAG_SUFFIX"
+# Aggregate targets (only if we have services to include)
+if [[ ${#ALL_TARGETS[@]} -gt 0 ]]; then
+    echo "" >> "$OUTPUT_FILE"
+    echo "# Aggregate target for all services" >> "$OUTPUT_FILE"
+    printf 'target "all" { targets = %s }\n' "[$(IFS=','; echo "${ALL_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+fi
+
+if [[ ${#PYTHON_TARGETS[@]} -gt 0 ]]; then
+    echo "" >> "$OUTPUT_FILE"
+    echo "# Aggregate target for Python services" >> "$OUTPUT_FILE"
+    printf 'target "all-python" { targets = %s }\n' "[$(IFS=','; echo "${PYTHON_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+fi
+
+echo ""
+echo "Generated $OUTPUT_FILE"
+echo "  Environment: $ENVIRONMENT"
+echo "  Service selection: $SERVICE_SELECTION"
+echo "  Targets generated: ${ALL_TARGETS[*]:-none} ${PYTHON_TARGETS[*]:-}"
