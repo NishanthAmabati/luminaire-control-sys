@@ -173,6 +173,17 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           registry: ${{ needs.setup.outputs.registry }}
 
+      - name: Debug - Check script location
+        shell: bash
+        run: |
+          echo "github.action_path: ${{ github.action_path }}"
+          echo "github.workspace: ${{ github.workspace }}"
+          echo "Current dir: $(pwd)"
+          echo "Scripts dir contents:"
+          ls -la ${{ github.workspace }}/.github/scripts/
+          echo "Script file check:"
+          ls -la ${{ github.workspace }}/.github/scripts/generate-bake.sh 2>&1 || echo "SCRIPT NOT FOUND"
+
       - name: Generate bake file
         id: bake
         uses: ./.github/actions/generate-bake
