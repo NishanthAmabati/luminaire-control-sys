@@ -219,9 +219,6 @@ jobs:
           files: ${{ env.DOCKER_BAKE_FILE }}
           targets: ${{ github.event.inputs.services || 'all' }}
           push: true
-          set: |
-            *.cache-from=["type=gha"]
-            *.cache-to=["type=gha,mode=max"]
 
       - name: Summary
         run: |
