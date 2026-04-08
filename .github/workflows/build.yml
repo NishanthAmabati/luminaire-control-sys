@@ -189,17 +189,6 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           registry: ${{ needs.setup.outputs.registry }}
 
-      - name: Debug - Check script location
-        shell: bash
-        run: |
-          echo "github.action_path: ${{ github.action_path }}"
-          echo "github.workspace: ${{ github.workspace }}"
-          echo "Current dir: $(pwd)"
-          echo "Scripts dir contents:"
-          ls -la ${{ github.workspace }}/.github/scripts/
-          echo "Script file check:"
-          ls -la ${{ github.workspace }}/.github/scripts/generate-bake.sh 2>&1 || echo "SCRIPT NOT FOUND"
-
       - name: Generate bake file
         id: bake
         uses: ./.github/actions/generate-bake
@@ -211,23 +200,6 @@ jobs:
           output: ${{ env.DOCKER_BAKE_FILE }}
         env:
           GIT_SHA: ${{ steps.commit.outputs.sha }}
-
-      - name: Debug - Show bake file content
-        run: |
-          echo "=== Bake File Content ==="
-          cat ${{ env.DOCKER_BAKE_FILE }}
-          echo "=========================="
-
-      - name: Debug - Check file encoding
-        run: |
-          echo "=== File Info ==="
-          file ${{ env.DOCKER_BAKE_FILE }}
-          echo ""
-          echo "=== First 200 bytes hex ==="
-          head -c 200 ${{ env.DOCKER_BAKE_FILE }} | xxd | head -20
-          echo ""
-          echo "=== Last 100 bytes hex ==="
-          tail -c 100 ${{ env.DOCKER_BAKE_FILE }} | xxd
 
       - name: Build and push
         uses: docker/bake-action@v5

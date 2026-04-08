@@ -68,6 +68,19 @@ fi
 # Load the mapping
 load_map
 
+# Helper function to join array elements with quotes for HCL
+join_with_quotes() {
+    local result=""
+    for item in "$@"; do
+        if [ -n "$result" ]; then
+            result="$result,\"$item\""
+        else
+            result="\"$item\""
+        fi
+    done
+    echo "$result"
+}
+
 # Determine which targets to generate
 GENERATE_WEBAPP=false
 GENERATE_GATEWAY=false
@@ -422,13 +435,15 @@ fi
 if [[ ${#ALL_TARGETS[@]} -gt 0 ]]; then
     echo "" >> "$OUTPUT_FILE"
     echo "# Aggregate group for all services" >> "$OUTPUT_FILE"
-    printf 'group "all" { targets = %s }\n' "[$(IFS=','; echo "${ALL_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+    ALL_QUOTED=$(join_with_quotes "${ALL_TARGETS[@]}")
+    printf 'group "all" { targets = [%s] }\n' "$ALL_QUOTED" >> "$OUTPUT_FILE"
 fi
 
 if [[ ${#PYTHON_TARGETS[@]} -gt 0 ]]; then
     echo "" >> "$OUTPUT_FILE"
     echo "# Aggregate group for Python services" >> "$OUTPUT_FILE"
-    printf 'group "all-python" { targets = %s }\n' "[$(IFS=','; echo "${PYTHON_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+    PYTHON_QUOTED=$(join_with_quotes "${PYTHON_TARGETS[@]}")
+    printf 'group "all-python" { targets = [%s] }\n' "$PYTHON_QUOTED" >> "$OUTPUT_FILE"
 fi
 
 echo ""
