@@ -3,6 +3,11 @@ name: Build Docker Images
 on:
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: "Git commit SHA to build (leave empty for current HEAD)"
+        required: false
+        type: string
+        default: ""
       services:
         description: "Services to build"
         required: false
@@ -66,7 +71,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
+        if: github.event.inputs.commit_sha == ''
         uses: actions/checkout@v4
+
+      - name: Checkout specific commit
+        if: github.event.inputs.commit_sha != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.commit_sha }}
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -123,7 +136,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
+        if: github.event.inputs.commit_sha == ''
         uses: actions/checkout@v4
+
+      - name: Checkout specific commit
+        if: github.event.inputs.commit_sha != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Get commit SHA
+        id: commit
+        run: |
+          if [ -n "${{ github.event.inputs.commit_sha }}" ]; then
+            COMMIT_SHA="${{ github.event.inputs.commit_sha }}"
+          else
+            COMMIT_SHA="${{ github.sha }}"
+          fi
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
@@ -141,6 +173,8 @@ jobs:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ needs.setup.outputs.username }}
           output: ${{ env.DOCKER_BAKE_FILE }}
+        env:
+          GIT_SHA: ${{ steps.commit.outputs.sha }}
 
       - name: Build and push
         uses: docker/bake-action@v5
@@ -158,31 +192,34 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | `${{ needs.detect.outputs.environment }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Services | `${{ github.event.inputs.services || 'all' }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Registry | `${{ needs.setup.outputs.registry }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Username | `${{ needs.setup.outputs.username }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tag Suffix | `${{ needs.detect.outputs.tag_suffix }}` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | `${{ github.sha }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ needs.detect.outputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services | \`${{ github.event.inputs.services || 'all' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | \`${{ needs.setup.outputs.registry }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Username | \`${{ needs.setup.outputs.username }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Suffix | \`${{ needs.detect.outputs.tag_suffix }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit SHA | \`${{ steps.commit.outputs.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Short SHA | \`${{ steps.commit.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Images Built" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           SERVICES="${{ github.event.inputs.services || 'all' }}"
+          TAG_SUFFIX="${{ needs.detect.outputs.tag_suffix }}"
+          SHORT_SHA="${{ steps.commit.outputs.short_sha }}"
           case "$SERVICES" in
             all)
-              echo "webapp${{ needs.detect.outputs.tag_suffix }}"
-              echo "event-gateway${{ needs.detect.outputs.tag_suffix }}"
-              echo "state-service${{ needs.detect.outputs.tag_suffix }}"
-              echo "scheduler-service${{ needs.detect.outputs.tag_suffix }}"
-              echo "timer-service${{ needs.detect.outputs.tag_suffix }}"
-              echo "metrics-service${{ needs.detect.outputs.tag_suffix }}"
-              echo "luminaire-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "webapp:\${TAG_SUFFIX} \`webapp:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "event-gateway:\${TAG_SUFFIX} \`event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "state-service:\${TAG_SUFFIX} \`state-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "scheduler-service:\${TAG_SUFFIX} \`scheduler-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "timer-service:\${TAG_SUFFIX} \`timer-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "metrics-service:\${TAG_SUFFIX} \`metrics-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "luminaire-service:\${TAG_SUFFIX} \`luminaire-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
               ;;
-            web) echo "webapp${{ needs.detect.outputs.tag_suffix }}" ;;
-            gateway) echo "event-gateway${{ needs.detect.outputs.tag_suffix }}" ;;
+            web) echo "webapp:\${TAG_SUFFIX} \`webapp:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
+            gateway) echo "event-gateway:\${TAG_SUFFIX} \`event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
             python|state|scheduler|timer|metrics|luminaire)
-              echo "${SERVICES}-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "${SERVICES}-service:\${TAG_SUFFIX} \`${SERVICES}-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
               ;;
-            *) echo "$SERVICES${{ needs.detect.outputs.tag_suffix }}" ;;
+            *) echo "$SERVICES:\${TAG_SUFFIX} \`$SERVICES:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
           esac
           echo '```' >> $GITHUB_STEP_SUMMARY
