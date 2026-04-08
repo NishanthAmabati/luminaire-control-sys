@@ -13,7 +13,7 @@ runs:
         GIT_SHA: ${{ github.sha }}
         GIT_BRANCH: ${{ github.ref_name }}
       run: |
-        ${{ github.action_path }}/../../../scripts/generate-bake.sh \
+        ${{ github.action_path }}/../../scripts/generate-bake.sh \
           "$ENVIRONMENT" \
           "$SERVICES" \
           "${{ inputs.output }}"
