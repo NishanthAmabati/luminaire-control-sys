@@ -217,8 +217,11 @@ jobs:
         uses: docker/bake-action@v5
         with:
           files: ${{ env.DOCKER_BAKE_FILE }}
-          targets: ${{ github.event.inputs.services || 'all' }}
+          targets: ${{ steps.target.outputs.target }}
           push: true
+          load: false
+          set: |
+            *.context=.
 
       - name: Summary
         run: |
