@@ -1,0 +1,188 @@
+name: Build Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Services to build"
+        required: false
+        type: choice
+        default: "all"
+        options:
+          - all
+          - web
+          - gateway
+          - python
+          - state
+          - scheduler
+          - timer
+          - metrics
+          - luminaire
+      environment:
+        description: "Target environment"
+        required: false
+        type: choice
+        default: "dev"
+        options:
+          - dev
+          - prod
+      registry:
+        description: "Docker registry"
+        required: false
+        type: string
+        default: ""
+      username:
+        description: "Registry username (leave empty to use GitHub variable)"
+        required: false
+        type: string
+        default: ""
+      skip_tests:
+        description: "Skip running tests"
+        required: false
+        type: boolean
+        default: true
+
+env:
+  DOCKER_BAKE_FILE: docker-bake.hcl
+
+jobs:
+  # Detect environment
+  detect:
+    name: Detect Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      tag_suffix: ${{ steps.detect.outputs.tag_suffix }}
+    steps:
+      - name: Run detect-env action
+        id: detect
+        uses: ./.github/actions/detect-env
+        with:
+          environment: ${{ github.event.inputs.environment || 'dev' }}
+
+  # Run tests (optional)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio > /dev/null 2>&1 || true
+
+      - name: Run tests
+        run: |
+          for service in state_service scheduler_service timer_service luminaire_service metrics_service; do
+            if [ -f "$service/requirements.txt" ]; then
+              echo "Testing $service..."
+              # Add actual test commands here
+            fi
+          done
+
+  # Determine username (from input or GitHub variable)
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      username: ${{ steps.resolve.outputs.username }}
+      registry: ${{ steps.resolve.outputs.registry }}
+    steps:
+      - name: Resolve username
+        id: resolve
+        run: |
+          USERNAME="${{ github.event.inputs.username }}"
+          REGISTRY="${{ github.event.inputs.registry }}"
+          
+          if [ -z "$USERNAME" ]; then
+            USERNAME="${{ vars.DOCKERHUB_USERNAME }}"
+          fi
+          
+          if [ -z "$REGISTRY" ]; then
+            REGISTRY="docker.io"
+          fi
+          
+          if [ -z "$USERNAME" ]; then
+            echo "::error::Docker registry username not set. Set DOCKERHUB_USERNAME GitHub variable or provide username input."
+            exit 1
+          fi
+          
+          echo "username=$USERNAME" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+
+  # Build Docker images
+  build:
+    name: Build ${{ github.event.inputs.services || 'all' }}
+    needs: [detect, setup]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker
+        uses: ./.github/actions/setup-docker
+        with:
+          username: ${{ needs.setup.outputs.username }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ needs.setup.outputs.registry }}
+
+      - name: Generate bake file
+        id: bake
+        uses: ./.github/actions/generate-bake
+        with:
+          environment: ${{ needs.detect.outputs.environment }}
+          services: ${{ github.event.inputs.services || 'all' }}
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ needs.setup.outputs.username }}
+          output: ${{ env.DOCKER_BAKE_FILE }}
+
+      - name: Build and push
+        uses: docker/bake-action@v5
+        with:
+          files: ${{ env.DOCKER_BAKE_FILE }}
+          targets: ${{ github.event.inputs.services || 'all' }}
+          push: true
+          set: |
+            *.cache-from=["type=gha"]
+            *.cache-to=["type=gha,mode=max"]
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | `${{ needs.detect.outputs.environment }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services | `${{ github.event.inputs.services || 'all' }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | `${{ needs.setup.outputs.registry }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Username | `${{ needs.setup.outputs.username }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Suffix | `${{ needs.detect.outputs.tag_suffix }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | `${{ github.sha }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images Built" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          SERVICES="${{ github.event.inputs.services || 'all' }}"
+          case "$SERVICES" in
+            all)
+              echo "webapp${{ needs.detect.outputs.tag_suffix }}"
+              echo "event-gateway${{ needs.detect.outputs.tag_suffix }}"
+              echo "state-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "scheduler-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "timer-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "metrics-service${{ needs.detect.outputs.tag_suffix }}"
+              echo "luminaire-service${{ needs.detect.outputs.tag_suffix }}"
+              ;;
+            web) echo "webapp${{ needs.detect.outputs.tag_suffix }}" ;;
+            gateway) echo "event-gateway${{ needs.detect.outputs.tag_suffix }}" ;;
+            python|state|scheduler|timer|metrics|luminaire)
+              echo "${SERVICES}-service${{ needs.detect.outputs.tag_suffix }}"
+              ;;
+            *) echo "$SERVICES${{ needs.detect.outputs.tag_suffix }}" ;;
+          esac
+          echo '```' >> $GITHUB_STEP_SUMMARY
