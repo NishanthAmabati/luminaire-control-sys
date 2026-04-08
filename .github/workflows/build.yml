@@ -1,6 +1,9 @@
 name: Build Docker Images
 
 on:
+  push:
+    branches:
+      - feature/improve-ci-and-logging
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -72,7 +75,6 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    if: github.event.inputs.skip_tests != true
     steps:
       - name: Checkout
         if: github.event.inputs.commit_sha == ''
@@ -99,6 +101,7 @@ jobs:
           for service in state_service scheduler_service timer_service luminaire_service metrics_service; do
             if [ -f "$service/requirements.txt" ]; then
               echo "Testing $service..."
+              # Add actual test commands here
             fi
           done
 
@@ -163,23 +166,6 @@ jobs:
           echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "short_sha=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
 
-      - name: Resolve target name
-        id: target
-        run: |
-          # Service to target name mapping
-          case "${{ github.event.inputs.services || 'all' }}" in
-            web) echo "target=webapp" ;;
-            gateway) echo "target=event-gateway" ;;
-            state) echo "target=state-service" ;;
-            scheduler) echo "target=scheduler-service" ;;
-            timer) echo "target=timer-service" ;;
-            metrics) echo "target=metrics-service" ;;
-            luminaire) echo "target=luminaire-service" ;;
-            python) echo "target=all-python" ;;
-            all) echo "target=all" ;;
-            *) echo "target=all" ;;
-          esac >> $GITHUB_OUTPUT
-
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
         with:
@@ -203,7 +189,7 @@ jobs:
         uses: docker/bake-action@v5
         with:
           files: ${{ env.DOCKER_BAKE_FILE }}
-          targets: ${{ steps.target.outputs.target }}
+          targets: ${{ github.event.inputs.services || 'all' }}
           push: true
           set: |
             *.cache-from=["type=gha"]
@@ -217,7 +203,6 @@ jobs:
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Environment | \`${{ needs.detect.outputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Services | \`${{ github.event.inputs.services || 'all' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Target | \`${{ steps.target.outputs.target }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Registry | \`${{ needs.setup.outputs.registry }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Username | \`${{ needs.setup.outputs.username }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Tag Suffix | \`${{ needs.detect.outputs.tag_suffix }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -231,28 +216,19 @@ jobs:
           SHORT_SHA="${{ steps.commit.outputs.short_sha }}"
           case "$SERVICES" in
             all)
-              echo "webapp:\${TAG_SUFFIX} -> webapp:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "event-gateway:\${TAG_SUFFIX} -> event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "state-service:\${TAG_SUFFIX} -> state-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "scheduler-service:\${TAG_SUFFIX} -> scheduler-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "timer-service:\${TAG_SUFFIX} -> timer-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "metrics-service:\${TAG_SUFFIX} -> metrics-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "luminaire-service:\${TAG_SUFFIX} -> luminaire-service:\${SHORT_SHA}\${TAG_SUFFIX}"
+              echo "webapp:\${TAG_SUFFIX} \`webapp:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "event-gateway:\${TAG_SUFFIX} \`event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "state-service:\${TAG_SUFFIX} \`state-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "scheduler-service:\${TAG_SUFFIX} \`scheduler-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "timer-service:\${TAG_SUFFIX} \`timer-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "metrics-service:\${TAG_SUFFIX} \`metrics-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
+              echo "luminaire-service:\${TAG_SUFFIX} \`luminaire-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
               ;;
-            web) echo "webapp:\${TAG_SUFFIX} -> webapp:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            gateway) echo "event-gateway:\${TAG_SUFFIX} -> event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            python)
-              echo "state-service:\${TAG_SUFFIX} -> state-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "scheduler-service:\${TAG_SUFFIX} -> scheduler-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "timer-service:\${TAG_SUFFIX} -> timer-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "metrics-service:\${TAG_SUFFIX} -> metrics-service:\${SHORT_SHA}\${TAG_SUFFIX}"
-              echo "luminaire-service:\${TAG_SUFFIX} -> luminaire-service:\${SHORT_SHA}\${TAG_SUFFIX}"
+            web) echo "webapp:\${TAG_SUFFIX} \`webapp:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
+            gateway) echo "event-gateway:\${TAG_SUFFIX} \`event-gateway:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
+            python|state|scheduler|timer|metrics|luminaire)
+              echo "${SERVICES}-service:\${TAG_SUFFIX} \`${SERVICES}-service:\${SHORT_SHA}\${TAG_SUFFIX}\`"
               ;;
-            state) echo "state-service:\${TAG_SUFFIX} -> state-service:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            scheduler) echo "scheduler-service:\${TAG_SUFFIX} -> scheduler-service:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            timer) echo "timer-service:\${TAG_SUFFIX} -> timer-service:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            metrics) echo "metrics-service:\${TAG_SUFFIX} -> metrics-service:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            luminaire) echo "luminaire-service:\${TAG_SUFFIX} -> luminaire-service:\${SHORT_SHA}\${TAG_SUFFIX}" ;;
-            *) echo "$SERVICES:\${TAG_SUFFIX}" ;;
+            *) echo "$SERVICES:\${TAG_SUFFIX} \`$SERVICES:\${SHORT_SHA}\${TAG_SUFFIX}\`" ;;
           esac
           echo '```' >> $GITHUB_STEP_SUMMARY
