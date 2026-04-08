@@ -58,11 +58,11 @@ GIT_BRANCH="${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 
 REGISTRY="${DOCKER_REGISTRY:-docker.io}"
 USERNAME="${DOCKER_USERNAME:-}"
 
-# Tag suffix based on environment
+# Repo suffix based on environment (dev repos get -dev suffix)
 if [ "$ENVIRONMENT" = "dev" ]; then
-    TAG_SUFFIX="-dev"
+    REPO_SUFFIX="-dev"
 else
-    TAG_SUFFIX=""
+    REPO_SUFFIX=""
 fi
 
 # Load the mapping
@@ -131,7 +131,7 @@ variable "REGISTRY" { default = "${REGISTRY}" }
 variable "USERNAME" { default = "${USERNAME}" }
 variable "GIT_SHA" { default = "${GIT_SHA}" }
 variable "GIT_BRANCH" { default = "${GIT_BRANCH}" }
-variable "TAG_SUFFIX" { default = "${TAG_SUFFIX}" }
+variable "REPO_SUFFIX" { default = "${REPO_SUFFIX}" }
 
 variable "TIMEZONE" { default = "Asia/Kolkata" }
 variable "REDIS_URL" { default = "redis://redis:6379" }
@@ -217,8 +217,8 @@ target "webapp" {
         TIMEZONE = "${TIMEZONE}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/webapp:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/webapp:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/web${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/web${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -251,8 +251,8 @@ target "event-gateway" {
         GATEWAY_LATENCY_INTERVAL_MS = "${GATEWAY_LATENCY_INTERVAL_MS}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/event-gateway:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/event-gateway:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/event-gw${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/event-gw${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -285,8 +285,8 @@ target "state-service" {
         METRICS_REDIS_PUB = "${METRICS_REDIS_PUB}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/state-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/state-service:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/state-api${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/state-api${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -319,8 +319,8 @@ target "scheduler-service" {
         SCHEDULER_LUMINAIRE_URL = "${SCHEDULER_LUMINAIRE_URL}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/scheduler-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/scheduler-service:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/scheduler-service${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/scheduler-service${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -347,8 +347,8 @@ target "timer-service" {
         TIMER_STATE_SERVICE_URL = "${TIMER_STATE_SERVICE_URL}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/timer-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/timer-service:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/timer-service${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/timer-service${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -374,8 +374,8 @@ target "metrics-service" {
         METRICS_LOG_LEVEL = "${METRICS_LOG_LEVEL}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/metrics-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/metrics-service:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/metrics-service${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/metrics-service${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -412,8 +412,8 @@ target "luminaire-service" {
         LUMINAIRE_API_ACCESS_LOG = "${LUMINAIRE_API_ACCESS_LOG}"
     }
     tags = [
-        "${REGISTRY}/${USERNAME}/luminaire-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/luminaire-service:${GIT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/luminaire-service${REPO_SUFFIX}:latest",
+        "${REGISTRY}/${USERNAME}/luminaire-service${REPO_SUFFIX}:${GIT_SHA}"
     ]
     platforms = ["linux/amd64"]
     push = true
