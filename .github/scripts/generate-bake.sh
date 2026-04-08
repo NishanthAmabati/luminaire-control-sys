@@ -53,7 +53,6 @@ get_target() {
 # Git info
 GIT_SHA="${GIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'local')}"
 GIT_BRANCH="${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'local')}"
-GIT_SHORT_SHA="${GIT_SHA:0:7}"
 
 # Registry
 REGISTRY="${DOCKER_REGISTRY:-docker.io}"
@@ -219,7 +218,7 @@ target "webapp" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/webapp:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/webapp:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/webapp:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -253,7 +252,7 @@ target "event-gateway" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/event-gateway:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/event-gateway:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/event-gateway:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -287,7 +286,7 @@ target "state-service" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/state-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/state-service:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/state-service:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -321,7 +320,7 @@ target "scheduler-service" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/scheduler-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/scheduler-service:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/scheduler-service:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -349,7 +348,7 @@ target "timer-service" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/timer-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/timer-service:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/timer-service:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -376,7 +375,7 @@ target "metrics-service" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/metrics-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/metrics-service:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/metrics-service:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
@@ -414,7 +413,7 @@ target "luminaire-service" {
     }
     tags = [
         "${REGISTRY}/${USERNAME}/luminaire-service:latest${TAG_SUFFIX}",
-        "${REGISTRY}/${USERNAME}/luminaire-service:${GIT_SHORT_SHA}${TAG_SUFFIX}"
+        "${REGISTRY}/${USERNAME}/luminaire-service:${GIT_SHA}${TAG_SUFFIX}"
     ]
     platforms = ["linux/amd64"]
     push = true
