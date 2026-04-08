@@ -418,17 +418,17 @@ target "luminaire-service" {
 TARGET
 fi
 
-# Aggregate targets (only if we have services to include)
+# Aggregate groups (only if we have services to include)
 if [[ ${#ALL_TARGETS[@]} -gt 0 ]]; then
     echo "" >> "$OUTPUT_FILE"
-    echo "# Aggregate target for all services" >> "$OUTPUT_FILE"
-    printf 'target "all" { targets = %s }\n' "[$(IFS=','; echo "${ALL_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+    echo "# Aggregate group for all services" >> "$OUTPUT_FILE"
+    printf 'group "all" { targets = %s }\n' "[$(IFS=','; echo "${ALL_TARGETS[*]}")]" >> "$OUTPUT_FILE"
 fi
 
 if [[ ${#PYTHON_TARGETS[@]} -gt 0 ]]; then
     echo "" >> "$OUTPUT_FILE"
-    echo "# Aggregate target for Python services" >> "$OUTPUT_FILE"
-    printf 'target "all-python" { targets = %s }\n' "[$(IFS=','; echo "${PYTHON_TARGETS[*]}")]" >> "$OUTPUT_FILE"
+    echo "# Aggregate group for Python services" >> "$OUTPUT_FILE"
+    printf 'group "all-python" { targets = %s }\n' "[$(IFS=','; echo "${PYTHON_TARGETS[*]}")]" >> "$OUTPUT_FILE"
 fi
 
 echo ""

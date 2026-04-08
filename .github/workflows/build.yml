@@ -166,6 +166,22 @@ jobs:
           echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "short_sha=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
 
+      - name: Resolve target name
+        id: target
+        run: |
+          case "${{ github.event.inputs.services || 'all' }}" in
+            web) echo "target=webapp" ;;
+            gateway) echo "target=event-gateway" ;;
+            state) echo "target=state-service" ;;
+            scheduler) echo "target=scheduler-service" ;;
+            timer) echo "target=timer-service" ;;
+            metrics) echo "target=metrics-service" ;;
+            luminaire) echo "target=luminaire-service" ;;
+            python) echo "target=all-python" ;;
+            all) echo "target=all" ;;
+            *) echo "target=all" ;;
+          esac >> $GITHUB_OUTPUT
+
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
         with:
@@ -220,8 +236,6 @@ jobs:
           targets: ${{ steps.target.outputs.target }}
           push: true
           load: false
-          set: |
-            *.context=.
 
       - name: Summary
         run: |
