@@ -62,6 +62,9 @@ jobs:
       environment: ${{ steps.detect.outputs.environment }}
       tag_suffix: ${{ steps.detect.outputs.tag_suffix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Run detect-env action
         id: detect
         uses: ./.github/actions/detect-env
@@ -110,6 +113,9 @@ jobs:
       username: ${{ steps.resolve.outputs.username }}
       registry: ${{ steps.resolve.outputs.registry }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Resolve username
         id: resolve
         run: |
