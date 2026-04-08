@@ -184,14 +184,23 @@ jobs:
           output: ${{ env.DOCKER_BAKE_FILE }}
         env:
           GIT_SHA: ${{ steps.commit.outputs.sha }}
-          run: |
-            echo "=== Generated Bake File Content ==="
-            cat ${{ env.DOCKER_BAKE_FILE }}
-            echo "==================================="
-            echo ""
-            echo "=== File Permissions and Size ==="
-            ls -la ${{ env.DOCKER_BAKE_FILE }}
-            echo "=================================="
+
+      - name: Debug - Show bake file content
+        run: |
+          echo "=== Bake File Content ==="
+          cat ${{ env.DOCKER_BAKE_FILE }}
+          echo "=========================="
+
+      - name: Debug - Check file encoding
+        run: |
+          echo "=== File Info ==="
+          file ${{ env.DOCKER_BAKE_FILE }}
+          echo ""
+          echo "=== First 200 bytes hex ==="
+          head -c 200 ${{ env.DOCKER_BAKE_FILE }} | xxd | head -20
+          echo ""
+          echo "=== Last 100 bytes hex ==="
+          tail -c 100 ${{ env.DOCKER_BAKE_FILE }} | xxd
 
       - name: Build and push
         uses: docker/bake-action@v5
