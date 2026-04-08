@@ -1,6 +1,9 @@
 name: Build Docker Images
 
 on:
+  push:
+    branches:
+      - feature/improve-ci-and-logging
   workflow_dispatch:
     inputs:
       commit_sha:
