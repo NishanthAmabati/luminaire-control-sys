@@ -106,7 +106,14 @@ function applyScheduler(event, payload) {
     }
     if (event === 'scheduler:runtime') {
       Object.assign(sch.runtime, payload || {});
-      if (typeof payload?.system_on === 'boolean') sch.system_on = payload.system_on;
+      if (typeof payload?.system_on === 'boolean') {
+        sch.system_on = payload.system_on;
+      } else if (
+        sch.system_on === false &&
+        (Number(payload?.cct ?? 0) > 0 || Number(payload?.lux ?? 0) > 0 || Boolean(sch.running_scene))
+      ) {
+        sch.system_on = true;
+      }
     }
     if (event === 'scheduler:scene_load' || event === 'scheduler:scene_loaded') {
       sch.loaded_scene = payload?.loaded_scene || payload?.scene || sch.loaded_scene;
@@ -114,6 +121,11 @@ function applyScheduler(event, payload) {
     }
     if (event === 'scheduler:available_scenes') {
       sch.available_scenes = payload?.scenes || payload?.available_scenes || sch.available_scenes;
+    }
+    if (event === 'scheduler:scene_stopped') {
+      sch.running_scene = '';
+      sch.loaded_scene = '';
+      sch.scene_profile = { cct: [], intensity: [] };
     }
   });
 }
