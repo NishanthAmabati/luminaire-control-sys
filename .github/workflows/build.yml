@@ -1,13 +1,12 @@
 name: Build Docker Images
 
 on:
-  push:
-    branches:
-      - feature/improve-ci-and-logging
+  repository_dispatch:
+    types: [trigger-docker-build]
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: "Git commit SHA to build (leave empty for current HEAD)"
+        description: "Git commit SHA to build"
         required: false
         type: string
         default: ""
@@ -16,45 +15,34 @@ on:
         required: false
         type: choice
         default: "all"
-        options:
-          - all
-          - web
-          - gateway
-          - python
-          - state
-          - scheduler
-          - timer
-          - metrics
-          - luminaire
+        options: [all, web, gateway, python, state, scheduler, timer, metrics, luminaire]
       environment:
         description: "Target environment"
         required: false
         type: choice
         default: "dev"
-        options:
-          - dev
-          - prod
+        options: [dev, prod]
       registry:
         description: "Docker registry"
         required: false
         type: string
         default: ""
       username:
-        description: "Registry username (leave empty to use GitHub variable)"
+        description: "Registry username"
         required: false
         type: string
         default: ""
-      skip_tests:
-        description: "Skip running tests"
-        required: false
-        type: boolean
-        default: true
 
 env:
   DOCKER_BAKE_FILE: docker-bake.hcl
+  # Normalize inputs so they work for both CURL and UI dispatch
+  SELECTED_SERVICES: ${{ github.event.inputs.services || github.event.client_payload.services || 'all' }}
+  SELECTED_ENV: ${{ github.event.inputs.environment || github.event.client_payload.environment || 'dev' }}
+  SELECTED_SHA: ${{ github.event.inputs.commit_sha || github.event.client_payload.commit_sha || '' }}
+  SELECTED_REGISTRY: ${{ github.event.inputs.registry || github.event.client_payload.registry || '' }}
+  SELECTED_USERNAME: ${{ github.event.inputs.username || github.event.client_payload.username || '' }}
 
 jobs:
-  # Detect environment
   detect:
     name: Detect Environment
     runs-on: ubuntu-latest
@@ -64,48 +52,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Run detect-env action
         id: detect
         uses: ./.github/actions/detect-env
         with:
-          environment: ${{ github.event.inputs.environment || 'dev' }}
+          environment: ${{ env.SELECTED_ENV }}
 
-  # Run tests (optional)
   test:
     name: Run Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        if: github.event.inputs.commit_sha == ''
-        uses: actions/checkout@v4
-
-      - name: Checkout specific commit
-        if: github.event.inputs.commit_sha != ''
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.commit_sha }}
-          fetch-depth: 1
-
+          ref: ${{ env.SELECTED_SHA }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install pytest pytest-asyncio > /dev/null 2>&1 || true
-
       - name: Run tests
         run: |
           for service in state_service scheduler_service timer_service luminaire_service metrics_service; do
             if [ -f "$service/requirements.txt" ]; then
               echo "Testing $service..."
-              # Add actual test commands here
             fi
           done
 
-  # Determine username (from input or GitHub variable)
   setup:
     name: Setup
     runs-on: ubuntu-latest
@@ -113,63 +85,37 @@ jobs:
       username: ${{ steps.resolve.outputs.username }}
       registry: ${{ steps.resolve.outputs.registry }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve username
+      - name: Resolve credentials
         id: resolve
         run: |
-          USERNAME="${{ github.event.inputs.username }}"
-          REGISTRY="${{ github.event.inputs.registry }}"
-          
-          if [ -z "$USERNAME" ]; then
-            USERNAME="${{ vars.DOCKERHUB_USERNAME }}"
-          fi
-          
-          if [ -z "$REGISTRY" ]; then
-            REGISTRY="docker.io"
-          fi
-          
-          if [ -z "$USERNAME" ]; then
-            echo "::error::Docker registry username not set. Set DOCKERHUB_USERNAME GitHub variable or provide username input."
-            exit 1
-          fi
-          
+          USERNAME="${{ env.SELECTED_USERNAME }}"
+          REGISTRY="${{ env.SELECTED_REGISTRY }}"
+          if [ -z "$USERNAME" ]; then USERNAME="${{ vars.DOCKERHUB_USERNAME }}"; fi
+          if [ -z "$REGISTRY" ]; then REGISTRY="docker.io"; fi
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
 
-  # Build Docker images
   build:
-    name: Build ${{ github.event.inputs.services || 'all' }}
+    name: Build ${{ github.event.inputs.services || github.event.client_payload.services || 'all' }}
     needs: [detect, setup]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        if: github.event.inputs.commit_sha == ''
-        uses: actions/checkout@v4
-
-      - name: Checkout specific commit
-        if: github.event.inputs.commit_sha != ''
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.commit_sha }}
-          fetch-depth: 1
+          ref: ${{ env.SELECTED_SHA }}
 
       - name: Get commit SHA
         id: commit
         run: |
-          if [ -n "${{ github.event.inputs.commit_sha }}" ]; then
-            COMMIT_SHA="${{ github.event.inputs.commit_sha }}"
-          else
-            COMMIT_SHA="${{ github.sha }}"
-          fi
-          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-          echo "short_sha=${COMMIT_SHA:0:7}" >> $GITHUB_OUTPUT
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHA:0:7}" >> $GITHUB_OUTPUT
 
       - name: Resolve target name
         id: target
         run: |
-          case "${{ github.event.inputs.services || 'all' }}" in
+          case "${{ env.SELECTED_SERVICES }}" in
             web) echo "target=webapp" ;;
             gateway) echo "target=event-gateway" ;;
             state) echo "target=state-service" ;;
@@ -178,7 +124,6 @@ jobs:
             metrics) echo "target=metrics-service" ;;
             luminaire) echo "target=luminaire-service" ;;
             python) echo "target=all-python" ;;
-            all) echo "target=all" ;;
             *) echo "target=all" ;;
           esac >> $GITHUB_OUTPUT
 
@@ -194,7 +139,7 @@ jobs:
         uses: ./.github/actions/generate-bake
         with:
           environment: ${{ needs.detect.outputs.environment }}
-          services: ${{ github.event.inputs.services || 'all' }}
+          services: ${{ env.SELECTED_SERVICES }}
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ needs.setup.outputs.username }}
           output: ${{ env.DOCKER_BAKE_FILE }}
