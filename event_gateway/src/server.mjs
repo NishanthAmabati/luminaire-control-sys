@@ -3,29 +3,24 @@ import cors from 'cors';
 import { createClient } from 'redis';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { randomUUID } from 'crypto';
-
-const TRACE_HEADER = 'X-Trace-ID';
 
 const requireEnv = (name) => {
   const value = process.env[name];
-  if (!value) throw new Error(`missing required env var ${name}`);
+  if (!value) throw new Error(`missing required env var: ${name}`);
   return value;
 };
 
-const logger = pino({
-  level: process.env.GATEWAY_LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV === 'production' ? undefined : { target: 'pino-pretty' },
-});
+const toInt = (name) => {
+  const value = Number(requireEnv(name));
+  if (!Number.isFinite(value)) throw new Error(`invalid integer env var: ${name}`);
+  return value;
+};
 
-const log = logger.child({ module: 'gateway' });
-
-const PORT = Number(process.env.GATEWAY_PORT);
+const PORT = toInt('GATEWAY_PORT');
 const REDIS_URL = requireEnv('GATEWAY_REDIS_URL');
 const STATE_SERVICE_URL = requireEnv('GATEWAY_STATE_SERVICE_URL');
-const HEARTBEAT = Number(process.env.GATEWAY_HEARTBEAT_MS);
-const LATENCY_INTERVAL = Number(process.env.GATEWAY_LATENCY_INTERVAL_MS);
-const REDIS_RECONNECT_MS = Number(process.env.GATEWAY_REDIS_RECONNECT_MS) || 5000;
+const HEARTBEAT = toInt('GATEWAY_HEARTBEAT_MS');
+const LATENCY_INTERVAL = toInt('GATEWAY_LATENCY_INTERVAL_MS');
 
 const CHANNELS = {
   scheduler: requireEnv('GATEWAY_CHANNEL_SCHEDULER'),
@@ -34,26 +29,29 @@ const CHANNELS = {
   metrics: requireEnv('GATEWAY_CHANNEL_METRICS'),
 };
 
+const REDIS_RECONNECT_MS = toInt('GATEWAY_REDIS_RECONNECT_MS');
+
+/* ===============================
+   LOGGER
+================================ */
+
+const logger = pino({
+  level: requireEnv('GATEWAY_LOG_LEVEL'),
+  transport: { target: 'pino-pretty' },
+});
+
+/* ===============================
+   EXPRESS
+================================ */
+
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+app.use(pinoHttp({ logger }));
 
-app.use((req, res, next) => {
-  const incomingTraceId = req.headers[TRACE_HEADER.toLowerCase()];
-  const traceId = (incomingTraceId && isValidUUID(incomingTraceId)) ? incomingTraceId : randomUUID();
-  
-  req.traceId = traceId;
-  res.setHeader(TRACE_HEADER, traceId);
-  req.log = log.child({ trace_id: traceId });
-  
-  next();
-});
-
-app.use(pinoHttp({ 
-  logger,
-  useLevel: 'debug',
-  autoLogging: { ignore: (req) => req.url === '/health' } 
-}));
+/* ===============================
+   SNAPSHOT STATE
+================================ */
 
 const snapshot = {
   scheduler: {
@@ -77,6 +75,10 @@ function updateSnapshot(mutator) {
   snapshot.last_updated = new Date().toISOString();
 }
 
+/* ===============================
+   UTILITIES
+================================ */
+
 const parseHmToHour = (v) => {
   if (!v?.includes(':')) return null;
   const [h, m] = v.split(':').map(Number);
@@ -87,14 +89,21 @@ const parseHmToHour = (v) => {
 const mapScenePoints = (points = []) => {
   const cct = [];
   const intensity = [];
+
   for (const p of points) {
     const hour = parseHmToHour(p.time);
     if (hour === null) continue;
+
     if (typeof p.cct === 'number') cct.push([hour, p.cct]);
     if (typeof p.lux === 'number') intensity.push([hour, p.lux]);
   }
+
   return { cct, intensity };
 };
+
+/* ===============================
+   EVENT HANDLERS
+================================ */
 
 function applyScheduler(event, payload) {
   updateSnapshot((s) => {
@@ -117,6 +126,7 @@ function applyScheduler(event, payload) {
         sch.system_on === false &&
         (Number(payload?.cct ?? 0) > 0 || Number(payload?.lux ?? 0) > 0 || Boolean(sch.running_scene))
       ) {
+        // If state event was missed, infer "on" from active runtime.
         sch.system_on = true;
       }
     }
@@ -169,8 +179,8 @@ function applyTimer(event, payload) {
 
   updateSnapshot((s) => {
     s.timer.enabled = !!payload?.timer_enabled;
-    s.timer.start = typeof payload?.start === 'string' ? payload.start : s.timer.start;
-    s.timer.end = typeof payload?.end === 'string' ? payload.end : s.timer.end;
+    s.timer.start = payload?.timer_start || '';
+    s.timer.end = payload?.timer_end || '';
   });
 }
 
@@ -225,6 +235,46 @@ function applyStateSnapshot(state) {
   });
 }
 
+async function bootstrapFromStateService() {
+  if (!STATE_SERVICE_URL) return false;
+  try {
+    const response = await fetch(STATE_SERVICE_URL);
+    if (!response.ok) throw new Error(`state service responded ${response.status}`);
+    const state = await response.json();
+    applyStateSnapshot(state);
+    if (state?.mode === 'AUTO') {
+      const base = STATE_SERVICE_URL.replace(/\/state$/, '');
+      const sceneToLoad = state?.auto?.running_scene || state?.auto?.loaded_scene;
+      try {
+        await fetch(`${base}/scene/available`);
+      } catch (err) {
+        logger.warn({ err }, 'failed to refresh available scenes');
+      }
+      if (sceneToLoad) {
+        try {
+          // Trigger scheduler to publish scheduler:scene_load with full profile points.
+          await fetch(`${base}/scene/load`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ scene: sceneToLoad }),
+          });
+        } catch (err) {
+          logger.warn({ err, scene: sceneToLoad }, 'failed to refresh scene profile');
+        }
+      }
+    }
+    logger.info('state service snapshot loaded');
+    return true;
+  } catch (err) {
+    logger.warn({ err }, 'failed to fetch state service snapshot');
+    return false;
+  }
+}
+
+/* ===============================
+   SSE
+================================ */
+
 const clients = new Set();
 
 async function broadcast(data) {
@@ -233,6 +283,7 @@ async function broadcast(data) {
       const response = await fetch(STATE_SERVICE_URL);
       if (response.ok) {
         const state = await response.json();
+        // Update manual_input from state service
         if (state?.manual && snapshot.scheduler.mode === 'MANUAL') {
           if (typeof state.manual.cw === 'number') {
             snapshot.scheduler.manual_input.cw = state.manual.cw;
@@ -247,13 +298,13 @@ async function broadcast(data) {
     }
   }
   const msg = `data: ${JSON.stringify(data)}\n\n`;
-  clients.forEach(res => {
+  for (const res of clients) {
     try {
       res.write(msg);
-    } catch (err) {
+    } catch {
       clients.delete(res);
     }
-  });
+  }
 }
 
 app.get('/events', (req, res) => {
@@ -262,18 +313,27 @@ app.get('/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   clients.add(res);
-  req.log.info(`new sse client connected total ${clients.size}`);
 
-  res.write(`data: ${JSON.stringify({ type: 'snapshot', snapshot, trace_id: req.traceId })}\n\n`);
+  res.write(
+    `data: ${JSON.stringify({ type: 'snapshot', snapshot })}\n\n`
+  );
 
   const hb = setInterval(() => res.write(': ping\n\n'), HEARTBEAT);
 
   req.on('close', () => {
     clearInterval(hb);
     clients.delete(res);
-    req.log.info(`sse client disconnected total ${clients.size}`);
+    logger.info('SSE client disconnected');
   });
 });
+
+setInterval(() => {
+  broadcast({ type: 'heartbeat', server_time: Date.now() });
+}, LATENCY_INTERVAL);
+
+/* ===============================
+   HEALTH
+================================ */
 
 app.get('/health', (_, res) => {
   res.json({
@@ -285,9 +345,9 @@ app.get('/health', (_, res) => {
 
 app.get('/snapshot', (_, res) => res.json(snapshot));
 
-setInterval(() => {
-  broadcast({ type: 'heartbeat', server_time: Date.now() });
-}, LATENCY_INTERVAL);
+/* ===============================
+   REDIS
+================================ */
 
 const redis = createClient({
   url: REDIS_URL,
@@ -296,80 +356,40 @@ const redis = createClient({
   },
 });
 
-sub.on('error', (err) => log.error({ err }, 'redis subscriber error'));
-redis.on('error', (err) => log.error({ err }, 'redis client error'));
+redis.on('error', (e) => logger.error(e, 'Redis error'));
+
+await redis.connect();
 
 const sub = redis.duplicate();
+await sub.connect();
 
-async function startRedis() {
-  await redis.connect();
-  await sub.connect();
-  log.info('connected to redis cluster');
-
-  await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CHANNELS.metrics], (raw, channel) => {
-    try {
-      const msg = JSON.parse(raw);
-      const event = msg?.event;
-      const payload = msg?.payload ?? msg;
-
-      if (!event) {
-        log.warn({ channel, msg }, 'Redis message missing event field');
-        return;
-      }
-
-      if (channel === CHANNELS.scheduler) applyScheduler(event, payload);
-      if (channel === CHANNELS.luminaires) applyLuminaire(event, payload);
-      if (channel === CHANNELS.timer) applyTimer(event, payload);
-      if (channel === CHANNELS.metrics) applyMetrics(event, payload);
-
-      broadcast({ channel, event, payload, snapshot, trace_id: msg?.trace_id });
-    } catch (err) {
-      log.error({ err }, 'Redis event parse failed');
-    }
-  });
-}
-
-function isValidUUID(str) {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
-async function bootstrapFromStateService() {
-  if (!STATE_SERVICE_URL) return false;
+await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CHANNELS.metrics], (raw, channel) => {
   try {
-    const response = await fetch(STATE_SERVICE_URL);
-    if (!response.ok) throw new Error(`state service responded ${response.status}`);
-    const state = await response.json();
-    applyStateSnapshot(state);
-    if (state?.mode === 'AUTO') {
-      const base = STATE_SERVICE_URL.replace(/\/state$/, '');
-      const sceneToLoad = state?.auto?.running_scene || state?.auto?.loaded_scene;
-      try {
-        await fetch(`${base}/scene/available`);
-      } catch (err) {
-        log.warn({ err }, 'failed to refresh available scenes');
-      }
-      if (sceneToLoad) {
-        try {
-          await fetch(`${base}/scene/load`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ scene: sceneToLoad }),
-          });
-        } catch (err) {
-          log.warn({ err, scene: sceneToLoad }, 'failed to refresh scene profile');
-        }
-      }
-    }
-    log.info('state service snapshot loaded');
-    return true;
-  } catch (err) {
-    log.warn({ err }, 'failed to fetch state service snapshot');
-    return false;
-  }
-}
+    const msg = JSON.parse(raw);
+    const event = msg?.event;
+    const payload = msg?.payload ?? msg;
 
-async function startBootstrap() {
+    if (!event) {
+      logger.warn({ channel, msg }, 'Redis message missing event field');
+      return;
+    }
+
+    if (channel === CHANNELS.scheduler) applyScheduler(event, payload);
+    if (channel === CHANNELS.luminaires) applyLuminaire(event, payload);
+    if (channel === CHANNELS.timer) applyTimer(event, payload);
+    if (channel === CHANNELS.metrics) applyMetrics(event, payload);
+
+    broadcast({ channel, event, payload, snapshot });
+  } catch (err) {
+    logger.error(err, 'Redis event parse failed');
+  }
+});
+
+/* ===============================
+   START
+================================ */
+
+const startBootstrap = async () => {
   let attempts = 0;
   const maxAttempts = 12;
   const intervalMs = 5000;
@@ -379,19 +399,23 @@ async function startBootstrap() {
     if (ok) return;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  log.warn('state service snapshot bootstrap failed after retries');
-}
+  logger.warn('state service snapshot bootstrap failed after retries');
+};
 
-app.listen(PORT, async () => {
-  log.info(`event gateway listening on port ${PORT}`);
-  await startRedis();
-  await startBootstrap();
-});
+void startBootstrap();
+
+app.listen(PORT, () => logger.info(`event-gateway listening on ${PORT}`));
+
+/* ===============================
+   GRACEFUL SHUTDOWN
+================================ */
 
 async function shutdown() {
-  log.info('shutting down');
+  logger.info('Shutting down');
+
   await sub.quit();
   await redis.quit();
+
   process.exit(0);
 }
 
