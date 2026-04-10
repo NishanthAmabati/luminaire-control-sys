@@ -7,6 +7,7 @@ import { useUiFeedback } from './context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from './utils/apiError';
 import { useEventSnapshot } from './hooks/useEventSnapshot';
 import { TraceProvider, useTrace } from './context/TraceContext';
+import { TRACE_HEADER } from './constants/trace';
 
 const AppShell: React.FC = () => {
   const apiBase = import.meta.env.VITE_API_URL || '/api';
@@ -16,7 +17,7 @@ const AppShell: React.FC = () => {
   const { theme } = useDashboardTheme();
   const { pushError } = useUiFeedback();
   const { snapshot } = useEventSnapshot();
-  const { createTraceHeaders, generateTraceId } = useTrace();
+  const { generateTraceId } = useTrace();
 
   useEffect(() => {
     const scheduler = (snapshot?.scheduler as Record<string, unknown> | undefined) ?? {};
@@ -30,12 +31,15 @@ const AppShell: React.FC = () => {
     const next = !systemOn;
     setPowerPending(true);
     setToggleAnimating(true);
-    generateTraceId();
+    const traceId = generateTraceId();
 
     try {
       const response = await fetch(`${apiBase}/system/power`, {
         method: 'POST',
-        headers: createTraceHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          [TRACE_HEADER]: traceId,
+        },
         body: JSON.stringify({ on: next }),
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));

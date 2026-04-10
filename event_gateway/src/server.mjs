@@ -20,11 +20,11 @@ const logger = pino({
 
 const log = logger.child({ module: 'gateway' });
 
-const PORT = Number(process.env.GATEWAY_PORT) || 8000;
+const PORT = Number(process.env.GATEWAY_PORT);
 const REDIS_URL = requireEnv('GATEWAY_REDIS_URL');
 const STATE_SERVICE_URL = requireEnv('GATEWAY_STATE_SERVICE_URL');
-const HEARTBEAT = Number(process.env.GATEWAY_HEARTBEAT_MS) || 10000;
-const LATENCY_INTERVAL = Number(process.env.GATEWAY_LATENCY_INTERVAL_MS) || 5000;
+const HEARTBEAT = Number(process.env.GATEWAY_HEARTBEAT_MS);
+const LATENCY_INTERVAL = Number(process.env.GATEWAY_LATENCY_INTERVAL_MS);
 
 const CHANNELS = {
   scheduler: requireEnv('GATEWAY_CHANNEL_SCHEDULER'),
@@ -207,12 +207,22 @@ async function bootstrap() {
     
     const response = await fetch(STATE_SERVICE_URL, { 
       signal: controller.signal,
-      headers: { [TRACE_HEADER]: req?.traceId || randomUUID() }
+      headers: { [TRACE_HEADER]: randomUUID() }
     });
     clearTimeout(timeout);
 
     if (response.ok) {
       const state = await response.json();
+      updateSnapshot((s) => {
+        if (typeof state?.system_on === 'boolean') {
+          s.scheduler.system_on = state.system_on;
+        }
+        s.scheduler.mode = state?.mode === 'AUTO' ? 'AUTO' : 'MANUAL';
+        s.scheduler.loaded_scene = state?.auto?.loaded_scene || '';
+        s.scheduler.running_scene = state?.auto?.running_scene || '';
+        if (state?.auto?.cct !== undefined) s.scheduler.runtime.cct = state.auto.cct;
+        if (state?.auto?.lux !== undefined) s.scheduler.runtime.lux = state.auto.lux;
+      });
       log.info('initial snapshot hydration complete');
     }
   } catch (err) {
