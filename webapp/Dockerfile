@@ -1,34 +1,34 @@
-# Stage 1: Build the frontend app
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install dependencies
-COPY webapp/package*.json ./
+COPY webapp/package*.json /app/
 RUN npm ci
 
+COPY webapp /app
+COPY config.yaml /app/public/config.yaml
 
-# Copy the rest of the application
-COPY webapp/ .
+ARG VITE_API_URL
+ARG VITE_EVENT_GATEWAY_URL
+ARG VITE_UI_CONFIG_URL
 
-# Build the production-ready static files
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_EVENT_GATEWAY_URL=$VITE_EVENT_GATEWAY_URL
+ENV VITE_UI_CONFIG_URL=$VITE_UI_CONFIG_URL
+
 RUN npm run build
 
-# Stage 2: Serve with minimal NGINX
-FROM nginx:1.25-alpine AS serve
+FROM nginx:alpine
 
-# Remove default NGINX config
-#RUN rm /etc/nginx/conf.d/default.conf
+ARG TIMEZONE
 
-# Copy custom NGINX config
-COPY webapp/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache tzdata
 
-# Copy built frontend from builder stage
+ENV TZ=$TIMEZONE
+
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY webapp/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose HTTP port
 EXPOSE 80
 
-# Start NGINX
 CMD ["nginx", "-g", "daemon off;"]
