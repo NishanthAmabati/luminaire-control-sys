@@ -5,11 +5,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
-COPY package*.json ./
+COPY webapp/package*.json ./
 RUN npm ci
 
+
 # Copy the rest of the application
-COPY . .
+COPY webapp/ .
 
 # Build the production-ready static files
 RUN npm run build
