@@ -144,7 +144,7 @@ variable "VITE_UI_CONFIG_URL" { default = "/config.yaml" }
 # Gateway variables
 variable "GATEWAY_PORT" { default = "8088" }
 variable "GATEWAY_LOG_LEVEL" { default = "info" }
-variable "GATEWAY_STATE_SERVICE_URL" { default = "http://state-service:8001" }
+variable "GATEWAY_STATE_SERVICE_URL" { default = "http://state-service:8001/state" }
 variable "GATEWAY_REDIS_URL" { default = "redis://redis:6379" }
 variable "GATEWAY_REDIS_RECONNECT_MS" { default = "5000" }
 variable "GATEWAY_CHANNEL_SCHEDULER" { default = "scheduler:events" }
@@ -176,7 +176,7 @@ variable "SCHEDULER_LUMINAIRE_URL" { default = "http://luminaire-service:8000" }
 
 # Timer service variables
 variable "TIMER_REDIS_PUB" { default = "timer:events" }
-variable "TIMER_STATE_SERVICE_URL" { default = "http://state-service:8001" }
+variable "TIMER_STATE_SERVICE_URL" { default = "http://state-service:8001/system/power" }
 
 # Metrics service variables
 variable "METRICS_INTERVAL" { default = "5" }
