@@ -21,7 +21,7 @@ FROM nginx:1.25-alpine AS serve
 #RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom NGINX config
-COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY webapp/nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built frontend from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
