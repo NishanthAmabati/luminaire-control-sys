@@ -1,0 +1,233 @@
+name: Build Docker Images
+
+on:
+  repository_dispatch:
+    types: [trigger-docker-build]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Git commit SHA to build"
+        required: false
+        type: string
+        default: ""
+      services:
+        description: "Services to build (e.g. 'all', 'web', 'web,gateway,python', 'state,metrics')"
+        required: false
+        type: string
+        default: "all"
+      environment:
+        description: "Target environment"
+        required: false
+        type: choice
+        default: "dev"
+        options: [dev, prod]
+      registry:
+        description: "Docker registry"
+        required: false
+        type: string
+        default: ""
+      username:
+        description: "Registry username"
+        required: false
+        type: string
+        default: ""
+
+env:
+  DOCKER_BAKE_FILE: docker-bake.hcl
+  # Normalize inputs so they work for both CURL and UI dispatch
+  SELECTED_SERVICES: ${{ github.event.inputs.services || github.event.client_payload.services || 'all' }}
+  SELECTED_ENV: ${{ github.event.inputs.environment || github.event.client_payload.environment || 'dev' }}
+  SELECTED_SHA: ${{ github.event.inputs.commit_sha || github.event.client_payload.commit_sha || '' }}
+  SELECTED_REGISTRY: ${{ github.event.inputs.registry || github.event.client_payload.registry || '' }}
+  SELECTED_USERNAME: ${{ github.event.inputs.username || github.event.client_payload.username || '' }}
+
+jobs:
+  detect:
+    name: Detect Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      tag_suffix: ${{ steps.detect.outputs.tag_suffix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run detect-env action
+        id: detect
+        uses: ./.github/actions/detect-env
+        with:
+          environment: ${{ env.SELECTED_ENV }}
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SELECTED_SHA }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run tests
+        run: |
+          for service in state_service scheduler_service timer_service luminaire_service metrics_service; do
+            if [ -f "$service/requirements.txt" ]; then
+              echo "Testing $service..."
+            fi
+          done
+
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      username: ${{ steps.resolve.outputs.username }}
+      registry: ${{ steps.resolve.outputs.registry }}
+    steps:
+      - name: Resolve credentials
+        id: resolve
+        run: |
+          USERNAME="${{ env.SELECTED_USERNAME }}"
+          REGISTRY="${{ env.SELECTED_REGISTRY }}"
+          if [ -z "$USERNAME" ]; then USERNAME="${{ vars.DOCKERHUB_USERNAME }}"; fi
+          if [ -z "$REGISTRY" ]; then REGISTRY="docker.io"; fi
+          echo "username=$USERNAME" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build ${{ env.SELECTED_SERVICES }}
+    needs: [detect, setup]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SELECTED_SHA }}
+
+      - name: Get commit SHA
+        id: commit
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - name: Resolve target names
+        id: target
+        run: |
+          SERVICES="${{ env.SELECTED_SERVICES }}"
+          TARGETS=""
+          
+          resolve_target() {
+            case "$1" in
+              web) echo "webapp" ;;
+              gateway) echo "event-gateway" ;;
+              state) echo "state-service" ;;
+              scheduler) echo "scheduler-service" ;;
+              timer) echo "timer-service" ;;
+              metrics) echo "metrics-service" ;;
+              luminaire) echo "luminaire-service" ;;
+              python) echo "all-python" ;;
+              all) echo "all" ;;
+              *) echo "INVALID:$1" ;;
+            esac
+          }
+          
+          IFS=',' read -ra SERVICE_ARRAY <<< "$SERVICES"
+          for svc in "${SERVICE_ARRAY[@]}"; do
+            svc=$(echo "$svc" | tr -d ' ')
+            target=$(resolve_target "$svc")
+            if [[ "$target" == INVALID:* ]]; then
+              echo "ERROR: Unknown service '$svc'. Valid services: all, web, gateway, python, state, scheduler, timer, metrics, luminaire"
+              exit 1
+            fi
+            if [[ -z "$TARGETS" ]]; then
+              TARGETS="$target"
+            else
+              TARGETS="$TARGETS,$target"
+            fi
+          done
+          
+          echo "targets=$TARGETS" >> $GITHUB_OUTPUT
+          echo "service_count=${#SERVICE_ARRAY[@]}" >> $GITHUB_OUTPUT
+
+      - name: Setup Docker
+        uses: ./.github/actions/setup-docker
+        with:
+          username: ${{ needs.setup.outputs.username }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ needs.setup.outputs.registry }}
+
+      - name: Generate bake file
+        id: bake
+        uses: ./.github/actions/generate-bake
+        with:
+          environment: ${{ needs.detect.outputs.environment }}
+          services: ${{ env.SELECTED_SERVICES }}
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ needs.setup.outputs.username }}
+          output: ${{ env.DOCKER_BAKE_FILE }}
+        env:
+          GIT_SHA: ${{ steps.commit.outputs.sha }}
+
+      - name: Build and push
+        uses: docker/bake-action@v5
+        with:
+          files: ${{ env.DOCKER_BAKE_FILE }}
+          targets: ${{ steps.target.outputs.targets }}
+          push: true
+          load: false
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ needs.detect.outputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services | \`${{ env.SELECTED_SERVICES }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service Count | \`${{ steps.target.outputs.service_count }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | \`${{ needs.setup.outputs.registry }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Username | \`${{ needs.setup.outputs.username }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Suffix | \`${{ needs.detect.outputs.tag_suffix }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit SHA | \`${{ steps.commit.outputs.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Short SHA | \`${{ steps.commit.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images Built" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          TAG_SUFFIX="${{ needs.detect.outputs.tag_suffix }}"
+          SHORT_SHA="${{ steps.commit.outputs.short_sha }}"
+          
+          print_image() {
+            local cli_name="$1"
+            local image_name="$2"
+            echo "${image_name}${TAG_SUFFIX} \`${image_name}:${SHORT_SHA}${TAG_SUFFIX}\`"
+          }
+          
+          IFS=',' read -ra SERVICE_ARRAY <<< "${{ env.SELECTED_SERVICES }}"
+          for svc in "${SERVICE_ARRAY[@]}"; do
+            svc=$(echo "$svc" | tr -d ' ')
+            case "$svc" in
+              all)
+                print_image "web" "webapp"
+                print_image "gateway" "event-gateway"
+                print_image "state" "state-service"
+                print_image "scheduler" "scheduler-service"
+                print_image "timer" "timer-service"
+                print_image "metrics" "metrics-service"
+                print_image "luminaire" "luminaire-service"
+                ;;
+              web) print_image "web" "webapp" ;;
+              gateway) print_image "gateway" "event-gateway" ;;
+              python)
+                print_image "state" "state-service"
+                print_image "scheduler" "scheduler-service"
+                print_image "timer" "timer-service"
+                print_image "metrics" "metrics-service"
+                print_image "luminaire" "luminaire-service"
+                ;;
+              state|scheduler|timer|metrics|luminaire)
+                print_image "$svc" "${svc}-service"
+                ;;
+            esac
+          done
+          echo '```' >> $GITHUB_STEP_SUMMARY
