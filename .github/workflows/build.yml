@@ -95,7 +95,7 @@ jobs:
           echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
 
   build:
-    name: Build ${{ env.SELECTED_SERVICES }}
+    name: Build ${{ github.event.inputs.services || github.event.client_payload.services || 'all' }}
     needs: [detect, setup]
     runs-on: ubuntu-latest
     steps:
