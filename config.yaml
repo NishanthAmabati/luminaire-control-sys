@@ -65,6 +65,7 @@ services:
   
   metrics:
     interval: 1
+    log_level: info
     redis:
       pub: "metrics:events"
 
