@@ -211,7 +211,7 @@ variable "SCALES_LUX_MIN" { default = "0" }
 variable "SCALES_LUX_MAX" { default = "700" }
 variable "SCHEDULER_INTERVAL" { default = "60" }
 variable "SCHEDULER_SCENES_DIR" { default = "/app/scenes" }
-variable "SCHEDULER_LUMINAIRE_URL" { default = "http://luminaire-service:8000" }
+variable "SCHEDULER_LUMINAIRE_URL" { default = "http://luminaire-service:8000/set" }
 
 # Timer service variables
 variable "TIMER_REDIS_PUB" { default = "timer:events" }
