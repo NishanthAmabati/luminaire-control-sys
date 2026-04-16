@@ -223,7 +223,7 @@ def generate_bake():
         lines.extend(args_block)
         lines.append('    }')
         lines.append('    tags = [')
-        lines.append(f'        "${{REGISTRY}}/${{USERNAME}}/{image}${{REPO_SUFFIX}}:latest"')
+        lines.append(f'        "${{REGISTRY}}/${{USERNAME}}/{image}${{REPO_SUFFIX}}:latest",')
         lines.append(f'        "${{REGISTRY}}/${{USERNAME}}/{image}${{REPO_SUFFIX}}:${{GIT_SHA}}"')
         lines.append('    ]')
         lines.append('    platforms = ["linux/amd64"]')
