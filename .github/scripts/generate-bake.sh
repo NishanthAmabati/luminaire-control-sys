@@ -166,11 +166,11 @@ variable "SCHEDULER_REDIS_PUB" { default = "scheduler:events" }
 variable "METRICS_REDIS_PUB" { default = "metrics:events" }
 
 # Scheduler service variables
-variable "SCALES_CCT_MIN" { default = "2000" }
-variable "SCALES_CCT_MAX" { default = "7000" }
+variable "SCALES_CCT_MIN" { default = "3500" }
+variable "SCALES_CCT_MAX" { default = "6500" }
 variable "SCALES_LUX_MIN" { default = "0" }
-variable "SCALES_LUX_MAX" { default = "700" }
-variable "SCHEDULER_INTERVAL" { default = "60" }
+variable "SCALES_LUX_MAX" { default = "500" }
+variable "SCHEDULER_INTERVAL" { default = "1" }
 variable "SCHEDULER_SCENES_DIR" { default = "/app/scenes" }
 variable "SCHEDULER_LUMINAIRE_URL" { default = "http://luminaire-service:8000/devices/luminaires/set" }
 
@@ -179,7 +179,7 @@ variable "TIMER_REDIS_PUB" { default = "timer:events" }
 variable "TIMER_STATE_SERVICE_URL" { default = "http://state-service:8001/system/power" }
 
 # Metrics service variables
-variable "METRICS_INTERVAL" { default = "5" }
+variable "METRICS_INTERVAL" { default = "1" }
 variable "METRICS_LOG_LEVEL" { default = "info" }
 
 # Luminaire service variables
@@ -189,7 +189,7 @@ variable "LUMINAIRE_TCP_KEEPALIVE_ENABLED" { default = "true" }
 variable "LUMINAIRE_TCP_KEEPALIVE_IDLE_S" { default = "60" }
 variable "LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S" { default = "10" }
 variable "LUMINAIRE_TCP_KEEPALIVE_COUNT" { default = "5" }
-variable "LUMINAIRE_TCP_USER_TIMEOUT_MS" { default = "30000" }
+variable "LUMINAIRE_TCP_USER_TIMEOUT_MS" { default = "30" }
 variable "LUMINAIRE_REDIS_PUB" { default = "devices:luminaires" }
 variable "LUMINAIRE_API_HOST" { default = "0.0.0.0" }
 variable "LUMINAIRE_API_PORT" { default = "8000" }
