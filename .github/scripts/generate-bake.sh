@@ -246,16 +246,16 @@ def generate_bake():
         lines.append(f'group "all-python" {{ targets = [{targets_str}] }}')
         lines.append('')
     
-    # Summary
-    lines.append(f'Generated {output_file}')
-    lines.append(f'  Config: {config_path}')
-    lines.append(f'  Services: {services_input} ({selected_services})')
-    lines.append(f'  Environment: {sys.argv[11] if len(sys.argv) > 11 else "dev"}')
-    lines.append(f'  Targets: {", ".join(all_targets)}')
-    
-    # Write output
+    # Write HCL output to file (summary goes to stdout)
     with open(output_file, 'w') as f:
         f.write('\n'.join(lines) + '\n')
+    
+    # Print summary to stdout
+    print(f'Generated {output_file}')
+    print(f'  Config: {config_path}')
+    print(f'  Services: {services_input} ({selected_services})')
+    print(f'  Environment: {sys.argv[11] if len(sys.argv) > 11 else "dev"}')
+    print(f'  Targets: {", ".join(all_targets)}')
 
 if __name__ == '__main__':
     generate_bake()
