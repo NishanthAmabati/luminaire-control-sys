@@ -177,7 +177,7 @@ variable "REDIS_URL" { default = "redis://redis:6379" }
 
 # Webapp variables
 variable "VITE_API_URL" { default = "/api" }
-variable "VITE_EVENT_GATEWAY_URL" { default = "/api" }
+variable "VITE_EVENT_GATEWAY_URL" { default = "" }
 variable "VITE_UI_CONFIG_URL" { default = "/config.yaml" }
 
 # Gateway variables
