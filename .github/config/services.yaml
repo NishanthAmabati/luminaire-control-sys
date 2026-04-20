@@ -1,0 +1,271 @@
+# Service definitions for Docker bake generation
+# Each service defines: dockerfile, image name, and argument mappings
+# Argument values are sourced from config.yaml - no defaults allowed
+
+services:
+  web:
+    dockerfile: webapp/Dockerfile
+    image: web
+    args:
+      VITE_API_URL:
+        type: static
+        value: /api
+      VITE_EVENT_GATEWAY_URL:
+        type: static
+        value: ""
+      VITE_UI_CONFIG_URL:
+        type: static
+        value: /config.yaml
+      TIMEZONE:
+        type: config
+        path: .timezone
+
+  gateway:
+    dockerfile: event_gateway/Dockerfile
+    image: event-gw
+    args:
+      GATEWAY_PORT:
+        type: config
+        path: .event_gateway.service.port
+      GATEWAY_LOG_LEVEL:
+        type: config
+        path: .event_gateway.service.log_level
+      GATEWAY_STATE_SERVICE_URL:
+        type: config
+        path: .event_gateway.service.state_service_url
+        rewrite_host: state-service
+      GATEWAY_REDIS_URL:
+        type: config
+        path: .event_gateway.redis.url
+        rewrite_host: redis
+      GATEWAY_REDIS_RECONNECT_MS:
+        type: config
+        path: .event_gateway.redis.reconnect_strategy_ms
+      GATEWAY_CHANNEL_SCHEDULER:
+        type: config
+        path: .event_gateway.channels.scheduler
+      GATEWAY_CHANNEL_LUMINAIRES:
+        type: config
+        path: .event_gateway.channels.luminaires
+      GATEWAY_CHANNEL_TIMER:
+        type: config
+        path: .event_gateway.channels.timer
+      GATEWAY_CHANNEL_METRICS:
+        type: config
+        path: .event_gateway.channels.metrics
+      GATEWAY_CHANNEL_SYSTEM:
+        type: config
+        path: .event_gateway.channels.system
+      GATEWAY_HEARTBEAT_MS:
+        type: config
+        path: .event_gateway.sse.heartbeat_interval_ms
+      GATEWAY_LATENCY_INTERVAL_MS:
+        type: config
+        path: .event_gateway.sse.latency_interval_ms
+      TIMEZONE:
+        type: config
+        path: .timezone
+
+  state:
+    dockerfile: state_service/Dockerfile
+    image: state-api
+    is_python: true
+    args:
+      STATE_API_HOST:
+        type: config
+        path: .services.state.fastAPI.host
+      STATE_API_PORT:
+        type: config
+        path: .services.state.fastAPI.port
+      STATE_API_LOOP:
+        type: config
+        path: .services.state.fastAPI.loop
+      STATE_API_LOG_LEVEL:
+        type: config
+        path: .services.state.fastAPI.log_level
+      STATE_API_ACCESS_LOG:
+        type: config
+        path: .services.state.fastAPI.access_log
+      CORS_ORIGINS:
+        type: config_list
+        path: .services.state.cors_origins
+      STATE_REDIS_PUB:
+        type: config
+        path: .services.state.redis.pub
+      SCHEDULER_REDIS_PUB:
+        type: config
+        path: .services.scheduler.redis.pub
+      METRICS_REDIS_PUB:
+        type: config
+        path: .services.metrics.redis.pub
+      TIMEZONE:
+        type: config
+        path: .timezone
+      REDIS_URL:
+        type: config
+        path: .services.redis.redis_url
+        rewrite_host: redis
+
+  scheduler:
+    dockerfile: scheduler_service/Dockerfile
+    image: scheduler-service
+    is_python: true
+    args:
+      SCHEDULER_INTERVAL:
+        type: config
+        path: .services.scheduler.interval
+      SCHEDULER_SCENES_DIR:
+        type: config
+        path: .services.scheduler.scenes_dir
+      SCHEDULER_LUMINAIRE_URL:
+        type: config
+        path: .services.scheduler.luminaire_service_url
+        rewrite_host: luminaire-service
+      SCALES_CCT_MIN:
+        type: config
+        path: .scales.cct.min
+      SCALES_CCT_MAX:
+        type: config
+        path: .scales.cct.max
+      SCALES_LUX_MIN:
+        type: config
+        path: .scales.lux.min
+      SCALES_LUX_MAX:
+        type: config
+        path: .scales.lux.max
+      SCHEDULER_REDIS_PUB:
+        type: config
+        path: .services.scheduler.redis.pub
+      STATE_REDIS_PUB:
+        type: config
+        path: .services.state.redis.pub
+      TIMEZONE:
+        type: config
+        path: .timezone
+      REDIS_URL:
+        type: config
+        path: .services.redis.redis_url
+        rewrite_host: redis
+
+  timer:
+    dockerfile: timer_service/Dockerfile
+    image: timer-service
+    is_python: true
+    args:
+      TIMER_REDIS_PUB:
+        type: config
+        path: .services.timer.redis.pub
+      STATE_REDIS_PUB:
+        type: config
+        path: .services.state.redis.pub
+      TIMER_STATE_SERVICE_URL:
+        type: config
+        path: .services.timer.state_service_url
+        rewrite_host: state-service
+      TIMEZONE:
+        type: config
+        path: .timezone
+      REDIS_URL:
+        type: config
+        path: .services.redis.redis_url
+        rewrite_host: redis
+
+  metrics:
+    dockerfile: metrics_service/Dockerfile
+    image: metrics-service
+    is_python: true
+    args:
+      METRICS_INTERVAL:
+        type: config
+        path: .services.metrics.interval
+      METRICS_REDIS_PUB:
+        type: config
+        path: .services.metrics.redis.pub
+      METRICS_LOG_LEVEL:
+        type: config
+        path: .services.metrics.log_level
+      REDIS_URL:
+        type: config
+        path: .services.redis.redis_url
+        rewrite_host: redis
+
+  luminaire:
+    dockerfile: luminaire_service/Dockerfile
+    image: luminaire-service
+    is_python: true
+    args:
+      LUMINAIRE_TCP_HOST:
+        type: config
+        path: .services.tcp.tcpserver.host
+      LUMINAIRE_TCP_PORT:
+        type: config
+        path: .services.tcp.tcpserver.port
+      LUMINAIRE_TCP_KEEPALIVE_ENABLED:
+        type: config
+        path: .services.tcp.tcpserver.keepalive_enabled
+      LUMINAIRE_TCP_KEEPALIVE_IDLE_S:
+        type: config
+        path: .services.tcp.tcpserver.keepalive_idle_s
+      LUMINAIRE_TCP_KEEPALIVE_INTERVAL_S:
+        type: config
+        path: .services.tcp.tcpserver.keepalive_interval_s
+      LUMINAIRE_TCP_KEEPALIVE_COUNT:
+        type: config
+        path: .services.tcp.tcpserver.keepalive_count
+      LUMINAIRE_TCP_USER_TIMEOUT_MS:
+        type: config
+        path: .services.tcp.tcpserver.tcp_user_timeout_ms
+      LUMINAIRE_REDIS_PUB:
+        type: config
+        path: .services.tcp.redis.pub
+      LUMINAIRE_API_HOST:
+        type: config
+        path: .services.tcp.fastAPI.host
+      LUMINAIRE_API_PORT:
+        type: config
+        path: .services.tcp.fastAPI.port
+      LUMINAIRE_API_LOOP:
+        type: config
+        path: .services.tcp.fastAPI.loop
+      LUMINAIRE_API_LOG_LEVEL:
+        type: config
+        path: .services.tcp.fastAPI.log_level
+      LUMINAIRE_API_ACCESS_LOG:
+        type: config
+        path: .services.tcp.fastAPI.access_log
+      TIMEZONE:
+        type: config
+        path: .timezone
+      REDIS_URL:
+        type: config
+        path: .services.redis.redis_url
+        rewrite_host: redis
+
+# Service groups for convenience
+groups:
+  python:
+    - state
+    - scheduler
+    - timer
+    - metrics
+    - luminaire
+  all:
+    - web
+    - gateway
+    - state
+    - scheduler
+    - timer
+    - metrics
+    - luminaire
+
+# Valid service names
+valid_services:
+  - web
+  - gateway
+  - state
+  - scheduler
+  - timer
+  - metrics
+  - luminaire
+  - python
+  - all

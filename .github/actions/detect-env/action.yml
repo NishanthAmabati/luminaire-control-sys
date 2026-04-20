@@ -1,0 +1,32 @@
+name: "Detect Environment"
+description: "Determine build environment from inputs"
+runs:
+  using: "composite"
+  steps:
+    - name: Detect environment
+      id: detect
+      shell: bash
+      run: |
+        INPUT_ENV="${{ inputs.environment }}"
+        
+        if [ "$INPUT_ENV" = "auto" ]; then
+          # Default to dev if not specified
+          echo "environment=dev" >> $GITHUB_OUTPUT
+        else
+          echo "environment=$INPUT_ENV" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "tag_suffix=$( [ '$INPUT_ENV' = 'dev' ] && echo '-dev' || echo '' )" >> $GITHUB_OUTPUT
+
+inputs:
+  environment:
+    description: "Environment (dev/prod/auto)"
+    default: "dev"
+    required: false
+outputs:
+  environment:
+    description: "Resolved environment"
+    value: ${{ steps.detect.outputs.environment }}
+  tag_suffix:
+    description: "Tag suffix for images"
+    value: ${{ steps.detect.outputs.tag_suffix }}

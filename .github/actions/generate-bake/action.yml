@@ -1,0 +1,57 @@
+name: "Generate Bake File"
+description: "Generate Docker bake HCL file for building services"
+runs:
+  using: "composite"
+  steps:
+    - name: Generate bake file
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        SERVICES: ${{ inputs.services }}
+        DOCKER_REGISTRY: ${{ inputs.registry }}
+        DOCKER_USERNAME: ${{ inputs.username }}
+        GIT_SHA: ${{ github.sha }}
+        GIT_BRANCH: ${{ github.ref_name }}
+      run: |
+        ${{ github.action_path }}/../../scripts/generate-bake.sh \
+          "$ENVIRONMENT" \
+          "$SERVICES" \
+          "${{ inputs.output }}"
+
+    - name: Show generated bake file
+      shell: bash
+      run: |
+        echo "=== Generated Bake File ==="
+        cat ${{ inputs.output }}
+        echo "=========================="
+
+inputs:
+  environment:
+    description: "Build environment (dev/prod)"
+    default: "dev"
+    required: false
+  services:
+    description: "Services to build (comma-separated: web,gateway,python,state,etc. or 'all')"
+    default: "all"
+    required: false
+  registry:
+    description: "Docker registry"
+    default: "docker.io"
+    required: false
+  username:
+    description: "Docker registry username"
+    required: true
+  output:
+    description: "Output file path"
+    default: "docker-bake.hcl"
+    required: false
+outputs:
+  bake_file:
+    description: "Path to generated bake file"
+    value: ${{ inputs.output }}
+  environment:
+    description: "Environment used"
+    value: ${{ inputs.environment }}
+  services:
+    description: "Services to build"
+    value: ${{ inputs.services }}
