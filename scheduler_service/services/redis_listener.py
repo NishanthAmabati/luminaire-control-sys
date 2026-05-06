@@ -1,9 +1,8 @@
 import asyncio
 import json
-import time
-import logging
+import structlog
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 class RedisListener:
     def __init__(self, redis, sub_chan, scheduler):
@@ -14,40 +13,52 @@ class RedisListener:
     async def listen(self):
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(self.sub_chan)
+        
+        log.info("redis_listener_started", channel=self.sub_chan)
 
-        async for message in pubsub.listen():
-            if message["type"] != "message":
-                continue
-
-            data = json.loads(message["data"])
-            event = data.get("event")
-            payload = data.get("payload", {})
-
-            await self.handle_event(event, payload)
+        try:
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    event = data.get("event")
+                    payload = data.get("payload", {})
+                    
+                    await self.handle_event(event, payload)
+                except json.JSONDecodeError as e:
+                    log.error("redis_message_parse_failed", channel=self.sub_chan, error=str(e), raw_data=message["data"])
+                except Exception as e:
+                    log.error("redis_event_handling_crashed", event=data.get("event"), error=str(e), exc_info=True)
+                    
+        except asyncio.CancelledError:
+            log.info("redis_listener_task_cancelled")
+            raise
+        finally:
+            await pubsub.unsubscribe(self.sub_chan)
+            await pubsub.close()
+            log.info("redis_listener_stopped")
 
     async def handle_event(self, event, payload):
+        event_log = log.bind(redis_event=event)
+        event_log.info("event_processing_started", payload=payload)
+
         if event == "system:power":
-            log.info(f"event triggered: {event}")
             await self.scheduler.handle_power()
 
         elif event == "system:mode":
-            log.info(f"event triggered: {event}")
             await self.scheduler.handle_mode()
 
         elif event == "scheduler:scene_loaded":
-            log.info(f"event triggered: {event}")
-            await self.scheduler.load_scene(payload["scene"])
+            await self.scheduler.load_scene(payload.get("scene"))
 
         elif event == "scheduler:scene_activated":
-            log.info(f"event triggered: {event}")
-            await self.scheduler.activate_scene(payload["scene"])
+            await self.scheduler.activate_scene(payload.get("scene"))
 
         elif event == "scheduler:scene_stopped":
-            log.info(f"event triggered: {event}")
             await self.scheduler.deactivate_scene()
 
         elif event == "manual:update":
-            log.info(f"event triggered: {event}")
             medium = payload.get("medium", "sliders")
             await self.scheduler.apply_manual(
                 medium,
@@ -58,7 +69,10 @@ class RedisListener:
             )
 
         elif event == "scheduler:available_scenes":
-            log.info(f"event triggered: {event}")
             await self.scheduler.publish_available_scenes()
+            
+        else:
+            event_log.warning("unhandled_redis_event")
+            return
 
-        log.info(f"handled event {event}")
+        event_log.info("event_processing_complete")

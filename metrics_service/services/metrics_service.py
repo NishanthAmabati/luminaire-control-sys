@@ -1,13 +1,11 @@
 import asyncio
 import json
-import logging
-import os
 import time
-
 import psutil
+import structlog
 from redis.asyncio import Redis
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 class MetricsService:
     def __init__(self, redis_url: str, channel: str, interval_s: float):
@@ -16,11 +14,10 @@ class MetricsService:
         self.interval_s = interval_s
         self.running = True
 
-        # Prime cpu_percent so subsequent reads are non-blocking.
         try:
             psutil.cpu_percent(interval=None)
-        except Exception:
-            log.exception("Failed to prime cpu_percent")
+        except Exception as e:
+            log.error("cpu_percent_prime_failed", error=str(e), exc_info=True)
 
     def _read_temperature_sys(self):
         try:
@@ -38,7 +35,7 @@ class MetricsService:
                         if entry.current is not None:
                             return float(entry.current)
         except Exception:
-            log.debug("psutil.sensors_temperatures unavailable")
+            log.debug("psutil_sensors_temperatures_unavailable")
         return self._read_temperature_sys()
 
     def collect(self):
@@ -48,13 +45,13 @@ class MetricsService:
 
         try:
             cpu = float(psutil.cpu_percent(interval=None))
-        except Exception:
-            log.exception("Failed to read cpu percent")
+        except Exception as e:
+            log.error("metric_collection_failed", metric="cpu", error=str(e), exc_info=True)
 
         try:
             memory = float(psutil.virtual_memory().percent)
-        except Exception:
-            log.exception("Failed to read memory percent")
+        except Exception as e:
+            log.error("metric_collection_failed", metric="memory", error=str(e), exc_info=True)
 
         temperature = self._read_temperature()
 
@@ -74,20 +71,23 @@ class MetricsService:
                     "ts": time.time()
                 })
             )
+            log.debug("metrics_published", channel=self.channel, payload=payload)
         except Exception as e:
-            log.exception(f"failed to publish metrics to redis. err: {e}")
+            log.error("redis_publish_failed", event="metrics:events", channel=self.channel, error=str(e), exc_info=True)
 
     async def run(self):
-        log.info("metrics service started")
+        log.info("metrics_collection_started", interval_s=self.interval_s)
         while self.running:
             payload = self.collect()
             await self.publish(payload)
             await asyncio.sleep(self.interval_s)
 
     async def shutdown(self):
+        log.info("metrics_service_shutdown_initiated")
         self.running = False
         try:
             await self.redis.close()
             await self.redis.connection_pool.disconnect()
-        except Exception:
-            log.exception("Failed to close redis")
+            log.info("redis_connection_closed")
+        except Exception as e:
+            log.error("redis_close_failed", error=str(e), exc_info=True)

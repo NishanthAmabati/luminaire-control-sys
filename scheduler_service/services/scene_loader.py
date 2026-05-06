@@ -1,11 +1,10 @@
 import csv
 import os
-import logging
+import structlog
 
 from datetime import time as dt
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 class SceneLoader:
     def __init__(self, scenes_dir, scales):
@@ -14,24 +13,28 @@ class SceneLoader:
 
     def _validate_range(self, name, value, min_v, max_v, path, line_no):
         if value < min_v or value > max_v:
-            raise ValueError(f"{path}:{line_no} {name} out of range {min_v}-{max_v}): {value}")
+            raise ValueError(f"{path}:{line_no} {name} out of range {min_v}-{max_v}: {value}")
 
     def load_all(self):
         scenes = {}
         if not os.path.isdir(self.scenes_dir):
-            log.error(f"scenes directory not found: {self.scenes_dir}")
+            log.error("scene_load_aborted_dir_not_found", path=self.scenes_dir)
             return scenes
+            
         for file in os.listdir(self.scenes_dir):
             if not file.endswith(".csv"):
                 continue
+                
             scene_name = file.removesuffix(".csv")
             path = os.path.join(self.scenes_dir, file)
+            
             try:
                 scenes[scene_name] = self._load_scene(path)
-                log.info(f"loaded scene: {scene_name}")
-            except Exception:
-                log.exception(f"failed to load scene: {scene_name}")
-        log.info(f"loaded {len(scenes)} scenes")
+                log.info("scene_loaded", scene_name=scene_name, points_count=len(scenes[scene_name]))
+            except Exception as e:
+                log.error("scene_load_failed", scene_name=scene_name, file_path=path, error=str(e), exc_info=True)
+                
+        log.info("all_scenes_loaded", total_scenes=len(scenes))
         return scenes
     
     def _load_scene(self, path):
@@ -51,13 +54,14 @@ class SceneLoader:
                 try:
                     h, m = map(int, row["time"].split(":"))
                     t = dt(hour=h, minute=m)
-                except Exception:
-                    raise ValueError(f"{path}:{i} invalid time format: {row['time']}")
+                except Exception as e:
+                    raise ValueError(f"{path}:{i} invalid time format: {row['time']}") from e
                 
                 try:
                     cct = float(row["cct"])
-                except Exception:
-                    raise ValueError(f"{path}:{i} invalid cct value: {row['cct']}")
+                except Exception as e:
+                    raise ValueError(f"{path}:{i} invalid cct value: {row['cct']}") from e
+                    
                 self._validate_range(
                     "cct",
                     cct,
@@ -69,8 +73,9 @@ class SceneLoader:
 
                 try:
                     lux = float(row["lux"])
-                except Exception:
-                    raise ValueError(f"{path}:{i} invalid lux value: {row['lux']}")
+                except Exception as e:
+                    raise ValueError(f"{path}:{i} invalid lux value: {row['lux']}") from e
+                    
                 self._validate_range(
                     "lux",
                     lux,
@@ -81,8 +86,9 @@ class SceneLoader:
                 )
                 
                 points.append({
-                    "time": dt(hour=h, minute=m),
-                    "cct": float(row["cct"]),
-                    "lux": float(row["lux"]),
+                    "time": t,
+                    "cct": cct,
+                    "lux": lux,
                 })
+                
         return sorted(points, key=lambda x: x["time"])

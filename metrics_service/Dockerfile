@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt
+COPY app_logging .
 RUN pip install --no-cache-dir --prefix=/install -r /app/requirements.txt
 
 FROM python:3.11-slim-bookworm AS runtime
@@ -23,6 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY metrics_service /app/metrics_service
+COPY --from=deps /app/app_logging app/metrics_service/app_logging
 WORKDIR /app/metrics_service
 
 ARG REDIS_URL

@@ -1,7 +1,6 @@
 import asyncio
-import time
 import json
-import logging
+import structlog
 import pytz
 
 from datetime import datetime as dt
@@ -12,7 +11,7 @@ from services.light_channeler import LightChanneler
 from clients.luminaire_client import LuminaireClient
 from models.scheduler_runtime import SchedulerRuntime
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 def minutes(t):
     return t.hour * 60 + t.minute
@@ -57,9 +56,6 @@ class Scheduler:
                 "available_scenes": self.runtime.available_scenes,
                 "loaded_scene": self.runtime.loaded_scene,
                 "running_scene": self.runtime.running_scene,
-                #"progress": self.runtime.progress,
-                #"cct": self.runtime.cct,
-                #"lux": self.runtime.lux,
             }
             await self.redis.publish(
                 self.pub_chan,
@@ -70,15 +66,12 @@ class Scheduler:
                 })
             )
         except Exception as e:
-            log.info(f"failed to publish scheduler state to redis, chan: '{self.pub_chan}', err: {e}")
+            log.error("redis_publish_failed", redis_event="scheduler:state", channel=self.pub_chan, error=str(e), exc_info=True)
 
     async def publish_runtime(self):
         payload = {
-            #"mode": self.runtime.mode,
             "cct": self.runtime.cct,
             "lux": self.runtime.lux,
-            # "cw": self.runtime.cw,
-            # "ww": self.runtime.ww,
             "progress": self.runtime.progress
         }
         await self.redis.publish(
@@ -89,7 +82,7 @@ class Scheduler:
                 "ts": str(dt.now(self.tz))
             })
         )
-        log.debug(f"scheduler runtime published to redis, chan: '{self.pub_chan}', event: 'scheduler:runtime'")
+        log.debug("redis_publish_success", redis_event="scheduler:runtime", channel=self.pub_chan)
 
     async def tick(self):
         if not self.runtime.system_on:
@@ -112,15 +105,11 @@ class Scheduler:
         if result:
             self.runtime.cw, self.runtime.ww = result["cw"], result["ww"]
             await self.luminaire_client.send(self.runtime.cw, self.runtime.ww)
-            log.debug("tick_executed", extra={
-                "system_on": self.runtime.system_on,
-                "cw": self.runtime.cw, 
-                "ww": self.runtime.ww
-            })
+            log.debug("tick_executed", system_on=self.runtime.system_on, cw=self.runtime.cw, ww=self.runtime.ww)
             await self.publish_runtime()
 
     async def run(self):
-        log.info("started scheduler loop")
+        log.info("scheduler_loop_started", interval_s=self.scheduler_interval)
         while self.running:
             await self.tick()
             await asyncio.sleep(self.scheduler_interval)
@@ -137,7 +126,7 @@ class Scheduler:
                 "ts": str(dt.now(self.tz))
             })
         )
-        log.info(f"publised scenes to redis, chan: '{self.pub_chan}', event: 'scheduler:available_scenes'")
+        log.info("redis_publish_success", redis_event="scheduler:available_scenes", channel=self.pub_chan)
 
     async def sync_from_redis(self):
         await self.handle_mode()
@@ -189,7 +178,7 @@ class Scheduler:
                         ww=manual_ww,
                     )
                 else:
-                    log.exception(f"unable to switch mode with values: cw: {manual_cw}, ww: {manual_ww}")
+                    log.error("mode_switch_failed", reason="missing_cw_or_ww", cw=manual_cw, ww=manual_ww)
             elif last_toggle == "sliders":
                 await self.apply_manual(
                     "sliders",
@@ -214,11 +203,11 @@ class Scheduler:
 
     async def load_scene(self, scene_name: str):
         if scene_name not in self.scenes:
-            log.exception(f"scene not found: {scene_name}")
+            log.error("scene_load_failed", reason="scene_not_found", scene_name=scene_name)
             return
+            
         self.runtime.loaded_scene = scene_name
         scene = self.scenes.get(scene_name)
-        # Convert time objects to strings so JSON can handle them
         serializable_points = [
             {**point, "time": point["time"].strftime("%H:%M")} 
             for point in scene
@@ -229,20 +218,22 @@ class Scheduler:
                 "event": "scheduler:scene_load",
                 "payload": {
                     "loaded_scene": scene_name,
-                    "points": serializable_points  # full CSV parsed structure
+                    "points": serializable_points
                 },
                 "ts": str(dt.now(self.tz))
             })
         )
+        log.info("scene_loaded", scene_name=scene_name)
 
     async def activate_scene(self, scene_name: str):
         if scene_name not in self.scenes:
-            log.exception(f"scene not found: {scene_name}")
+            log.error("scene_activation_failed", reason="scene_not_found", scene_name=scene_name)
             return
         
         if self.runtime.mode != "AUTO":
-            log.info("ignoring scene activation while not in AUTO")
+            log.info("scene_activation_ignored", reason="not_in_auto_mode", current_mode=self.runtime.mode)
             return
+            
         await self.deactivate_scene()
         await self.load_scene(scene_name)
         self.runtime.running_scene = scene_name
@@ -261,14 +252,8 @@ class Scheduler:
         self.runtime.running_scene = None
         self.runtime.progress = 0.0
 
-        # Optional: keep last cct/lux or reset?
-        # I recommend KEEPING last values.
-        # Do NOT force 0.
-
-        #await self.publish_runtime()
         await self.publish_state()
 
-    # async def apply_manual(self, cct: float, lux: float):
     async def apply_manual(self,
                             medium: str,
                             cct: float | None = None,
@@ -295,7 +280,6 @@ class Scheduler:
                 return
             self.runtime.cct = result["cct"]
             self.runtime.progress = 0.0
-            # keep existing lux
             result = self.channeler.resolve_channels(self.runtime.cct, self.runtime.lux)
             if not result:
                 return
