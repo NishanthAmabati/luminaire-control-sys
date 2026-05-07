@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt
+COPY app_logging .
 RUN pip install --no-cache-dir --prefix=/install -r /app/requirements.txt
 
 FROM python:3.11-slim-bookworm AS runtime
@@ -23,6 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY timer_service /app/timer_service
+COPY --from=deps /app/app_logging /app/timer_service
 WORKDIR /app/timer_service
 
 ARG REDIS_URL

@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY luminaire_service /app/luminaire_service
-COPY --from=deps /app/app_logging app/luminaire_service/app_logging
+COPY --from=deps /app/app_logging app/luminaire_service/
 WORKDIR /app/luminaire_service
 
 ARG REDIS_URL
