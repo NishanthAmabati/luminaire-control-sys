@@ -1,0 +1,129 @@
+services:
+  redis:
+    image: redis:7.0
+    container_name: redis
+    command:
+      [
+        "redis-server",
+        "--appendonly", "yes",
+        "--appendfsync", "everysec"
+      ]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  luminaire-service:
+    image: nishanthambati/luminaire-service-dev:latest
+    container_name: luminaire-service
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      default:
+        aliases:
+          - luminaire-svc
+    ports:
+      - "5250:5250"
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://luminaire-service:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  state-api:
+    image: nishanthambati/state-api-dev:latest
+    container_name: state-api
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://state-api:8001/state || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    networks:
+      default:
+        aliases:
+          - state-service
+
+  scheduler-service:
+    image: nishanthambati/scheduler-service-dev:latest
+    container_name: scheduler-service
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+      luminaire-service:
+        condition: service_healthy
+    restart: always
+    volumes:
+      - ./scenes:/app/scheduler_service/scenes
+
+  timer-service:
+    image: nishanthambati/timer-service-dev:latest
+    container_name: timer-service
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+      state-api:
+        condition: service_healthy
+    restart: always
+
+  metrics-service:
+    image: nishanthambati/metrics-service-dev:latest
+    container_name: metrics-service
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  event-gateway:
+    image: nishanthambati/event-gw-dev:latest
+    container_name: event-gw
+    ports:
+      - "8088:8088"
+    environment:
+      - GATEWAY_STATE_SERVICE_URL=http://state-service:8001/state
+    depends_on:
+      redis:
+        condition: service_healthy
+      state-api:
+        condition: service_healthy
+    restart: always
+
+  webapp:
+    image: nishanthambati/web-dev:latest
+    container_name: webapp
+    ports:
+      - "80:80"
+    depends_on:
+      event-gateway:
+        condition: service_started
+    restart: always
+
+volumes:
+  redis-data:
