@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt
-COPY app_logging ./app/app_logging
+COPY app_logging /app/app_logging
 RUN pip install --no-cache-dir --prefix=/install -r /app/requirements.txt
 
 FROM python:3.11-slim-bookworm AS runtime
