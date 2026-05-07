@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY metrics_service /app/metrics_service
-COPY --from=deps /app/app_logging app/metrics_service/
+COPY --from=deps /app/app_logging app/metrics_service/app_logging
 WORKDIR /app/metrics_service
 
 ARG REDIS_URL

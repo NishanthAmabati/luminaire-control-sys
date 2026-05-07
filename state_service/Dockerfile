@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY state_service /app/state_service
-COPY --from=deps /app/app_logging app/state_service/
+COPY --from=deps /app/app_logging app/state_service/app_logging
 WORKDIR /app/state_service
 
 ARG REDIS_URL

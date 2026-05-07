@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY timer_service /app/timer_service
-COPY --from=deps /app/app_logging /app/timer_service
+COPY --from=deps /app/app_logging /app/timer_service/app_logging
 WORKDIR /app/timer_service
 
 ARG REDIS_URL

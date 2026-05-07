@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /install /usr/local
 
 COPY scheduler_service /app/scheduler_service
-COPY --from=deps /app/app_logging app/scheduler_service/
+COPY --from=deps /app/app_logging app/scheduler_service/app_logging
 WORKDIR /app/scheduler_service
 
 ARG REDIS_URL
