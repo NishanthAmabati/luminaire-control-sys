@@ -1,0 +1,36 @@
+// 1. Discover all containers running on the local Docker daemon
+discovery.docker "local_containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// 2. Extract Docker metadata to create clean, searchable Loki labels
+discovery.relabel "loki_labels" {
+  targets = discovery.docker.local_containers.targets
+
+  // Create a 'container' label (e.g., "luminaire-control-sys-state-service-1")
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  
+  // Create a 'service' label (e.g., "state-service") based on the docker-compose name
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+// 3. Scrape the logs from the discovered containers
+loki.source.docker "log_scraper" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.loki_labels.output
+  forward_to = [loki.write.local_loki.receiver]
+}
+
+// 4. Send the scraped logs to our Loki database
+loki.write "local_loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
