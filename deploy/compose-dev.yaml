@@ -108,6 +108,8 @@ services:
       - "8088:8088"
     environment:
       - GATEWAY_STATE_SERVICE_URL=http://state-service:8001/state
+      - HA_TOKEN=
+      - HA_URL=http://homeassistant:8123
     depends_on:
       redis:
         condition: service_healthy
@@ -125,5 +127,25 @@ services:
         condition: service_started
     restart: always
 
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    environment:
+      TZ: Asia/Kolkata
+    volumes:
+      - ./homeassistant-config:/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "8123:8123"
+    restart: always
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
   redis-data:
+  homeassistant-config:
