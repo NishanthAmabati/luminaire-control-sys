@@ -78,6 +78,41 @@ rest:
         value_template: "{{ value_json.timer.enabled }}"
         device_class: running
 
+# --- VIRTUAL UI CONTROLS ---
+input_select:
+  luminaire_target_mode:
+    name: "Control Mode"
+    options:
+      - "AUTO"
+      - "MANUAL"
+    icon: mdi:tune-variant
+
+  luminaire_target_scene:
+    name: "Active Scene"
+    options:
+      - "Morning Setup"
+      - "Focus Mode"
+      - "Evening Relax"
+      - "Nightlight"
+    icon: mdi:palette-swatch-outline
+
+input_number:
+  luminaire_target_cct:
+    name: "Target Color Temp"
+    min: 3500
+    max: 6500
+    step: 50
+    unit_of_measurement: "K"
+    icon: mdi:thermometer-lines
+
+  luminaire_target_lux:
+    name: "Target Intensity"
+    min: 0
+    max: 500
+    step: 10
+    unit_of_measurement: "Lux"
+    icon: mdi:brightness-percent
+
 lovelace:
   dashboards:
     luminaire-control-system:
