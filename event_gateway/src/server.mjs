@@ -22,6 +22,10 @@ const STATE_SERVICE_URL = requireEnv('GATEWAY_STATE_SERVICE_URL');
 const HEARTBEAT = toInt('GATEWAY_HEARTBEAT_MS');
 const LATENCY_INTERVAL = toInt('GATEWAY_LATENCY_INTERVAL_MS');
 
+// Optional Home Assistant integration
+const HA_URL = process.env.HA_URL;
+const HA_TOKEN = process.env.HA_TOKEN;
+
 const CHANNELS = {
   scheduler: requireEnv('GATEWAY_CHANNEL_SCHEDULER'),
   luminaires: requireEnv('GATEWAY_CHANNEL_LUMINAIRES'),
@@ -79,7 +83,7 @@ function updateSnapshot(mutator) {
 }
 
 /* ===============================
-   UTILITIES
+   UTILITIES & EXTERNAL INTEGRATIONS
 ================================ */
 
 const parseHmToHour = (v) => {
@@ -103,6 +107,39 @@ const mapScenePoints = (points = []) => {
 
   return { cct, intensity };
 };
+
+// Pushes live luminaire connection/ack events to Home Assistant
+async function pushToHomeAssistant(event, payload) {
+  if (!HA_URL || !HA_TOKEN || !payload?.ip) return;
+
+  const deviceId = payload.ip.replace(/\./g, '_');
+  const endpoint = `${HA_URL}/api/states/sensor.luminaire_node_${deviceId}`;
+
+  let status = 'Unknown';
+  if (event === 'connection' || event === 'ack') status = 'Connected';
+  if (event === 'disconnection') status = 'Disconnected';
+
+  try {
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HA_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        state: status,
+        attributes: {
+          ...payload,
+          ip_address: payload.ip,
+          icon: status === 'Connected' ? 'mdi:wifi-check' : 'mdi:wifi-strength-alert-outline',
+          friendly_name: `Luminaire Node ${payload.ip}`
+        }
+      })
+    });
+  } catch (error) {
+    logger.warn({ err: error.message, ip: payload.ip }, 'ha_push_failed');
+  }
+}
 
 /* ===============================
    EVENT HANDLERS
@@ -392,7 +429,11 @@ await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CH
     }
 
     if (channel === CHANNELS.scheduler) applyScheduler(event, payload);
-    if (channel === CHANNELS.luminaires) applyLuminaire(event, payload);
+    if (channel === CHANNELS.luminaires) {
+      applyLuminaire(event, payload);
+      // Fire-and-forget push to Home Assistant
+      pushToHomeAssistant(event, payload);
+    }
     if (channel === CHANNELS.timer) applyTimer(event, payload);
     if (channel === CHANNELS.metrics) applyMetrics(event, payload);
 
