@@ -1,0 +1,55 @@
+title: Luminaire Control System
+views:
+  - title: System Overview
+    path: overview
+    icon: mdi:view-dashboard
+    cards:
+      # --- CARD 1: LUMINAIRE CONTROLS ---
+      - type: entities
+        title: Luminaire Status
+        state_color: true
+        entities:
+          - entity: binary_sensor.luminaire_system_power
+            name: System Power
+          - entity: sensor.luminaire_mode
+            name: Operating Mode
+          - entity: binary_sensor.luminaire_timer_active
+            name: Timer Configuration
+          - entity: sensor.luminaire_timer_start
+            name: Timer Start Time
+          - entity: sensor.luminaire_timer_end
+            name: Timer End Time
+          - type: section
+          - entity: sensor.luminaire_active_cct
+            name: Color Temperature
+          - entity: sensor.luminaire_active_lux
+            name: Brightness (Lux)
+          - entity: sensor.luminaire_running_scene
+            name: Current Scene
+
+      # --- CARD 2: HARDWARE METRICS ---
+      - type: entities
+        title: Hardware Health
+        entities:
+          - entity: sensor.pi_cpu_usage
+            name: CPU Load
+          - entity: sensor.pi_memory_usage
+            name: Memory Usage
+          - entity: sensor.pi_temperature
+            name: CPU Temperature
+          - type: section
+          - entity: sensor.luminaire_last_updated
+            name: Last Sync
+
+        # --- CARD 3: DYNAMIC CONNECTED HARDWARE ---
+      - type: markdown
+        title: Active Luminaires
+        content: >
+          {%- set active_nodes = states.sensor | selectattr('entity_id', 'search', 'luminaire_node_') | selectattr('state', 'eq', 'Connected') | list -%}
+          {%- if active_nodes | length > 0 -%}
+            {%- for state in active_nodes %}
+          | <ha-icon icon="mdi:led-strip-variant"></ha-icon> **{{ state.attributes.get('friendly_name', 'Node') | replace('Luminaire Node ', 'Node ') }}** | `{{ state.attributes.get('ip_address', 'Unknown') }}` | **{{ state.attributes.get('cw', 0) }}** | **{{ state.attributes.get('ww', 0) }}** |
+            {%- endfor -%}
+          {%- else %}
+          | <ha-icon icon="mdi:lan-disconnect"></ha-icon> _No online luminaires detected._
+          {%- endif -%}

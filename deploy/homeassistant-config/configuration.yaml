@@ -1,0 +1,88 @@
+rest:
+  - resource: "http://state-api:8001/state"
+    scan_interval: 5
+    # -- SENSORS (Numbers & Text) --
+    sensor:
+      - name: "Luminaire Mode"
+        value_template: "{{ value_json.mode }}"
+        icon: "mdi:auto-fix"
+
+      - name: "Luminaire Active CCT"
+        value_template: >
+          {% if value_json.mode == 'MANUAL' %}
+            {{ value_json.manual.cct | default(0) }}
+          {% else %}
+            {{ value_json.auto.cct | default(0) }}
+          {% endif %}
+        unit_of_measurement: "K"
+        icon: "mdi:thermometer-lines"
+
+      - name: "Luminaire Active Lux"
+        value_template: >
+          {% if value_json.mode == 'MANUAL' %}
+            {{ value_json.manual.lux | default(0) }}
+          {% else %}
+            {{ value_json.auto.lux | default(0) }}
+          {% endif %}
+        unit_of_measurement: "lx"
+        icon: "mdi:brightness-6"
+
+      - name: "Luminaire Running Scene"
+        value_template: "{{ value_json.auto.running_scene | default('None', true) }}"
+        icon: "mdi:palette"
+
+      - name: "Pi CPU Usage"
+        value_template: "{{ value_json.metrics.cpu }}"
+        unit_of_measurement: "%"
+        icon: "mdi:cpu-64-bit"
+
+      - name: "Pi Memory Usage"
+        value_template: "{{ value_json.metrics.memory }}"
+        unit_of_measurement: "%"
+        icon: "mdi:memory"
+
+      - name: "Pi Temperature"
+        value_template: "{{ value_json.metrics.temperature }}"
+        unit_of_measurement: "°C"
+
+      - name: "Luminaire Last Updated"
+        # Replaces the space with a 'T' so Home Assistant recognizes it as a valid ISO timestamp
+        value_template: "{{ value_json.last_updated | replace(' ', 'T') }}"
+        device_class: timestamp
+
+      - name: "Luminaire Timer Start"
+        value_template: >
+          {% if value_json.timer.start %}
+            {{ value_json.timer.start }}
+          {% else %}
+            Not Set
+          {% endif %}
+        icon: "mdi:clock-start"
+
+      - name: "Luminaire Timer End"
+        value_template: >
+          {% if value_json.timer.end %}
+            {{ value_json.timer.end }}
+          {% else %}
+            Not Set
+          {% endif %}
+        icon: "mdi:clock-end"
+
+    # -- BINARY SENSORS (On/Off Booleans) --
+    binary_sensor:
+      - name: "Luminaire System Power"
+        value_template: "{{ value_json.system_on }}"
+        device_class: running
+
+      - name: "Luminaire Timer Active"
+        value_template: "{{ value_json.timer.enabled }}"
+        device_class: running
+
+lovelace:
+  dashboards:
+    luminaire-control-system:
+      mode: yaml
+      title: Luminaire Control System
+      icon: mdi:home-lightning-bolt
+      show_in_sidebar: true
+      filename: dashboards/luminaire-control-sys.yaml
