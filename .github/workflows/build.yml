@@ -119,8 +119,8 @@ jobs:
           
           resolve_target() {
             case "$1" in
-              web) echo "web" ;;
-              gateway) echo "event-gw" ;;
+              web) echo "webapp" ;;
+              gateway) echo "event-gateway" ;;
               state) echo "state-service" ;;
               scheduler) echo "scheduler-service" ;;
               timer) echo "timer-service" ;;
