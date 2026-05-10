@@ -83,7 +83,7 @@ services:
 
   event-gateway:
     image: nishanthambati/event-gw:latest
-    container_name: event-gw
+    container_name: event-gateway
     ports:
       - "8088:8088"
     depends_on:

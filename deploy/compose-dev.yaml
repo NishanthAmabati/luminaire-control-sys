@@ -102,8 +102,8 @@ services:
     restart: always
 
   event-gateway:
-    image: nishanthambati/event-gw-dev:latest
-    container_name: event-gw
+    image: nishanthambati/event-gateway-dev:latest
+    container_name: event-gateway
     ports:
       - "8088:8088"
     environment:
@@ -126,25 +126,6 @@ services:
       event-gateway:
         condition: service_started
     restart: always
-
-  homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:stable
-    container_name: homeassistant
-    environment:
-      TZ: Asia/Kolkata
-    volumes:
-      - ./homeassistant-config:/config
-      - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "8123:8123"
-    restart: always
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8123"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
 volumes:
   redis-data:
