@@ -110,34 +110,41 @@ const mapScenePoints = (points = []) => {
 
 // Pushes live luminaire connection/ack events to Home Assistant
 async function pushToHomeAssistant(event, payload) {
-  if (!HA_URL || !HA_TOKEN || !payload?.ip) return;
-
+  if (!HA_URL || !payload?.ip) return;
   const deviceId = payload.ip.replace(/\./g, '_');
   const endpoint = `${HA_URL}/api/states/sensor.luminaire_node_${deviceId}`;
-
   let status = 'Unknown';
-  if (event === 'connection' || event === 'ack') status = 'Connected';
-  if (event === 'disconnection') status = 'Disconnected';
-
+  if (event === 'connection' || event === 'ack') {
+    status = 'Connected';
+  }
+  if (event === 'disconnection') {
+    status = 'Disconnected';
+  }
+  const headers = {
+    'Content-Type': 'application/json'
+  };
   try {
     await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${HA_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
         state: status,
         attributes: {
           ...payload,
           ip_address: payload.ip,
-          icon: status === 'Connected' ? 'mdi:wifi-check' : 'mdi:wifi-strength-alert-outline',
+          icon:
+            status === 'Connected'
+              ? 'mdi:wifi-check'
+              : 'mdi:wifi-strength-alert-outline',
           friendly_name: `Luminaire Node ${payload.ip}`
         }
       })
     });
   } catch (error) {
-    logger.warn({ err: error.message, ip: payload.ip }, 'ha_push_failed');
+    logger.warn(
+      { err: error.message, ip: payload.ip },
+      'ha_push_failed'
+    );
   }
 }
 
