@@ -22,7 +22,7 @@ services:
 
   gateway:
     dockerfile: event_gateway/Dockerfile
-    image: event-gw
+    image: event-gateway
     args:
       GATEWAY_PORT:
         type: config
