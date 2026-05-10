@@ -1,3 +1,12 @@
+homeassistant:
+  auth_providers:
+    - type: trusted_networks
+      trusted_networks:
+        - 172.16.0.0/12
+      allow_bypass_login: true
+
+    - type: homeassistant
+    
 rest:
   - resource: "http://state-api:8001/state"
     scan_interval: 5
