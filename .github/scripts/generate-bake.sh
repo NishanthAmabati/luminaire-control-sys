@@ -226,7 +226,7 @@ def generate_bake():
         lines.append(f'        "${{REGISTRY}}/${{USERNAME}}/{image}${{REPO_SUFFIX}}:latest",')
         lines.append(f'        "${{REGISTRY}}/${{USERNAME}}/{image}${{REPO_SUFFIX}}:${{GIT_SHA}}"')
         lines.append('    ]')
-        lines.append('    platforms = ["linux/amd64"]')
+        lines.append('    platforms = ["linux/amd64", "linux/arm64"]')
         lines.append('    push = true')
         lines.append('    cache-from = ["type=gha"]')
         lines.append('    cache-to = ["type=gha,mode=max"]')
