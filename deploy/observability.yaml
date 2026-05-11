@@ -1,6 +1,7 @@
 services:
   loki:
     image: grafana/loki:3.0.0
+    container_name: loki
     command: -config.file=/etc/loki/local-config.yaml
     ports:
       - "3100:3100"
@@ -9,6 +10,7 @@ services:
 
   alloy:
     image: grafana/alloy:v1.0.0
+    container_name: alloy
     user: root 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -22,6 +24,7 @@ services:
 
   grafana:
     image: grafana/grafana:10.4.2
+    container_name: grafana
     ports:
       - "3000:3000"
     volumes:
