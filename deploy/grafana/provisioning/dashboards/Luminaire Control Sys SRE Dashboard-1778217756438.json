@@ -18,6 +18,12 @@
       "version": "10.4.2"
     },
     {
+      "type": "panel",
+      "id": "logs",
+      "name": "Logs",
+      "version": ""
+    },
+    {
       "type": "datasource",
       "id": "loki",
       "name": "Loki",
@@ -52,6 +58,43 @@
   "id": null,
   "links": [],
   "panels": [
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "editorMode": "code",
+          "expr": "{service_name=~\".+\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "New Panel",
+      "type": "logs"
+    },
     {
       "datasource": {
         "type": "loki",
@@ -115,7 +158,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 15
       },
       "id": 2,
       "options": {
@@ -207,8 +250,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 8
+        "x": 12,
+        "y": 15
       },
       "id": 1,
       "options": {
@@ -239,20 +282,20 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "10s",
+  "refresh": "auto",
   "schemaVersion": 39,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Luminaire Control Sys SRE Dashboard",
   "uid": "dflevz1h9ze9sa",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
