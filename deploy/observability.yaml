@@ -2,14 +2,15 @@ services:
   loki:
     image: grafana/loki:3.0.0
     container_name: loki
-    command: -config.file=/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/config.yaml
     ports:
       - "3100:3100"
     volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
 
   alloy:
-    image: grafana/alloy:v1.0.0
+    image: grafana/alloy:v1.10.2
     container_name: alloy
     user: root 
     volumes:
