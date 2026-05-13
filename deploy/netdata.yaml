@@ -1,0 +1,37 @@
+services: 
+  netdata:
+    image: netdata/netdata:v2.3.2
+    container_name: netdata
+
+    network_mode: host
+    pid: host
+
+    restart: unless-stopped
+
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+
+    security_opt:
+      - apparmor=unconfined
+
+    volumes:
+      - netdata_config:/etc/netdata
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+volumes:
+  netdata_config:
+  netdata_lib:
+  netdata_cache:
