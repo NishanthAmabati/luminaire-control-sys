@@ -41,6 +41,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "41"
     restart: always
 
   state-api:
@@ -78,6 +83,11 @@ services:
     restart: always
     volumes:
       - ./scenes:/app/scheduler_service/scenes
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "41"
 
   timer-service:
     image: nishanthambati/timer-service-dev:latest
@@ -100,6 +110,11 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "21"
 
   event-gateway:
     image: nishanthambati/event-gateway-dev:latest
@@ -117,9 +132,9 @@ services:
         condition: service_healthy
     restart: always
 
-  webapp:
+  web:
     image: nishanthambati/web-dev:latest
-    container_name: webapp
+    container_name: web
     ports:
       - "80:80"
     depends_on:
@@ -129,4 +144,3 @@ services:
 
 volumes:
   redis-data:
-  homeassistant-config:
