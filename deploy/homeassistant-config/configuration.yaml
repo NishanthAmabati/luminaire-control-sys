@@ -1,3 +1,8 @@
+automation: !include automations.yaml
+
+# ==========================================
+# 1. STATE OBSERVABILITY (READ-ONLY SENSORS)
+# ==========================================
 rest:
   - resource: "http://state-api:8001/state"
     scan_interval: 5
@@ -5,7 +10,7 @@ rest:
     sensor:
       - name: "Luminaire Mode"
         value_template: "{{ value_json.mode }}"
-        icon: "mdi:auto-fix"
+        icon: mdi:state-machine
 
       - name: "Luminaire Active CCT"
         value_template: >
@@ -46,7 +51,6 @@ rest:
         unit_of_measurement: "°C"
 
       - name: "Luminaire Last Updated"
-        # Replaces the space with a 'T' so Home Assistant recognizes it as a valid ISO timestamp
         value_template: "{{ value_json.last_updated | replace(' ', 'T') }}"
         device_class: timestamp
 
@@ -72,13 +76,25 @@ rest:
     binary_sensor:
       - name: "Luminaire System Power"
         value_template: "{{ value_json.system_on }}"
-        device_class: running
+        device_class: power # Changed to 'power' so it dynamically turns yellow when ON
 
       - name: "Luminaire Timer Active"
         value_template: "{{ value_json.timer.enabled }}"
         device_class: running
 
-# --- VIRTUAL UI CONTROLS ---
+
+# ==========================================
+# 2. VIRTUAL UI CONTROLS (THE DASHBOARD SLIDERS)
+# ==========================================
+input_boolean:
+  luminaire_system_power_toggle:
+    name: "Luminaire System Power"
+    icon: mdi:power
+
+  luminaire_timer_toggle:
+    name: "Enable Schedule"
+    icon: mdi:calendar-clock
+
 input_select:
   luminaire_target_mode:
     name: "Control Mode"
@@ -94,7 +110,7 @@ input_select:
       - "Focus Mode"
       - "Evening Relax"
       - "Nightlight"
-    icon: mdi:palette-swatch-outline
+    icon: mdi:lightbulb-group
 
 input_number:
   luminaire_target_cct:
@@ -110,9 +126,88 @@ input_number:
     min: 0
     max: 500
     step: 10
-    unit_of_measurement: "Lux"
+    unit_of_measurement: "lx"
     icon: mdi:brightness-percent
 
+input_datetime:
+  luminaire_timer_start_input:
+    name: "Start Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-start
+
+  luminaire_timer_end_input:
+    name: "End Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-end
+
+
+# ==========================================
+# 3. OUTBOUND API (REST COMMANDS)
+# ==========================================
+rest_command:
+  # Translates the Dashboard Power Toggle -> POST /system/power
+  set_luminaire_power:
+    url: "http://state-api:8001/system/power"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Jinja converts 'on'/'off' state to true/false boolean
+    payload: '{"on": {{ "true" if is_state("input_boolean.luminaire_system_power_toggle", "on") else "false" }}}'
+
+  # Translates the Dashboard Mode Dropdown -> POST /system/mode
+  set_luminaire_mode:
+    url: "http://state-api:8001/system/mode"
+    method: POST
+    headers:
+      content-type: "application/json"
+    payload: >
+      {
+        "mode": "{{ states('input_select.luminaire_target_mode') }}"
+      }
+
+  # Translates the Dashboard CCT/Lux Sliders -> POST /set/manual
+  set_luminaire_manual:
+    url: "http://state-api:8001/set/manual"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Includes the required 'medium' and default cw/ww keys from your API spec
+    payload: >
+      {
+        "medium": "sliders",
+        "cct": {{ states('input_number.luminaire_target_cct') | int }},
+        "lux": {{ states('input_number.luminaire_target_lux') | int }}
+      }
+
+  # Translates Dashboard Toggle -> POST /timer/toggle?enabled=true
+  set_luminaire_timer_toggle:
+    # Notice we inject the Jinja template directly into the URL query parameter
+    url: >
+      http://state-api:8001/timer/toggle?enabled={{ 'true' if is_state('input_boolean.luminaire_timer_toggle', 'on') else 'false' }}
+    method: POST
+    headers:
+      accept: "application/json"
+
+  # Translates Dashboard Time Pickers -> POST /timer/configure
+  set_luminaire_timer_configure:
+    url: "http://state-api:8001/timer/configure"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Home Assistant outputs time as "HH:MM:SS". Your API expects "HH:MM".
+    # The [:5] slices off the seconds so it strictly matches your API spec.
+    payload: >
+      {
+        "start": "{{ states('input_datetime.luminaire_timer_start_input')[:5] }}",
+        "end": "{{ states('input_datetime.luminaire_timer_end_input')[:5] }}"
+      }
+
+
+# ==========================================
+# 4. DASHBOARD REGISTRATION
+# ==========================================
 lovelace:
   dashboards:
     luminaire-control-system:
