@@ -1,7 +1,14 @@
 import structlog
 import logging
+from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.events import (
+    EVENT_JOB_EXECUTED, 
+    EVENT_JOB_ERROR, 
+    EVENT_JOB_MISSED, 
+    JobExecutionEvent
+)
 
 logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 log = structlog.get_logger()
@@ -12,6 +19,44 @@ class Scheduler:
         self.scheduler = AsyncIOScheduler(timezone=timezone)
         self.state_client = state_client
         self._started = False
+        
+        # Attach the event listener to catch Executions, Errors, and Misses
+        self.scheduler.add_listener(
+            self._on_job_event, 
+            EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED
+        )
+
+    def _on_job_event(self, event: JobExecutionEvent):
+        """Monitors all job lifecycle events for delays, errors, and misfires."""
+        
+        if event.code == EVENT_JOB_EXECUTED:
+            if event.scheduled_run_time:
+                now = datetime.now(event.scheduled_run_time.tzinfo)
+                delay_seconds = (now - event.scheduled_run_time).total_seconds()
+                
+                # If delayed by more than 5 seconds, log a warning
+                if delay_seconds > 5.0:
+                    log.warning(
+                        "timer_job_delayed", 
+                        job_id=event.job_id, 
+                        delay_seconds=delay_seconds, 
+                        scheduled_for=str(event.scheduled_run_time),
+                        executed_at=str(now)
+                    )
+                    
+        elif event.code == EVENT_JOB_MISSED:
+            log.error(
+                "timer_job_missed", 
+                job_id=event.job_id, 
+                scheduled_for=str(event.scheduled_run_time)
+            )
+            
+        elif event.code == EVENT_JOB_ERROR:
+            log.error(
+                "timer_job_crashed", 
+                job_id=event.job_id, 
+                error=str(event.exception)
+            )
 
     def start(self):
         if not self._started:
@@ -29,13 +74,10 @@ class Scheduler:
         log.info("timer_jobs_cleared")
 
     def configure(self, start_time: str, end_time: str):
-        """
-        start_time / end_time format: 'HH:MM'
-        """
         self.clear_jobs()
 
         if not start_time or not end_time:
-            log.warning("timer_configuration_skipped", reason="missing_times", start_time=start_time, end_time=end_time)
+            log.warning("timer_configuration_skipped", reason="missing_times")
             return
 
         try:
@@ -46,12 +88,13 @@ class Scheduler:
             return
 
         try:
+            # Set misfire_grace_time to None to force execution no matter the delay
             self.scheduler.add_job(
                 self._turn_on,
                 CronTrigger(hour=start_hour, minute=start_min),
                 id="timer_on",
                 replace_existing=True,
-                misfire_grace_time=60
+                misfire_grace_time=None 
             )
 
             self.scheduler.add_job(
@@ -59,21 +102,21 @@ class Scheduler:
                 CronTrigger(hour=end_hour, minute=end_min),
                 id="timer_off",
                 replace_existing=True,
-                misfire_grace_time=60
+                misfire_grace_time=None
             )
             log.info("timer_scheduled_successfully", start=start_time, end=end_time)
         except Exception as e:
             log.error("timer_job_addition_failed", error=str(e), exc_info=True)
 
     async def _turn_on(self):
-        log.info("timer_trigger_executed", action="system_on")
+        log.info("timer_trigger_executing", action="system_on")
         try:
             await self.state_client.send_toggle_system(True)
         except Exception as e:
             log.error("timer_trigger_failed", action="system_on", error=str(e), exc_info=True)
 
     async def _turn_off(self):
-        log.info("timer_trigger_executed", action="system_off")
+        log.info("timer_trigger_executing", action="system_off")
         try:
             await self.state_client.send_toggle_system(False)            
         except Exception as e:
