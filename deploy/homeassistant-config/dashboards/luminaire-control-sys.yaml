@@ -40,43 +40,43 @@ views:
           # --------------------------------------
           # HARDWARE HEALTH
           # --------------------------------------
-          - type: grid
-            title: Hardware Health
-            columns: 3
-            square: false
-            cards:
-              - type: gauge
-                entity: sensor.pi_cpu_usage
-                name: CPU
-                needle: true
-                min: 0
-                max: 100
-                severity:
-                  green: 0
-                  yellow: 60
-                  red: 85
+          # - type: grid
+          #   title: Hardware Health
+          #   columns: 3
+          #   square: false
+          #   cards:
+          #     - type: gauge
+          #       entity: sensor.pi_cpu_usage
+          #       name: CPU
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 60
+          #         red: 85
 
-              - type: gauge
-                entity: sensor.pi_memory_usage
-                name: RAM
-                needle: true
-                min: 0
-                max: 100
-                severity:
-                  green: 0
-                  yellow: 70
-                  red: 90
+          #     - type: gauge
+          #       entity: sensor.pi_memory_usage
+          #       name: RAM
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 70
+          #         red: 90
 
-              - type: gauge
-                entity: sensor.pi_temperature
-                name: Temp
-                needle: true
-                min: 0
-                max: 100
-                severity:
-                  green: 0
-                  yellow: 60
-                  red: 75
+          #     - type: gauge
+          #       entity: sensor.pi_temperature
+          #       name: Temp
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 60
+          #         red: 75
 
       # ==========================================
       # COLUMN 2
