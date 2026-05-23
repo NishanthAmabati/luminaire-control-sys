@@ -117,8 +117,8 @@ input_select:
 input_number:
   luminaire_target_cct:
     name: "Target Color Temp"
-    min: 3500
-    max: 6500
+    min: 2000
+    max: 7000
     step: 50
     unit_of_measurement: "K"
     icon: mdi:thermometer-lines
@@ -126,7 +126,7 @@ input_number:
   luminaire_target_lux:
     name: "Target Intensity"
     min: 0
-    max: 500
+    max: 600
     step: 10
     unit_of_measurement: "lx"
     icon: mdi:brightness-percent
