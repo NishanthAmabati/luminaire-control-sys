@@ -123,8 +123,6 @@ services:
       - "8088:8088"
     environment:
       - GATEWAY_STATE_SERVICE_URL=http://state-service:8001/state
-      - HA_TOKEN=
-      - HA_URL=http://homeassistant:8123
     depends_on:
       redis:
         condition: service_healthy
