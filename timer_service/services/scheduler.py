@@ -81,8 +81,10 @@ class Scheduler:
             return
 
         try:
-            start_hour, start_min = map(int, start_time.split(":"))
-            end_hour, end_min = map(int, end_time.split(":"))
+            self.start_t = datetime.strptime(start_time, "%H:%M").time()
+            self.end_t = datetime.strptime(end_time, "%H:%M").time()
+            start_hour, start_min = self.start_t.hour, self.start_t.minute
+            end_hour, end_min = self.end_t.hour, self.end_t.minute
         except ValueError as e:
             log.error("timer_configuration_failed", reason="invalid_format", error=str(e), exc_info=True)
             return
@@ -108,7 +110,24 @@ class Scheduler:
         except Exception as e:
             log.error("timer_job_addition_failed", error=str(e), exc_info=True)
 
+    def _is_active_window(self) -> bool:
+            now = datetime.now(self.scheduler.timezone).time()
+            if self.start_t <= self.end_t:
+                return self.start_t <= now < self.end_t
+            else:
+                return now >= self.start_t or now < self.end_t
+
     async def _turn_on(self):
+        now = datetime.now(self.scheduler.timezone).time()
+        if not self._is_active_window():
+            log.info(
+                "timer_trigger_aborted", 
+                action="system_on", 
+                reason="outside_active_window",
+                current_time=str(now),
+                configured_window=f"{self.start_t} to {self.end_t}"
+            )
+            return
         log.info("timer_trigger_executing", action="system_on")
         try:
             await self.state_client.send_toggle_system(True)
@@ -116,6 +135,16 @@ class Scheduler:
             log.error("timer_trigger_failed", action="system_on", error=str(e), exc_info=True)
 
     async def _turn_off(self):
+        now = datetime.now(self.scheduler.timezone).time()
+        if self._is_active_window():
+            log.info(
+                "timer_trigger_aborted", 
+                action="system_off", 
+                reason="inside_active_window",
+                current_time=str(now),
+                configured_window=f"{self.start_t} to {self.end_t}"
+            )
+            return
         log.info("timer_trigger_executing", action="system_off")
         try:
             await self.state_client.send_toggle_system(False)            
