@@ -5,22 +5,13 @@ This project runs fully in Docker with env-only configuration. Build-time config
 **Prereqs**
 - Docker
 - Docker Compose
-- Python 3 (for env generation)
+- Python 3
 
 **Build and Run**
 ```bash
 bash deploy/generate_env.sh
 
-docker compose -f deploy/docker-compose.yaml up --build
-```
-
-**CI: Select Targets to Build**
-Manual workflow runs can build only selected services by setting `targets`.
-Examples:
-```bash
-targets=web,event-gw
-targets=python
-targets=default
+docker compose -f deploy/compose.yaml up
 ```
 
 **Ports**
@@ -56,16 +47,3 @@ targets=default
 - Metrics: `METRICS_INTERVAL`, `METRICS_REDIS_PUB`
 - Gateway: `GATEWAY_PORT`, `GATEWAY_LOG_LEVEL`, `GATEWAY_STATE_SERVICE_URL`, `GATEWAY_REDIS_URL`, `GATEWAY_REDIS_RECONNECT_MS`, `GATEWAY_CHANNEL_SCHEDULER`, `GATEWAY_CHANNEL_LUMINAIRES`, `GATEWAY_CHANNEL_TIMER`, `GATEWAY_CHANNEL_METRICS`, `GATEWAY_HEARTBEAT_MS`, `GATEWAY_LATENCY_INTERVAL_MS`
 - Webapp: `VITE_API_URL`, `VITE_EVENT_GATEWAY_URL`, `VITE_UI_CONFIG_URL`
-
-**Troubleshooting**
-- Missing env vars: service exits early with a "missing required env var" error
-- Redis connectivity: ensure `redis` is healthy and `REDIS_URL` points to it
-- SSE latency or heartbeat: verify `GATEWAY_HEARTBEAT_MS` and `GATEWAY_LATENCY_INTERVAL_MS`
-
-**Deploy-Only Compose**
-- `deploy/compose.yaml` is for running pre-built images with baked config
-- No build args or env_file are required at runtime
-- Usage:
-```bash
-docker compose -f deploy/compose.yaml up
-```

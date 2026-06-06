@@ -1,9 +1,8 @@
 import asyncio
 import json
-import time
-import logging
+import structlog
 
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 class RedisListener:
     def __init__(self, redis, sub_chan, timer):
@@ -14,37 +13,59 @@ class RedisListener:
     async def listen(self):
         pubsub = self.redis.pubsub()
         await pubsub.subscribe(self.sub_chan)
+        
+        log.info("redis_listener_started", channel=self.sub_chan)
 
-        async for message in pubsub.listen():
-            if message ["type"] != "message":
-                continue
+        try:
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
 
-            data = json.loads(message["data"])
-            event = data.get("event")
-            payload = data.get("payload", {})
+                try:
+                    data = json.loads(message["data"])
+                    event = data.get("event")
+                    payload = data.get("payload", {})
 
-            await self.handle_event(event, payload)
+                    await self.handle_event(event, payload)
+                except json.JSONDecodeError as e:
+                    log.error("redis_message_parse_failed", channel=self.sub_chan, error=str(e), raw_data=message["data"])
+                except Exception as e:
+                    log.error("redis_event_routing_failed", event=data.get("event"), error=str(e), exc_info=True)
+                    
+        except asyncio.CancelledError:
+            log.info("redis_listener_task_cancelled")
+            raise
+        finally:
+            await pubsub.unsubscribe(self.sub_chan)
+            await pubsub.close()
+            log.info("redis_listener_stopped")
 
     async def handle_event(self, event, payload):
-        if event == "timer:toggled":
-            log.info(f"event triggered: {event}")
-            await self.timer.toggle_timer()
+        event_log = log.bind(redis_event=event)
+        event_log.info("event_processing_started")
 
-        elif event == "timer:configured":
-            log.info(f"event triggered: {event}")
-            await self.timer.configure_timer()
+        try:
+            if event == "timer:toggled":
+                await self.timer.toggle_timer()
 
-        elif event == "timer:cleared":
-            log.info(f"event triggered: {event}")
-            await self.timer.clear_timer()
-            
-        log.info(f"handled event {event}")
+            elif event == "timer:configured":
+                await self.timer.configure_timer()
+
+            elif event == "timer:cleared":
+                await self.timer.clear_timer()
+            else:
+                event_log.warning("unhandled_redis_event")
+                return
+
+            event_log.info("event_processing_complete")
+        except Exception as e:
+             event_log.error("event_handling_failed", error=str(e), exc_info=True)
 
     async def shutdown(self):
+        log.info("redis_listener_shutdown_initiated")
         try:
-            log.info(f"stopping redis...")
             await self.redis.close()
             await self.redis.connection_pool.disconnect()
-            log.info("stopped redis")
+            log.info("redis_connection_closed")
         except Exception as e:
-            log.exception(f"failed to close redis, err: {e}")
+            log.error("redis_close_failed", error=str(e), exc_info=True)

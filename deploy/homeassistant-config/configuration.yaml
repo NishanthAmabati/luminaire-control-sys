@@ -1,0 +1,220 @@
+mobile_app:
+
+automation: !include automations.yaml
+
+# ==========================================
+# 1. STATE OBSERVABILITY (READ-ONLY SENSORS)
+# ==========================================
+rest:
+  - resource: "http://state-api:8001/state"
+    scan_interval: 5
+    # -- SENSORS (Numbers & Text) --
+    sensor:
+      - name: "Luminaire Mode"
+        value_template: "{{ value_json.mode }}"
+        icon: mdi:state-machine
+
+      - name: "Luminaire Active CCT"
+        value_template: >
+          {% if value_json.mode == 'MANUAL' %}
+            {{ value_json.manual.cct | default(0) }}
+          {% else %}
+            {{ value_json.auto.cct | default(0) }}
+          {% endif %}
+        unit_of_measurement: "K"
+        icon: "mdi:thermometer-lines"
+
+      - name: "Luminaire Active Lux"
+        value_template: >
+          {% if value_json.mode == 'MANUAL' %}
+            {{ value_json.manual.lux | default(0) }}
+          {% else %}
+            {{ value_json.auto.lux | default(0) }}
+          {% endif %}
+        unit_of_measurement: "lx"
+        icon: "mdi:brightness-6"
+
+      - name: "Luminaire Running Scene"
+        value_template: "{{ value_json.auto.running_scene | default('None', true) }}"
+        icon: "mdi:palette"
+
+      - name: "Pi CPU Usage"
+        value_template: "{{ value_json.metrics.cpu }}"
+        unit_of_measurement: "%"
+        icon: "mdi:cpu-64-bit"
+
+      - name: "Pi Memory Usage"
+        value_template: "{{ value_json.metrics.memory }}"
+        unit_of_measurement: "%"
+        icon: "mdi:memory"
+
+      - name: "Pi Temperature"
+        value_template: "{{ value_json.metrics.temperature }}"
+        unit_of_measurement: "°C"
+
+      - name: "Luminaire Last Updated"
+        value_template: "{{ value_json.last_updated | replace(' ', 'T') }}"
+        device_class: timestamp
+
+      - name: "Luminaire Timer Start"
+        value_template: >
+          {% if value_json.timer.start %}
+            {{ value_json.timer.start }}
+          {% else %}
+            Not Set
+          {% endif %}
+        icon: "mdi:clock-start"
+
+      - name: "Luminaire Timer End"
+        value_template: >
+          {% if value_json.timer.end %}
+            {{ value_json.timer.end }}
+          {% else %}
+            Not Set
+          {% endif %}
+        icon: "mdi:clock-end"
+
+    # -- BINARY SENSORS (On/Off Booleans) --
+    binary_sensor:
+      - name: "Luminaire System Power"
+        value_template: "{{ value_json.system_on }}"
+        device_class: power # Changed to 'power' so it dynamically turns yellow when ON
+
+      - name: "Luminaire Timer Active"
+        value_template: "{{ value_json.timer.enabled }}"
+        device_class: running
+
+
+# ==========================================
+# 2. VIRTUAL UI CONTROLS (THE DASHBOARD SLIDERS)
+# ==========================================
+input_boolean:
+  luminaire_system_power_toggle:
+    name: "Luminaire System Power"
+    icon: mdi:power
+
+  luminaire_timer_toggle:
+    name: "Enable Schedule"
+    icon: mdi:calendar-clock
+
+input_select:
+  luminaire_target_mode:
+    name: "Control Mode"
+    options:
+      - "AUTO"
+      - "MANUAL"
+    icon: mdi:tune-variant
+
+  luminaire_target_scene:
+    name: "Active Scene"
+    options:
+      - "Morning Setup"
+      - "Focus Mode"
+      - "Evening Relax"
+      - "Nightlight"
+    icon: mdi:lightbulb-group
+
+input_number:
+  luminaire_target_cct:
+    name: "Target Color Temp"
+    min: 2000
+    max: 7000
+    step: 50
+    unit_of_measurement: "K"
+    icon: mdi:thermometer-lines
+
+  luminaire_target_lux:
+    name: "Target Intensity"
+    min: 0
+    max: 600
+    step: 10
+    unit_of_measurement: "lx"
+    icon: mdi:brightness-percent
+
+input_datetime:
+  luminaire_timer_start_input:
+    name: "Start Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-start
+
+  luminaire_timer_end_input:
+    name: "End Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-end
+
+
+# ==========================================
+# 3. OUTBOUND API (REST COMMANDS)
+# ==========================================
+rest_command:
+  # Translates the Dashboard Power Toggle -> POST /system/power
+  set_luminaire_power:
+    url: "http://state-api:8001/system/power"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Jinja converts 'on'/'off' state to true/false boolean
+    payload: '{"on": {{ "true" if is_state("input_boolean.luminaire_system_power_toggle", "on") else "false" }}}'
+
+  # Translates the Dashboard Mode Dropdown -> POST /system/mode
+  set_luminaire_mode:
+    url: "http://state-api:8001/system/mode"
+    method: POST
+    headers:
+      content-type: "application/json"
+    payload: >
+      {
+        "mode": "{{ states('input_select.luminaire_target_mode') }}"
+      }
+
+  # Translates the Dashboard CCT/Lux Sliders -> POST /set/manual
+  set_luminaire_manual:
+    url: "http://state-api:8001/set/manual"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Includes the required 'medium' and default cw/ww keys from your API spec
+    payload: >
+      {
+        "medium": "sliders",
+        "cct": {{ states('input_number.luminaire_target_cct') | int }},
+        "lux": {{ states('input_number.luminaire_target_lux') | int }}
+      }
+
+  # Translates Dashboard Toggle -> POST /timer/toggle?enabled=true
+  set_luminaire_timer_toggle:
+    # Notice we inject the Jinja template directly into the URL query parameter
+    url: >
+      http://state-api:8001/timer/toggle?enabled={{ 'true' if is_state('input_boolean.luminaire_timer_toggle', 'on') else 'false' }}
+    method: POST
+    headers:
+      accept: "application/json"
+
+  # Translates Dashboard Time Pickers -> POST /timer/configure
+  set_luminaire_timer_configure:
+    url: "http://state-api:8001/timer/configure"
+    method: POST
+    headers:
+      content-type: "application/json"
+    # Home Assistant outputs time as "HH:MM:SS". Your API expects "HH:MM".
+    # The [:5] slices off the seconds so it strictly matches your API spec.
+    payload: >
+      {
+        "start": "{{ states('input_datetime.luminaire_timer_start_input')[:5] }}",
+        "end": "{{ states('input_datetime.luminaire_timer_end_input')[:5] }}"
+      }
+
+
+# ==========================================
+# 4. DASHBOARD REGISTRATION
+# ==========================================
+lovelace:
+  dashboards:
+    luminaire-control-system:
+      mode: yaml
+      title: Luminaire Control System
+      icon: mdi:home-lightning-bolt
+      show_in_sidebar: true
+      filename: dashboards/luminaire-control-sys.yaml

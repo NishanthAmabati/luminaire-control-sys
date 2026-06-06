@@ -1,18 +1,20 @@
-import uvicorn
-import logging
 import asyncio
 import os
+import uvicorn
+import structlog
 
 from redis.asyncio import Redis
+from app_logging.logging_config import configure_logging
 from services.state_service import StateService
 from clients.redis_listener import RedisListener
 from api.api_server import createAPI
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
+log = structlog.get_logger()
 
 def require_env(name: str) -> str:
     value = os.getenv(name)
-    if value is None or value == "":
+    if not value:
         raise RuntimeError(f"missing required env var: {name}")
     return value
 
@@ -29,37 +31,57 @@ async def startFastAPI(app):
         access_log=parse_bool(os.getenv("STATE_API_ACCESS_LOG", "false")),
     )
     server = uvicorn.Server(fastAPIconfig)
+    log.info("fastapi_server_starting", host=fastAPIconfig.host, port=fastAPIconfig.port)
     await server.serve()
 
 async def main():
-    redis = Redis.from_url(require_env("REDIS_URL"))
-
-    service = StateService(
-        require_env("REDIS_URL"),
-        state_key="system:state",
-        channel="system:events"
-    )
-
-    lisnter = RedisListener(
-        redis=redis,
-        scheduler_sub_chan=require_env("SCHEDULER_REDIS_PUB"),
-        metrics_sub_chan=require_env("METRICS_REDIS_PUB"),
-        state_service=service
-    )
-
-    app = createAPI(service)
-
+    log.info("state_service_startup_initiated")
+    
     try:
+        redis_url = require_env("REDIS_URL")
+        redis = Redis.from_url(redis_url)
+
+        service = StateService(
+            redis_url,
+            state_key="system:state",
+            channel="system:events"
+        )
+
+        listener = RedisListener(
+            redis=redis,
+            scheduler_sub_chan=require_env("SCHEDULER_REDIS_PUB"),
+            metrics_sub_chan=require_env("METRICS_REDIS_PUB"),
+            state_service=service
+        )
+
+        app = createAPI(service)
+
+        log.info("state_service_components_initialized")
         await asyncio.gather(
             startFastAPI(app),
-            lisnter.listen()
+            listener.listen()
         )
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        logging.info("shutdown requested")
+    except Exception as e:
+        log.critical("state_service_crashed", error=str(e), exc_info=True)
     finally:
-        logging.info("running cleanup...")
-        await service.shutdown()
-        logging.info("shutdown complete")
+        log.info("state_shutdown_sequence_started")
+        if 'service' in locals():
+            try:
+                await service.shutdown()
+            except Exception:
+                log.error("state_service_shutdown_failed", exc_info=True)
+                
+        if 'redis' in locals():
+             try:
+                 await redis.aclose()
+                 await redis.connection_pool.disconnect()
+             except Exception:
+                 log.error("redis_connection_close_failed", exc_info=True)
+                 
+        log.info("state_shutdown_complete")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

@@ -91,14 +91,14 @@ event_gateway:
 
 ui:
   cct:
-    min: 3500
-    max: 6500
+    min: 2000
+    max: 8000
     default: 5000
     unit: "K"
     color: "#10b981"
   intensity:
     min: 0
-    max: 500
+    max: 800
     default: 250
     unit: "lux"
     color: "#f97316"

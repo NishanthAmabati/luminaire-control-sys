@@ -22,6 +22,10 @@ const STATE_SERVICE_URL = requireEnv('GATEWAY_STATE_SERVICE_URL');
 const HEARTBEAT = toInt('GATEWAY_HEARTBEAT_MS');
 const LATENCY_INTERVAL = toInt('GATEWAY_LATENCY_INTERVAL_MS');
 
+// Optional Home Assistant integration
+const HA_URL = process.env.HA_URL;
+const HA_TOKEN = process.env.HA_TOKEN;
+
 const CHANNELS = {
   scheduler: requireEnv('GATEWAY_CHANNEL_SCHEDULER'),
   luminaires: requireEnv('GATEWAY_CHANNEL_LUMINAIRES'),
@@ -36,8 +40,7 @@ const REDIS_RECONNECT_MS = toInt('GATEWAY_REDIS_RECONNECT_MS');
 ================================ */
 
 const logger = pino({
-  level: requireEnv('GATEWAY_LOG_LEVEL'),
-  transport: { target: 'pino-pretty' },
+  level: requireEnv('GATEWAY_LOG_LEVEL') || 'info',
 });
 
 /* ===============================
@@ -71,12 +74,16 @@ const snapshot = {
 };
 
 function updateSnapshot(mutator) {
-  mutator(snapshot);
-  snapshot.last_updated = new Date().toISOString();
+  try {
+    mutator(snapshot);
+    snapshot.last_updated = new Date().toISOString();
+  } catch (err) {
+    logger.error({ err }, 'snapshot_mutation_failed');
+  }
 }
 
 /* ===============================
-   UTILITIES
+   UTILITIES & EXTERNAL INTEGRATIONS
 ================================ */
 
 const parseHmToHour = (v) => {
@@ -100,6 +107,39 @@ const mapScenePoints = (points = []) => {
 
   return { cct, intensity };
 };
+
+// Pushes live luminaire connection/ack events to Home Assistant
+async function pushToHomeAssistant(event, payload) {
+  if (!HA_URL || !HA_TOKEN || !payload?.ip) return;
+
+  const deviceId = payload.ip.replace(/\./g, '_');
+  const endpoint = `${HA_URL}/api/states/sensor.luminaire_node_${deviceId}`;
+
+  let status = 'Unknown';
+  if (event === 'connection' || event === 'ack') status = 'Connected';
+  if (event === 'disconnection') status = 'Disconnected';
+
+  try {
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HA_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        state: status,
+        attributes: {
+          ...payload,
+          ip_address: payload.ip,
+          icon: status === 'Connected' ? 'mdi:wifi-check' : 'mdi:wifi-strength-alert-outline',
+          friendly_name: `Luminaire Node ${payload.ip}`
+        }
+      })
+    });
+  } catch (error) {
+    logger.warn({ err: error.message, ip: payload.ip }, 'ha_push_failed');
+  }
+}
 
 /* ===============================
    EVENT HANDLERS
@@ -126,7 +166,6 @@ function applyScheduler(event, payload) {
         sch.system_on === false &&
         (Number(payload?.cct ?? 0) > 0 || Number(payload?.lux ?? 0) > 0 || Boolean(sch.running_scene))
       ) {
-        // If state event was missed, infer "on" from active runtime.
         sch.system_on = true;
       }
     }
@@ -242,6 +281,7 @@ async function bootstrapFromStateService() {
     if (!response.ok) throw new Error(`state service responded ${response.status}`);
     const state = await response.json();
     applyStateSnapshot(state);
+    
     if (state?.mode === 'AUTO') {
       const base = STATE_SERVICE_URL.replace(/\/state$/, '');
       const sceneToLoad = state?.auto?.running_scene || state?.auto?.loaded_scene;
@@ -252,7 +292,6 @@ async function bootstrapFromStateService() {
       }
       if (sceneToLoad) {
         try {
-          // Trigger scheduler to publish scheduler:scene_load with full profile points.
           await fetch(`${base}/scene/load`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
@@ -263,10 +302,10 @@ async function bootstrapFromStateService() {
         }
       }
     }
-    logger.info('state service snapshot loaded');
+    logger.info('state_service_snapshot_loaded');
     return true;
   } catch (err) {
-    logger.warn({ err }, 'failed to fetch state service snapshot');
+    logger.warn({ err }, 'state_service_snapshot_fetch_failed');
     return false;
   }
 }
@@ -280,10 +319,14 @@ const clients = new Set();
 async function broadcast(data) {
   if (STATE_SERVICE_URL) {
     try {
-      const response = await fetch(STATE_SERVICE_URL);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000);
+      
+      const response = await fetch(STATE_SERVICE_URL, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const state = await response.json();
-        // Update manual_input from state service
         if (state?.manual && snapshot.scheduler.mode === 'MANUAL') {
           if (typeof state.manual.cw === 'number') {
             snapshot.scheduler.manual_input.cw = state.manual.cw;
@@ -294,14 +337,16 @@ async function broadcast(data) {
         }
       }
     } catch (err) {
-      // Silently fail - use existing values
+      logger.debug({ err: err.message }, 'broadcast_state_fetch_aborted_or_failed');
     }
   }
+  
   const msg = `data: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) {
     try {
       res.write(msg);
     } catch {
+      res.end();
       clients.delete(res);
     }
   }
@@ -313,17 +358,25 @@ app.get('/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   clients.add(res);
+  logger.info({ current_clients: clients.size }, 'sse_client_connected');
 
   res.write(
     `data: ${JSON.stringify({ type: 'snapshot', snapshot })}\n\n`
   );
 
-  const hb = setInterval(() => res.write(': ping\n\n'), HEARTBEAT);
+  const hb = setInterval(() => {
+      try {
+          res.write(': ping\n\n');
+      } catch (err) {
+          clearInterval(hb);
+          clients.delete(res);
+      }
+  }, HEARTBEAT);
 
   req.on('close', () => {
     clearInterval(hb);
     clients.delete(res);
-    logger.info('SSE client disconnected');
+    logger.info({ current_clients: clients.size }, 'sse_client_disconnected');
   });
 });
 
@@ -356,11 +409,12 @@ const redis = createClient({
   },
 });
 
-redis.on('error', (e) => logger.error(e, 'Redis error'));
+redis.on('error', (e) => logger.error({ err: e }, 'redis_main_client_error'));
 
 await redis.connect();
 
 const sub = redis.duplicate();
+sub.on('error', (e) => logger.error({ err: e }, 'redis_sub_client_error'));
 await sub.connect();
 
 await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CHANNELS.metrics], (raw, channel) => {
@@ -370,18 +424,22 @@ await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CH
     const payload = msg?.payload ?? msg;
 
     if (!event) {
-      logger.warn({ channel, msg }, 'Redis message missing event field');
+      logger.warn({ channel, msg }, 'redis_message_missing_event_field');
       return;
     }
 
     if (channel === CHANNELS.scheduler) applyScheduler(event, payload);
-    if (channel === CHANNELS.luminaires) applyLuminaire(event, payload);
+    if (channel === CHANNELS.luminaires) {
+      applyLuminaire(event, payload);
+      // Fire-and-forget push to Home Assistant
+      pushToHomeAssistant(event, payload);
+    }
     if (channel === CHANNELS.timer) applyTimer(event, payload);
     if (channel === CHANNELS.metrics) applyMetrics(event, payload);
 
     broadcast({ channel, event, payload, snapshot });
   } catch (err) {
-    logger.error(err, 'Redis event parse failed');
+    logger.error({ err }, 'redis_event_parse_failed');
   }
 });
 
@@ -399,25 +457,43 @@ const startBootstrap = async () => {
     if (ok) return;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  logger.warn('state service snapshot bootstrap failed after retries');
+  logger.error('state_service_snapshot_bootstrap_failed_after_retries');
 };
 
-void startBootstrap();
+startBootstrap().catch(err => logger.error({ err }, 'bootstrap_process_crashed'));
 
-app.listen(PORT, () => logger.info(`event-gateway listening on ${PORT}`));
+const server = app.listen(PORT, () => logger.info({ port: PORT }, 'event_gateway_started'));
 
 /* ===============================
    GRACEFUL SHUTDOWN
 ================================ */
 
-async function shutdown() {
-  logger.info('Shutting down');
+async function shutdown(signal) {
+  logger.info({ signal }, 'shutdown_initiated');
 
-  await sub.quit();
-  await redis.quit();
-
-  process.exit(0);
+  server.close(async (err) => {
+    if (err) logger.error({ err }, 'express_server_close_error');
+    try {
+      await sub.quit();
+      await redis.quit();
+      logger.info('redis_connections_closed');
+      process.exit(0);
+    } catch (redisErr) {
+      logger.error({ err: redisErr }, 'redis_quit_error');
+      process.exit(1);
+    }
+  });
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught_exception');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ reason }, 'unhandled_rejection');
+  process.exit(1);
+});

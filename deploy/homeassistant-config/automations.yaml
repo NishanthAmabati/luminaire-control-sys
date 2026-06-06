@@ -1,0 +1,43 @@
+- id: 'sync_luminaire_power'
+  alias: 'API Push Master Power'
+  trigger:
+    - platform: state
+      entity_id: input_boolean.luminaire_system_power_toggle
+  action:
+    - service: rest_command.set_luminaire_power
+
+- id: 'sync_luminaire_mode'
+  alias: 'API Push Mode Change'
+  trigger:
+    - platform: state
+      entity_id: input_select.luminaire_target_mode
+  action:
+    - service: rest_command.set_luminaire_mode
+
+- id: 'sync_luminaire_manual_sliders'
+  alias: 'API Push CCT Lux Sliders'
+  trigger:
+    - platform: state
+      entity_id: 
+        - input_number.luminaire_target_cct
+        - input_number.luminaire_target_lux
+  action:
+    - service: rest_command.set_luminaire_manual
+
+- id: 'sync_luminaire_timer_toggle'
+  alias: 'API Push Timer Toggle'
+  trigger:
+    - platform: state
+      entity_id: input_boolean.luminaire_timer_toggle
+  action:
+    - service: rest_command.set_luminaire_timer_toggle
+
+- id: 'sync_luminaire_timer_configure'
+  alias: 'API Push Timer Configure'
+  trigger:
+    - platform: state
+      entity_id: 
+        - input_datetime.luminaire_timer_start_input
+        - input_datetime.luminaire_timer_end_input
+  action:
+    - service: rest_command.set_luminaire_timer_configure

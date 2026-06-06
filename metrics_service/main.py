@@ -1,10 +1,12 @@
 import asyncio
-import logging
 import os
+import structlog
 
+from app_logging.logging_config import configure_logging
 from services.metrics_service import MetricsService
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
+log = structlog.get_logger()
 
 def require_env(name: str) -> str:
     value = os.getenv(name)
@@ -13,20 +15,33 @@ def require_env(name: str) -> str:
     return value
 
 async def main():
-    service = MetricsService(
-        redis_url=require_env("REDIS_URL"),
-        channel=require_env("METRICS_REDIS_PUB"),
-        interval_s=float(require_env("METRICS_INTERVAL")),
-    )
-
+    log.info("metrics_service_startup_initiated")
+    
     try:
+        service = MetricsService(
+            redis_url=require_env("REDIS_URL"),
+            channel=require_env("METRICS_REDIS_PUB"),
+            interval_s=float(require_env("METRICS_INTERVAL")),
+        )
+
+        log.info("metrics_loop_starting", interval_s=float(require_env("METRICS_INTERVAL")))
         await service.run()
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        logging.info("shutdown requested")
+        
+    except asyncio.CancelledError:
+        log.info("metrics_service_task_cancelled")
+    except Exception as e:
+        log.critical("metrics_service_crashed", error=str(e), exc_info=True)
     finally:
-        logging.info("running cleanup...")
-        await service.shutdown()
-        logging.info("shutdown complete")
+        log.info("metrics_shutdown_sequence_started")
+        if 'service' in locals():
+            try:
+                await service.shutdown()
+            except Exception:
+                log.error("metrics_service_shutdown_failed", exc_info=True)
+        log.info("metrics_shutdown_complete")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

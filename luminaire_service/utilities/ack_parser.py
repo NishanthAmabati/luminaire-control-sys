@@ -1,11 +1,6 @@
-import logging
+import structlog
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s:%(name)s:%(message)s",
-)
-
-log = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 def parse_ACK(message: str):
     """
@@ -22,8 +17,9 @@ def parse_ACK(message: str):
     *29242100ACK400500#
     """
     if "ACK" not in message:
-        log.error("ACK not found in recv: %s", message)
+        log.warning("ack_parse_failed_missing_keyword", raw_message=message)
         return None
+        
     try:
         ack_stripped = message.split("ACK")[1].rstrip("#")
         cw = round(float(ack_stripped[0:3]), 1) / 10
@@ -33,5 +29,5 @@ def parse_ACK(message: str):
             "ww": ww
         }
     except Exception as e:
-        log.warning(f"Failed to parse ACK: {message} | error: {e}")
+        log.warning("ack_parse_exception", raw_message=message, error=str(e), exc_info=True)
         return None

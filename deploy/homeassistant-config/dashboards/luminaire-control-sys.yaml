@@ -1,0 +1,258 @@
+title: Luminaire Control System
+
+views:
+  - title: Luminaire Control System
+    path: overview
+    icon: mdi:view-dashboard
+    type: sections
+    max_columns: 3
+
+    badges:
+      - entity: binary_sensor.luminaire_system_power
+        name: Power
+
+      - entity: sensor.luminaire_mode
+        name: Mode
+
+    sections:
+
+      # ==========================================
+      # COLUMN 1
+      # ==========================================
+      - type: grid
+        cards:
+
+          # --------------------------------------
+          # CORE STATE
+          # --------------------------------------
+          - type: entities
+            title: System Status
+            state_color: true
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.luminaire_system_power
+                name: System Power
+                secondary_info: last-changed
+
+              - entity: sensor.luminaire_mode
+                name: Operating Mode
+
+          # --------------------------------------
+          # HARDWARE HEALTH
+          # --------------------------------------
+          # - type: grid
+          #   title: Hardware Health
+          #   columns: 3
+          #   square: false
+          #   cards:
+          #     - type: gauge
+          #       entity: sensor.pi_cpu_usage
+          #       name: CPU
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 60
+          #         red: 85
+
+          #     - type: gauge
+          #       entity: sensor.pi_memory_usage
+          #       name: RAM
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 70
+          #         red: 90
+
+          #     - type: gauge
+          #       entity: sensor.pi_temperature
+          #       name: Temp
+          #       needle: true
+          #       min: 0
+          #       max: 100
+          #       severity:
+          #         green: 0
+          #         yellow: 60
+          #         red: 75
+
+      # ==========================================
+      # COLUMN 2
+      # ==========================================
+      - type: grid
+        cards:
+
+          # --------------------------------------
+          # LIGHTING OUTPUT
+          # --------------------------------------
+          - type: entities
+            title: Lighting Output
+            state_color: true
+            show_header_toggle: false
+            entities:
+              - entity: sensor.luminaire_active_cct
+                name: Color Temp
+
+              - entity: sensor.luminaire_active_lux
+                name: Intensity
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: sensor.luminaire_mode
+                    state_not: "MANUAL"
+                row:
+                  entity: sensor.luminaire_running_scene
+                  name: Current Scene
+
+          # --------------------------------------
+          # SCHEDULE STATUS
+          # --------------------------------------
+          - type: entities
+            title: Timer Status
+            state_color: true
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.luminaire_timer_active
+                name: Timer State
+                secondary_info: last-changed
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: binary_sensor.luminaire_timer_active
+                    state: "on"
+                row:
+                  entity: sensor.luminaire_timer_start
+                  name: Starts At
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: binary_sensor.luminaire_timer_active
+                    state: "on"
+                row:
+                  entity: sensor.luminaire_timer_end
+                  name: Ends At
+
+      # ==========================================
+      # COLUMN 3
+      # ==========================================
+      - type: grid
+        cards:
+
+          # --------------------------------------
+          # SYSTEM CONTROL
+          # --------------------------------------
+          - type: entities
+            title: System Control
+            state_color: true
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.luminaire_system_power_toggle
+                name: System Power
+
+              - entity: input_select.luminaire_target_mode
+                name: Target Mode
+
+              - type: section
+                label: Manual Overrides
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: input_select.luminaire_target_mode
+                    state: "MANUAL"
+                row:
+                  entity: input_number.luminaire_target_cct
+                  name: Target Color Temp
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: input_select.luminaire_target_mode
+                    state: "MANUAL"
+                row:
+                  entity: input_number.luminaire_target_lux
+                  name: Target Intensity
+
+          # --------------------------------------
+          # TIMER CONFIGURATION
+          # --------------------------------------
+          - type: entities
+            title: Timer Configuration
+            state_color: true
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.luminaire_timer_toggle
+                name: Enable Schedule
+
+              - type: section
+                label: Schedule Window
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: input_boolean.luminaire_timer_toggle
+                    state: "on"
+                row:
+                  entity: input_datetime.luminaire_timer_start_input
+                  name: Set Start Time
+
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: input_boolean.luminaire_timer_toggle
+                    state: "on"
+                row:
+                  entity: input_datetime.luminaire_timer_end_input
+                  name: Set End Time
+
+    cards:
+
+      # ==========================================
+      # CONNECTED LUMINAIRES
+      # ==========================================
+      # - type: markdown
+      #   title: Connected Luminaires
+      #   content: >
+      #     <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;font-family:'Courier New',monospace;font-size:13px;line-height:1.5;margin:0;box-shadow:inset 0px 2px 4px rgba(0,0,0,0.25);">
+      #     {%- set active_nodes = states.sensor
+      #     | selectattr('entity_id', 'search', 'luminaire_node_')
+      #     | selectattr('state', 'eq', 'Connected')
+      #     | list -%}
+
+      #     {%- if active_nodes | length > 0 -%}
+      #       {%- for state in active_nodes %}
+
+      #     <span style="color:#4ec9b0;">
+      #     {{ state.attributes.get('ip_address', 'Unknown') }}
+      #     </span>
+      #     |
+      #     cw:
+      #     <span style="color:#569cd6;">
+      #     {{ state.attributes.get('cw', 0) }}
+      #     </span>
+      #     |
+      #     ww:
+      #     <span style="color:#ce9178;">
+      #     {{ state.attributes.get('ww', 0) }}
+      #     </span>
+
+      #     {% if not loop.last %}
+      #     <span style="color:#404040;">
+      #     -----------------------------------
+      #     </span>
+      #     {% endif %}
+
+      #       {%- endfor %}
+      #     {%- else -%}
+
+      #     <span style="color:#d16969;">
+      #     [!] No luminaires connected.
+      #     </span>
+
+      #     {%- endif -%}
+      #     </pre>

@@ -50,7 +50,7 @@ services:
       access_log: False
 
   scheduler:
-    scenes_dir: "/home/nishanth/dev/sss-tech/luminaire-control/scheduler_service/scenes"
+    scenes_dir: ""
     interval: 1 #seconds
     luminaire_service_url: "http://0.0.0.0:8000/devices/luminaires/set"
 

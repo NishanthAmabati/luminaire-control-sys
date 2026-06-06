@@ -2,6 +2,9 @@
 # *<ip3><ip4><cw><ww>##
 
 import ipaddress
+import structlog
+
+log = structlog.get_logger()
 
 class CommandBuilder:
 
@@ -11,8 +14,10 @@ class CommandBuilder:
 
     @staticmethod
     def build_cw_ww(cw: float, ww: float) -> str:
-        #cw = CommandBuilder._clamp(cw, 0, 100)
-        #ww = CommandBuilder._clamp(ww, 0, 100)
+        # If value is 100, 100 * 10 = 1000 (4 characters). 
+        # This would break the strictly expected 3-character format (000-999).
+        # cw = CommandBuilder._clamp(cw, 0.0, 99.9)
+        # ww = CommandBuilder._clamp(ww, 0.0, 99.9)
 
         cw_scaled = int(round(cw * 10))
         ww_scaled = int(round(ww * 10))
@@ -21,9 +26,16 @@ class CommandBuilder:
 
     @staticmethod
     def extract_ip34(ip: str) -> str:
-        addr = ipaddress.IPv4Address(ip)
-        parts = str(addr).split(".")
-        return f"{int(parts[2]):03}{int(parts[3]):03}"
+        try:
+            addr = ipaddress.IPv4Address(ip)
+            parts = str(addr).split(".")
+            return f"{int(parts[2]):03}{int(parts[3]):03}"
+        except ipaddress.AddressValueError as e:
+            log.error("command_build_failed_invalid_ip", ip=ip, error=str(e), exc_info=True)
+            raise ValueError(f"Invalid IP format provided: {ip}") from e
+        except Exception as e:
+            log.error("command_build_unexpected_error", ip=ip, error=str(e), exc_info=True)
+            raise
 
     @staticmethod
     def build_command(ip34: str, cw_ww: str) -> str:
