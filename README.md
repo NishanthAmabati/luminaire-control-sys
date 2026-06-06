@@ -1,30 +1,23 @@
 # Luminaire Control System
 
-## Dashboard
 ![Dashboard](docs/images/dashboard.png)
 
-A local lighting control platform that coordinates luminaires, scheduling, timers, and system state through Redis pub/sub, with a web dashboard for monitoring and control. The UI consumes live updates via SSE from an event gateway that aggregates Redis events into a unified snapshot.
+The **Luminaire Control System** is a local-first lighting control software designed to orchestrate smart luminaires and other devices through scheduled scenes, manual controls, and automated adjustments. The system operates entirely locally, using Redis as a central event bus to coordinate multiple microservices.
 
-**Services (compose names)**
-- `redis`
-- `luminaire-service`
-- `state-service`
-- `scheduler-service`
-- `timer-service`
-- `metrics-service`
-- `event-gateway`
-- `webapp`
+### Key Features and Capabilities
 
-**Prereqs**
-- Docker
-- Docker Compose
+| Feature | Description |
+|---------|-------------|
+| **Scene-Based Automation** | CSV-defined lighting profiles with time-based CCT/Lux transitions |
+| **Dual Control Modes** | AUTO (scheduled/scene-driven) and MANUAL (direct control) |
+| **Color Temperature Control** | CCT range: 3500K (warm) to 6500K (cool) |
+| **Brightness Control** | Lux range: 0-500 with smooth interpolation |
+| **Timer Scheduling** | Cron-based on/off scheduling |
+| **Real-time SSE Streaming** | Live dashboard updates via Server-Sent Events |
+| **Multi-Device Support** | TCP-based communication with multiple luminaires |
+| **Metrics Collection** | CPU, memory, temperature monitoring |
 
-**Deploy Compose**
-- `deploy/compose.yaml`
-- Usage:
-```bash
-docker compose -f deploy/compose.yaml up
-```
+This software coordinates luminaires, scheduling, timers, and system state through Redis pub/sub, with a web dashboard for monitoring and control. The UI consumes live updates via SSE from an event gateway that aggregates Redis events into a unified snapshot.
 
-See `deploy/README.md` for env var reference.
 See `docs/ARCHITECTURE.md` to learn about the project architecture.
+See `docs/` to learn about the buisness logic, configuration & deployment, data models, algorithms & formulas.
