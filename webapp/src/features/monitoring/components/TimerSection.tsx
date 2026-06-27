@@ -1,11 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Clock, X } from 'lucide-react';
+import { Card } from '../../../components/Card';
 import { useSystemMonitor } from '../../../hooks/useSystemMonitor';
+import { useUiConfig } from '../../../hooks/useUiConfig';
 import { useUiFeedback } from '../../../context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
-export const TimerSection: React.FC = () => {
+interface TimerSectionProps {
+  variant?: 'card' | 'content';
+}
+
+export const TimerSection: React.FC<TimerSectionProps> = ({ variant = 'card' }) => {
   const { stats } = useSystemMonitor();
+  const { config: uiConfig } = useUiConfig();
   const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { pushError, pushSuccess } = useUiFeedback();
   const [onHour, setOnHour] = useState('');
@@ -231,34 +238,34 @@ export const TimerSection: React.FC = () => {
     }
   }, [stats, onFocused, offFocused, activePicker, timerSetPending, timerClearPending, suppressTimerSyncUntil]);
 
-  return (
-    <div className={`timer-shell ${isTimerEnabled ? 'enabled' : ''}`}>
-      <div className="flex items-center justify-between mb-3">
+  const timerBody = (
+    <>
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 field-label">
           <Clock size={14} className={isTimerEnabled ? 'timer-icon-active' : ''} />
-          TIMER
+          {uiConfig.labels.system_timer}
         </div>
-        <div className="tab-shell" style={{ maxWidth: '160px' }}>
+        <div className="tab-shell">
           <button
             className={`tab-btn ${isTimerEnabled ? 'active-green' : ''}`}
             onClick={() => void handleTimerToggle(true)}
             disabled={timerTogglePending}
           >
-            {timerTogglePending && !isTimerEnabled ? '...' : 'ON'}
+            {timerTogglePending && !isTimerEnabled ? '...' : uiConfig.labels.timer_enabled}
           </button>
           <button
             className={`tab-btn ${!isTimerEnabled ? 'active-green' : ''}`}
             onClick={() => void handleTimerToggle(false)}
             disabled={timerTogglePending}
           >
-            {timerTogglePending && isTimerEnabled ? '...' : 'OFF'}
+            {timerTogglePending && isTimerEnabled ? '...' : uiConfig.labels.timer_disabled}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div className="relative">
-          <label className="field-label block mb-1">ON</label>
+          <label className="field-label block mb-1">{uiConfig.labels.on_time}</label>
           <button
             type="button"
             onClick={() => openPicker('on')}
@@ -270,7 +277,7 @@ export const TimerSection: React.FC = () => {
           </button>
           {activePicker === 'on' ? (
             <div className="time-palette" style={{ left: 0, right: 'auto' }}>
-              <div className="time-palette-title">ON TIME</div>
+              <div className="time-palette-title">{uiConfig.labels.on_time}</div>
               <div className="time-edit-grid">
                 <div className="time-dial">
                   <div
@@ -315,7 +322,7 @@ export const TimerSection: React.FC = () => {
           ) : null}
         </div>
         <div className="relative">
-          <label className="field-label block mb-1">OFF</label>
+          <label className="field-label block mb-1">{uiConfig.labels.off_time}</label>
           <button
             type="button"
             onClick={() => openPicker('off')}
@@ -327,7 +334,7 @@ export const TimerSection: React.FC = () => {
           </button>
           {activePicker === 'off' ? (
             <div className="time-palette" style={{ right: 0, left: 'auto' }}>
-              <div className="time-palette-title">OFF TIME</div>
+              <div className="time-palette-title">{uiConfig.labels.off_time}</div>
               <div className="time-edit-grid">
                 <div className="time-dial">
                   <div
@@ -384,7 +391,7 @@ export const TimerSection: React.FC = () => {
             color: 'var(--action-neutral-text)',
           }}
         >
-          {timerSetPending ? '...' : 'SET'}
+          {timerSetPending ? '...' : uiConfig.labels.timer_set}
         </button>
         <button
           onClick={() => void handleClearTimer()}
@@ -396,9 +403,21 @@ export const TimerSection: React.FC = () => {
             color: 'var(--action-neutral-text)',
           }}
         >
-          {timerClearPending ? '...' : 'CLEAR'}
+          {timerClearPending ? '...' : uiConfig.labels.timer_clear}
         </button>
       </div>
+    </>
+  );
+
+  return variant === 'card' ? (
+    <Card title={uiConfig.labels.system_timer} icon={Clock} headerClassName="accent-green" className="h-full">
+      <div className="timer-shell">
+        {timerBody}
+      </div>
+    </Card>
+  ) : (
+    <div className="timer-shell">
+      {timerBody}
     </div>
   );
 };

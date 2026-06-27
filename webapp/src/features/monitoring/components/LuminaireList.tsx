@@ -3,9 +3,15 @@ import { Network, Plug, Search } from 'lucide-react';
 import { Card } from '../../../components/Card';
 import { type Luminaire } from '../../../types/luminaire';
 import { useEventSnapshot } from '../../../hooks/useEventSnapshot';
+import { useUiConfig } from '../../../hooks/useUiConfig';
 
-export const LuminaireList: React.FC = () => {
+interface LuminaireListProps {
+  variant?: 'card' | 'content';
+}
+
+export const LuminaireList: React.FC<LuminaireListProps> = ({ variant = 'card' }) => {
   const { snapshot } = useEventSnapshot();
+  const { config: uiConfig } = useUiConfig();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
@@ -28,23 +34,8 @@ export const LuminaireList: React.FC = () => {
     return `${l.id} ${l.name}`.toLowerCase().includes(q);
   });
 
-  return (
-    <Card
-      title="Connected Luminaires"
-      icon={Network}
-      headerClassName="accent-green"
-      className="h-full"
-      headerAction={
-        <button
-          type="button"
-          className="icon-toggle"
-          aria-label="Toggle search"
-          onClick={() => setShowSearch((prev) => !prev)}
-        >
-          <Search size={25} />
-        </button>
-      }
-    >
+  const inner = (
+    <>
       {showSearch ? (
         <div className="relative mb-3">
           <Search
@@ -56,7 +47,7 @@ export const LuminaireList: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search luminaires..."
+            placeholder={uiConfig.labels.search_luminaires}
             className="w-full h-9 pl-8 pr-2 rounded-lg text-sm motion-soft data-text"
             style={{
               border: '1px solid var(--border-color)',
@@ -70,7 +61,7 @@ export const LuminaireList: React.FC = () => {
       <div className="flex-1 soft-inset p-3 flex items-start justify-start overflow-y-auto">
         {filtered.length === 0 ? (
           <p className="text-xl data-text mt-2 mx-auto" style={{ color: 'var(--text-muted)' }}>
-            No Luminaires Connected
+            {uiConfig.labels.no_luminaires}
           </p>
         ) : (
           <ul className="w-full space-y-2">
@@ -108,8 +99,29 @@ export const LuminaireList: React.FC = () => {
       </div>
 
       <div className="mt-3 text-right text-sm font-semibold data-text" style={{ color: 'var(--text-secondary)' }}>
-        Total Luminaires: <span style={{ color: 'var(--text-primary)' }}>{filtered.length}</span>
+        {uiConfig.labels.total_luminaires} <span style={{ color: 'var(--text-primary)' }}>{filtered.length}</span>
       </div>
-    </Card>
+    </>
   );
+
+  return variant === 'card' ? (
+    <Card
+      title={uiConfig.labels.luminaire_title}
+      icon={Network}
+      headerClassName="accent-green"
+      className="h-full"
+      headerAction={
+        <button
+          type="button"
+          className="icon-toggle"
+          aria-label="Toggle search"
+          onClick={() => setShowSearch((prev) => !prev)}
+        >
+          <Search size={25} />
+        </button>
+      }
+    >
+      {inner}
+    </Card>
+  ) : inner;
 };

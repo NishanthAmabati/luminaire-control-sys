@@ -3,6 +3,7 @@ import { Activity, Timer, Check, ChevronDown, Clock, Cpu, MemoryStick, Thermomet
 import { Card } from '../../../components/Card';
 import { StatItem } from '../../../components/StatItem';
 import { useSystemMonitor } from '../../../hooks/useSystemMonitor';
+import { useUiConfig } from '../../../hooks/useUiConfig';
 import { useUiFeedback } from '../../../context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from '../../../utils/apiError';
 
@@ -12,6 +13,7 @@ interface StatusBoardProps {
 
 export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
   const { stats, error } = useSystemMonitor();
+  const { config: uiConfig } = useUiConfig();
   const apiBase = import.meta.env.VITE_API_URL || '/api';
   const { pushError, pushSuccess } = useUiFeedback();
   const [onHour, setOnHour] = useState('');
@@ -246,17 +248,17 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
 
   return (
     <Card
-      title="Status & Timer"
+      title={uiConfig.labels.status_timer}
       icon={Timer}
       headerClassName="accent-green"
       className="h-full overflow-visible"
       contentClassName="gap-3 overflow-visible"
     >
       <div className="grid grid-cols-2 gap-2">
-        <StatItem icon={Activity} label="Latency" value={stats?.latency ?? '--'} unit="ms" />
-        <StatItem icon={Cpu} label="CPU" value={stats?.cpu ?? '--'} unit="%" />
-        <StatItem icon={MemoryStick} label="Memory" value={stats?.memory ?? '--'} unit="%" />
-        <StatItem icon={Thermometer} label="Temperature" value={stats?.temperature ?? '--'} unit="°C" />
+        <StatItem icon={Activity} label={uiConfig.labels.latency} value={stats?.latency ?? '--'} unit="ms" />
+        <StatItem icon={Cpu} label={uiConfig.labels.cpu} value={stats?.cpu ?? '--'} unit="%" />
+        <StatItem icon={MemoryStick} label={uiConfig.labels.memory} value={stats?.memory ?? '--'} unit="%" />
+        <StatItem icon={Thermometer} label={uiConfig.labels.temperature} value={stats?.temperature ?? '--'} unit="°C" />
       </div>
 
       <div className={`status-chip motion-soft p-3 flex items-center gap-3 ${!systemOn || error ? 'status-offline-glow' : 'status-active-glow'}`}>
@@ -268,13 +270,13 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
         </div>
         <div>
           <p className="font-extrabold text-xl data-text" style={{ color: 'var(--text-primary)' }}>
-            {!systemOn ? 'System OFF' : error ? 'System Offline' : 'System Active'}
+            {!systemOn ? uiConfig.labels.system_off : error ? uiConfig.labels.system_offline : uiConfig.labels.system_active}
           </p>
           <p className="text-sm data-text" style={{ color: 'var(--text-secondary)' }}>
             {!systemOn
-              ? 'Power is disabled'
+              ? uiConfig.labels.power_disabled
               : error
-                ? 'Attempting to reconnect...'
+                ? uiConfig.labels.reconnecting
                 : `CCT: ${Math.round(stats?.currentCct ?? 5000)}K, Intensity: ${Math.round(stats?.currentLux ?? 250)}lux, ${currentTime}`}
           </p>
         </div>
@@ -284,7 +286,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 field-label">
             <Clock size={16} className={isTimerEnabled ? 'timer-icon-active' : ''} />
-            SYSTEM TIMER
+            {uiConfig.labels.system_timer}
           </div>
           <div className="tab-shell max-w-[220px] w-full">
             <button
@@ -292,21 +294,21 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
               onClick={() => void handleTimerToggle(true)}
               disabled={timerTogglePending}
             >
-              {timerTogglePending && !isTimerEnabled ? 'LOADING...' : 'ENABLED'}
+              {timerTogglePending && !isTimerEnabled ? '...' : uiConfig.labels.timer_enabled}
             </button>
             <button
               className={`tab-btn ${!isTimerEnabled ? 'active-green' : ''}`}
               onClick={() => void handleTimerToggle(false)}
               disabled={timerTogglePending}
             >
-              {timerTogglePending && isTimerEnabled ? 'LOADING...' : 'DISABLED'}
+              {timerTogglePending && isTimerEnabled ? '...' : uiConfig.labels.timer_disabled}
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
           <div className="relative">
-            <label className="field-label block mb-1">ON TIME</label>
+            <label className="field-label block mb-1">{uiConfig.labels.on_time}</label>
             <button
               type="button"
               onClick={() => openPicker('on')}
@@ -318,7 +320,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
             </button>
             {activePicker === 'on' ? (
               <div className="time-palette">
-                <div className="time-palette-title">ON TIME</div>
+                <div className="time-palette-title">{uiConfig.labels.on_time}</div>
                 <div className="time-edit-grid">
                   <div className="time-dial">
                     <div
@@ -363,7 +365,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
             ) : null}
           </div>
           <div className="relative">
-            <label className="field-label block mb-1">OFF TIME</label>
+            <label className="field-label block mb-1">{uiConfig.labels.off_time}</label>
             <button
               type="button"
               onClick={() => openPicker('off')}
@@ -375,7 +377,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
             </button>
             {activePicker === 'off' ? (
               <div className="time-palette">
-                <div className="time-palette-title">OFF TIME</div>
+                <div className="time-palette-title">{uiConfig.labels.off_time}</div>
                 <div className="time-edit-grid">
                   <div className="time-dial">
                     <div
@@ -429,7 +431,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
               color: 'var(--action-neutral-text)',
             }}
           >
-            {timerSetPending ? 'LOADING...' : 'SET'}
+            {timerSetPending ? '...' : uiConfig.labels.timer_set}
           </button>
           <button
             onClick={() => void handleClearTimer()}
@@ -441,7 +443,7 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
               color: 'var(--action-neutral-text)',
             }}
           >
-            {timerClearPending ? 'LOADING...' : 'CLEAR'}
+            {timerClearPending ? '...' : uiConfig.labels.timer_clear}
           </button>
         </div>
       </div>

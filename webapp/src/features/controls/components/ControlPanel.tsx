@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
-import { Settings2, Sun, Thermometer } from 'lucide-react';
+import { Minus, Plus, Settings2, Sun, Thermometer } from 'lucide-react';
 import { Card } from '../../../components/Card';
 import { ControlSlider } from '../../../components/ControlSlider';
 import { useUiConfig } from '../../../hooks/useUiConfig';
 import { useLuminaireControl } from '../hooks/useLuminaireControl';
 
-export const ControlPanel: React.FC = () => {
+interface ControlPanelProps {
+  variant?: 'card' | 'content';
+}
+
+export const ControlPanel: React.FC<ControlPanelProps> = ({ variant = 'card' }) => {
   const {
     mode,
     systemOn,
@@ -64,27 +68,35 @@ export const ControlPanel: React.FC = () => {
     setPendingActivation(false);
   };
 
-  return (
-    <Card title="Control Panel" icon={Settings2} headerClassName="accent-green" className="h-full" contentClassName="gap-2">
+  const inner = (
+    <div className="flex flex-col gap-2">
       <div className={`tab-shell ${modePulseClass}`}>
-        {(['MANUAL', 'AUTO'] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => handleModeToggle(m)}
-            className={`tab-btn ${mode === m ? 'active-green' : ''}`}
-            disabled={pending.mode || !systemOn}
-          >
-            {pending.mode && mode === m ? (
-              <span className="loading-dot" />
-            ) : (
-              m
-            )}
-          </button>
-        ))}
+        <button
+          onClick={() => handleModeToggle('MANUAL')}
+          className={`tab-btn ${mode === 'MANUAL' ? 'active-green' : ''}`}
+          disabled={pending.mode || !systemOn}
+        >
+          {pending.mode && mode === 'MANUAL' ? (
+            <span className="loading-dot" />
+          ) : (
+            uiConfig.labels.mode_manual
+          )}
+        </button>
+        <button
+          onClick={() => handleModeToggle('AUTO')}
+          className={`tab-btn ${mode === 'AUTO' ? 'active-green' : ''}`}
+          disabled={pending.mode || !systemOn}
+        >
+          {pending.mode && mode === 'AUTO' ? (
+            <span className="loading-dot" />
+          ) : (
+            uiConfig.labels.mode_auto
+          )}
+        </button>
       </div>
       {!systemOn ? (
         <p className="text-sm font-bold data-text text-right" style={{ color: 'var(--danger)' }}>
-          System is OFF. Control options are disabled.
+          {uiConfig.labels.power_disabled}
         </p>
       ) : null}
 
@@ -92,7 +104,7 @@ export const ControlPanel: React.FC = () => {
         <>
           <div className="soft-inset motion-soft p-2.5">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="field-label">SCENE SELECTION</div>
+              <div className="field-label">{uiConfig.labels.scene_selection}</div>
               {loadedScene && (
                 <span className="scene-loaded-badge">
                   {loadedScene}
@@ -113,7 +125,7 @@ export const ControlPanel: React.FC = () => {
                 color: 'var(--text-primary)',
               }}
             >
-              <option value="">Select Scene</option>
+              <option value="">{uiConfig.labels.select_scene}</option>
               {availableScenes.map((scene) => (
                 <option key={scene} value={scene}>
                   {scene}
@@ -122,18 +134,18 @@ export const ControlPanel: React.FC = () => {
             </select>
             {pending.sceneLoad ? (
               <p className="mt-1 text-sm font-bold data-text" style={{ color: 'var(--text-muted)' }}>
-                Loading scene...
+                {uiConfig.labels.loading_scene}
               </p>
             ) : null}
           </div>
 
           <div className="soft-inset motion-soft p-2.5">
             <p className="text-sm font-semibold data-text" style={{ color: 'var(--text-secondary)' }}>
-              Running: <span>{runningScene || 'None'}</span>
+              {uiConfig.labels.running_label}<span>{runningScene || uiConfig.labels.scene_none}</span>
             </p>
 
             <div className={`mt-1.5 inline-flex items-center px-3 py-1 rounded-md text-sm font-bold uppercase tracking-wide data-text ${schedulerStatus === 'idle' ? 'status-chip status-idle' : schedulerStatus === 'pending' ? 'status-chip status-pending' : 'status-chip status-running'}`}>
-              {schedulerStatus === 'idle' ? 'Idle' : schedulerStatus === 'pending' ? 'Pending' : 'Running'}
+              {schedulerStatus === 'idle' ? uiConfig.labels.status_idle : schedulerStatus === 'pending' ? uiConfig.labels.status_pending : uiConfig.labels.status_running}
             </div>
 
             {schedulerStatus === 'running' ? (
@@ -142,7 +154,7 @@ export const ControlPanel: React.FC = () => {
                   <div className="scene-progress-fill" style={{ width: `${progress}%` }} />
                 </div>
                 <p className="text-sm mt-1 font-semibold data-text" style={{ color: 'var(--text-muted)' }}>
-                  Progress {progress.toFixed(2)}%
+                  {uiConfig.labels.progress_label} {progress.toFixed(2)}%
                 </p>
               </div>
             ) : null}
@@ -160,7 +172,7 @@ export const ControlPanel: React.FC = () => {
                 border: '1px solid color-mix(in oklab, var(--action-strong-bg) 72%, var(--border-color) 28%)',
               }}
             >
-              {pending.sceneActivate ? <span className="loading-dot" /> : 'Activate'}
+              {pending.sceneActivate ? <span className="loading-dot" /> : uiConfig.labels.activate}
             </button>
             <button
               onClick={deactivateScene}
@@ -172,7 +184,7 @@ export const ControlPanel: React.FC = () => {
                 border: '1px solid var(--border-color)',
               }}
             >
-              {pending.sceneDeactivate ? <span className="loading-dot" /> : 'Deactivate'}
+              {pending.sceneDeactivate ? <span className="loading-dot" /> : uiConfig.labels.deactivate}
             </button>
           </div>
         </>
@@ -181,10 +193,10 @@ export const ControlPanel: React.FC = () => {
           <div className="soft-inset motion-soft p-2.5">
             <div className="flex items-center gap-1.5 mb-1.5 field-label">
               <Thermometer size={16} />
-              COLOR TEMPERATURE
+              {uiConfig.labels.color_temperature}
             </div>
             <ControlSlider
-              label="Color temperature"
+              label={uiConfig.labels.color_temperature}
               value={values.cct}
               min={uiConfig.cct.min}
               max={uiConfig.cct.max}
@@ -202,10 +214,10 @@ export const ControlPanel: React.FC = () => {
           <div className="soft-inset motion-soft p-2.5">
             <div className="flex items-center gap-1.5 mb-1.5 field-label">
               <Sun size={16} />
-              INTENSITY
+              {uiConfig.labels.intensity}
             </div>
             <ControlSlider
-              label="Intensity"
+              label={uiConfig.labels.intensity}
               value={values.intensity}
               min={uiConfig.intensity.min}
               max={uiConfig.intensity.max}
@@ -223,57 +235,60 @@ export const ControlPanel: React.FC = () => {
           {!systemOn ? (
             <div className="soft-inset p-3 text-center">
               <p className="text-sm font-bold data-text" style={{ color: 'var(--danger)' }}>
-                Manual controls are disabled. System is OFF.
+                {uiConfig.labels.power_disabled}
               </p>
             </div>
           ) : (
           <div className="grid grid-cols-2 gap-2 min-h-0">
             <div className="soft-inset p-2.5 text-center min-w-0">
-              <div className="field-label">Cool White</div>
-              <div className="text-2xl font-black mt-1 mb-3 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
+              <div className="field-label">{uiConfig.labels.cool_white}</div>
+              <div className="text-2xl font-black mt-1 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
                 {values.cw.toFixed(1)}%
               </div>
-              <div className="flex justify-center gap-3">
+              <div className="flex items-center justify-center gap-2 mt-2">
                 <button
-                  onClick={() => adjustLight('cw', -1)}
-                  disabled={!systemOn}
-                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
-                  style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
+                  className="icon-toggle"
+                  style={{ width: '28px', height: '28px' }}
+                  onClick={() => adjustLight('cw', -5)}
+                  disabled={!systemOn || pending.manual}
+                  aria-label="Decrease cool white"
                 >
-                  −
+                  <Minus size={14} />
                 </button>
                 <button
-                  onClick={() => adjustLight('cw', 1)}
-                  disabled={!systemOn}
-                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
-                  style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
+                  className="icon-toggle"
+                  style={{ width: '28px', height: '28px' }}
+                  onClick={() => adjustLight('cw', 5)}
+                  disabled={!systemOn || pending.manual}
+                  aria-label="Increase cool white"
                 >
-                  +
+                  <Plus size={14} />
                 </button>
               </div>
             </div>
-
             <div className="soft-inset p-2.5 text-center min-w-0">
-              <div className="field-label">Warm White</div>
-              <div className="text-2xl font-black mt-1 mb-3 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
+              <div className="field-label">{uiConfig.labels.warm_white}</div>
+              <div className="text-2xl font-black mt-1 data-text leading-none" style={{ color: 'var(--text-primary)' }}>
                 {values.ww.toFixed(1)}%
               </div>
-              <div className="flex justify-center gap-3">
+              <div className="flex items-center justify-center gap-2 mt-2">
                 <button
-                  onClick={() => adjustLight('ww', -1)}
-                  disabled={!systemOn}
-                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
-                  style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
+                  className="icon-toggle"
+                  style={{ width: '28px', height: '28px' }}
+                  onClick={() => adjustLight('ww', -5)}
+                  disabled={!systemOn || pending.manual}
+                  aria-label="Decrease warm white"
                 >
-                  −
+                  <Minus size={14} />
                 </button>
                 <button
-                  onClick={() => adjustLight('ww', 1)}
-                  disabled={!systemOn}
-                  className="h-10 w-10 rounded-lg font-black text-lg motion-soft btn-press"
-                  style={{ background: 'var(--card-bg-soft)', border: '1px solid var(--border-color)' }}
+                  className="icon-toggle"
+                  style={{ width: '28px', height: '28px' }}
+                  onClick={() => adjustLight('ww', 5)}
+                  disabled={!systemOn || pending.manual}
+                  aria-label="Increase warm white"
                 >
-                  +
+                  <Plus size={14} />
                 </button>
               </div>
             </div>
@@ -286,6 +301,12 @@ export const ControlPanel: React.FC = () => {
           ) : null}
         </>
       )}
-    </Card>
+    </div>
   );
+
+  return variant === 'card' ? (
+    <Card title={uiConfig.labels.control_panel} icon={Settings2} headerClassName="accent-green" className="h-full" contentClassName="gap-2">
+      {inner}
+    </Card>
+  ) : inner;
 };
