@@ -6,7 +6,7 @@ COPY webapp/package*.json /app/
 RUN npm ci
 
 COPY webapp /app
-COPY config.yaml /app/public/config.yaml
+# COPY config.yaml /app/public/config.yaml
 
 ARG VITE_API_URL
 ARG VITE_EVENT_GATEWAY_URL

@@ -1,5 +1,3 @@
-export type DashboardTheme =
-  | 'light-ivory'
-  | 'dark-obsidian';
+export type DashboardTheme = 'light-ivory';
 
-export type ThemeTone = 'light' | 'dark';
+export type ThemeTone = 'light';

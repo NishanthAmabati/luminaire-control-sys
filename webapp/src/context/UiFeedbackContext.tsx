@@ -20,7 +20,7 @@ export const UiFeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const pushError = useCallback((message: string) => {
     const id = Date.now() + Math.random();
-    const durationMs = 6500;
+    const durationMs = 4000;
     setErrors((prev) => [...prev, { id, message, durationMs }]);
     setTimeout(() => {
       setErrors((prev) => prev.filter((item) => item.id !== id));
@@ -29,7 +29,7 @@ export const UiFeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const pushSuccess = useCallback((message: string) => {
     const id = Date.now() + Math.random();
-    const durationMs = 4200;
+    const durationMs = 3000;
     setSuccesses((prev) => [...prev, { id, message, durationMs }]);
     setTimeout(() => {
       setSuccesses((prev) => prev.filter((item) => item.id !== id));
@@ -49,11 +49,11 @@ export const UiFeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   return (
     <UiFeedbackContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-3 max-w-[460px]">
+      <div className="toast-container">
         {successes.map((item) => (
           <div
             key={item.id}
-            className="toast-success rounded-lg border px-4 py-3 shadow-xl flex items-start gap-3 relative overflow-hidden"
+            className="toast-enter toast-success rounded-lg border px-4 py-3 shadow-xl flex items-start gap-3 relative overflow-hidden"
             style={{
               background: '#064e3b',
               borderColor: '#34d399',
@@ -78,7 +78,7 @@ export const UiFeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         {errors.map((item) => (
           <div
             key={item.id}
-            className="toast-error rounded-lg border px-4 py-3 shadow-xl flex items-start gap-3 relative overflow-hidden"
+            className="toast-enter toast-error rounded-lg border px-4 py-3 shadow-xl flex items-start gap-3 relative overflow-hidden"
             style={{
               background: '#7f1d1d',
               borderColor: '#ef4444',

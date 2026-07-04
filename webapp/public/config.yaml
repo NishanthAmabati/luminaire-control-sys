@@ -86,15 +86,60 @@ event_gateway:
 ui:
   cct:
     min: 2000
-    max: 7000
+    max: 8000
     default: 5000
     unit: "K"
     color: "#10b981"
   intensity:
     min: 0
-    max: 700
+    max: 800
     default: 250
     unit: "lux"
     color: "#f97316"
   polling_interval_ms: 2000
   latency_interval_ms: 2000
+  labels:
+    app_title: "Luminaire Control System"
+    system_toggle: "SYSTEM"
+    mode_manual: "MANUAL"
+    mode_auto: "AUTO"
+    activate: "Activate"
+    deactivate: "Deactivate"
+    control_panel: "Control Panel"
+    scene_selection: "SCENE SELECTION"
+    select_scene: "Select Scene"
+    color_temperature: "COLOR TEMPERATURE"
+    intensity: "INTENSITY"
+    cool_white: "Cool White"
+    warm_white: "Warm White"
+    system_active: "System Active"
+    system_offline: "System Offline"
+    system_off: "System OFF"
+    power_disabled: "Power is disabled"
+    reconnecting: "Attempting to reconnect..."
+    status_timer: "Status & Timer"
+    system_timer: "SYSTEM TIMER"
+    timer_enabled: "ENABLED"
+    timer_disabled: "DISABLED"
+    on_time: "ON TIME"
+    off_time: "OFF TIME"
+    timer_set: "SET"
+    timer_clear: "CLEAR"
+    loading_scene: "Loading scene..."
+    running_label: "Running: "
+    scene_none: "None"
+    status_running: "Running"
+    status_idle: "Idle"
+    status_pending: "Pending"
+    progress_label: "Progress"
+    luminaire_title: "Connected Luminaires"
+    search_luminaires: "Search luminaires..."
+    no_luminaires: "No Luminaires Connected"
+    total_luminaires: "Total Luminaires:"
+    latency: "Latency"
+    cpu: "CPU"
+    memory: "Memory"
+    temperature: "Temperature"
+    tab_controls: "Controls"
+    tab_timer: "Timer"
+    tab_luminaires: "Connected Luminaires"

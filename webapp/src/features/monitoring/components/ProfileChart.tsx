@@ -1,4 +1,4 @@
-import React, { useEffect, useState, startTransition } from 'react';
+import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { THEME_TOKENS } from '../../../config/theme.tokens';
 import type { DashboardTheme } from '../../../types/theme';
@@ -15,6 +15,7 @@ interface ProfileChartProps {
   currentVal: number;
   currentHour: number;
   clearAll?: boolean;
+  compactXAxis?: boolean;
 }
 
 export const ProfileChart: React.FC<ProfileChartProps> = ({
@@ -28,24 +29,11 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
   currentVal,
   currentHour,
   clearAll = false,
+  compactXAxis = false,
 }) => {
   const tokens = THEME_TOKENS[theme];
   const hasProfile = data.length > 0;
   const sourceData = data.map(([x, y]) => [Number(x), Number(y)] as [number, number]);
-  const [needsEntryAnimation, setNeedsEntryAnimation] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setNeedsEntryAnimation(false), 400);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    startTransition(() => {
-      setNeedsEntryAnimation(true);
-    });
-    const timer = setTimeout(() => setNeedsEntryAnimation(false), 400);
-    return () => clearTimeout(timer);
-  }, [hasProfile]);
 
   const interpolate = (x: number) => {
     if (sourceData.length === 0) return currentVal;
@@ -63,7 +51,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
   };
 
   const denseData: [number, number][] = hasProfile
-    ? Array.from({ length: 90 }, (_, i) => {
+    ? Array.from({ length: 60 }, (_, i) => {
         const x = i * 0.5;
         const base = interpolate(x);
 
@@ -131,11 +119,11 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
     animationEasing: 'cubicOut' as const,
     title: [
       {
-        text: `${title.toUpperCase()} ${hasProfile ? 'PROFILE' : 'TRACE'}`,
-        left: 'center',
-        top: 8,
+        text: `${title.toUpperCase()} PROFILE`,
+        left: compactXAxis ? 10 : 'center',
+        top: compactXAxis ? 6 : 8,
         textStyle: {
-          fontSize: 14,
+          fontSize: compactXAxis ? 11 : 14,
           fontWeight: 800,
           color: tokens.textSecondary,
           letterSpacing: 1,
@@ -143,14 +131,14 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       },
       {
         text: `Current ${title}: ${currentVal.toFixed(1)} ${unit}`,
-        right: 10,
-        top: 6,
-        padding: [7, 12],
+        right: compactXAxis ? 6 : 10,
+        top: compactXAxis ? 26 : 6,
+        padding: compactXAxis ? [4, 8] : [7, 12],
         borderRadius: 6,
         backgroundColor: tokens.chartBadgeBg,
         textStyle: {
           color: tokens.chartBadgeText,
-          fontSize: 12.5,
+          fontSize: compactXAxis ? 10 : 12.5,
           fontWeight: 700,
         },
       },
@@ -179,7 +167,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       },
     },
     legend: {
-      show: !clearAll,
+      show: !clearAll && !compactXAxis,
       left: 10,
       top: 36,
       textStyle: { color: tokens.textMuted, fontSize: 10.5 },
@@ -192,35 +180,22 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       top: 30,
       iconStyle: { borderColor: tokens.textMuted },
       feature: {
-        dataZoom: { yAxisIndex: 'none' },
         restore: {},
         saveAsImage: {},
       },
     },
-    dataZoom: hasProfile
-      ? [
-          { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
-          {
-            type: 'slider',
-            height: 14,
-            bottom: 12,
-            borderColor: tokens.border,
-            backgroundColor: tokens.cardBgSoft,
-            fillerColor: `${tokens.accentBlue}44`,
-          },
-        ]
-      : [],
+    dataZoom: [],
     grid: {
-      left: 60,
-      right: 22,
-      bottom: 44,
-      top: 74,
+      left: compactXAxis ? 46 : 60,
+      right: compactXAxis ? 14 : 22,
+      bottom: compactXAxis ? 28 : 44,
+      top: compactXAxis ? 46 : 74,
     },
     xAxis: {
       type: 'value',
       min: 0,
       max: 24,
-      interval: 2,
+      interval: compactXAxis ? 4 : 2,
       axisLabel: {
         color: tokens.chartAxis,
         fontSize: 11.5,
@@ -239,7 +214,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
       type: 'value',
       min: yMin,
       max: yMax,
-      interval: title === 'CCT' ? 1000 : 100,
+      splitNumber: compactXAxis ? 3 : 5,
       axisLabel: {
         color: tokens.chartAxis,
         fontSize: 13,
@@ -326,7 +301,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
   };
 
   return (  
-    <div className={`chart-shell p-2 md:p-3 h-[350px] ${needsEntryAnimation ? 'entering' : ''}`}>
+    <div className="chart-shell p-2 md:p-3 h-[350px]">
       <ReactECharts 
         option={option} 
         style={{ height: '100%', width: '100%' }} 
