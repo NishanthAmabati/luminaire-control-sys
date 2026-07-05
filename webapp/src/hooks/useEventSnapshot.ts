@@ -57,6 +57,8 @@ export const useEventSnapshot = () => {
   useEffect(() => {
     let cancelled = false;
     let eventSource: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
     let snapshotRefreshInFlight = false;
     let refreshQueued = false;
 
@@ -93,6 +95,7 @@ export const useEventSnapshot = () => {
 
       eventSource.onopen = () => {
         setStreamError(null);
+        reconnectAttempt = 0;
       };
 
       eventSource.onmessage = (event) => {
@@ -116,7 +119,13 @@ export const useEventSnapshot = () => {
       };
 
       eventSource.onerror = () => {
+        eventSource?.close();
         setStreamError('Gateway SSE stream disconnected, retrying...');
+
+        if (cancelled) return;
+        const delay = Math.min(1000 * 2 ** reconnectAttempt, 30000);
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(() => connectSse(), delay);
       };
     };
 
@@ -125,6 +134,7 @@ export const useEventSnapshot = () => {
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       eventSource?.close();
     };
   }, [gatewayHttp]);
