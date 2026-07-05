@@ -60,6 +60,7 @@ class SystemState:
         return cls(
             system_on=data.get("system_on", False),
             mode=data.get("mode", "MANUAL"),
+            metrics=MetricsState(**data.get("metrics", {})),
             timer=TimerState(**data.get("timer", {})),
             auto=AutoState(**data.get("auto", {})),
             manual=ManualState(**data.get("manual", {})),
