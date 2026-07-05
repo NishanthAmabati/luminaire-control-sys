@@ -13,6 +13,12 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+    memswap_limit: 256M
 
   luminaire-service:
     build:
@@ -42,6 +48,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    memswap_limit: 512M
 
   state-service:
     build:
@@ -65,6 +77,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    memswap_limit: 512M
 
   scheduler-service:
     build:
@@ -87,6 +105,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 192M
+    memswap_limit: 384M
 
   timer-service:
     build:
@@ -103,6 +127,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 192M
+    memswap_limit: 384M
 
   metrics-service:
     build:
@@ -118,6 +148,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 192M
+    memswap_limit: 384M
 
   event-gateway:
     build:
@@ -143,6 +179,12 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    memswap_limit: 512M
 
   webapp:
     build:
@@ -160,6 +202,12 @@ services:
       event-gateway:
         condition: service_started
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+    memswap_limit: 256M
 
 volumes:
   redis-data:
