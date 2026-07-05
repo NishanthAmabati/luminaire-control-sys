@@ -65,17 +65,46 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SELECTED_SHA }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Run tests
+
+      - name: Install Python dependencies
         run: |
+          pip install --upgrade pip
           for service in state_service scheduler_service timer_service luminaire_service metrics_service; do
             if [ -f "$service/requirements.txt" ]; then
-              echo "Testing $service..."
+              echo "Installing $service dependencies..."
+              pip install -r "$service/requirements.txt"
             fi
           done
+          pip install pytest pytest-asyncio
+
+      - name: Run Python tests
+        run: python -m pytest -v --junitxml=test-results.xml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install webapp dependencies
+        run: cd webapp && npm ci
+
+      - name: Build webapp
+        run: cd webapp && npm run build
+
+      - name: Run webapp unit tests
+        run: cd webapp && npx vitest run
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
 
   setup:
     name: Setup
