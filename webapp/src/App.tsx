@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { PortraitLayout } from './layouts/PortraitLayout';
 import { useDashboardTheme } from './hooks/useDashboardTheme';
@@ -23,6 +23,7 @@ const AppShell: React.FC = () => {
   const [systemOn, setSystemOn] = useState(true);
   const [powerPending, setPowerPending] = useState(false);
   const [toggleAnimating, setToggleAnimating] = useState(false);
+  const animTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewport, setViewport] = useState<Viewport>(() => resolveViewport(window.innerWidth));
   const { theme } = useDashboardTheme();
   const { config: uiConfig } = useUiConfig();
@@ -57,6 +58,7 @@ const AppShell: React.FC = () => {
       if (mql2) mql2.removeEventListener('change', check);
       if (mql3) mql3.removeEventListener('change', check);
       window.removeEventListener('resize', check);
+      if (animTimeout.current) clearTimeout(animTimeout.current);
     };
   }, []);
 
@@ -88,7 +90,7 @@ const AppShell: React.FC = () => {
       pushError(`Failed to toggle system power. ${unknownToMessage(err)}`);
     } finally {
       setPowerPending(false);
-      setTimeout(() => setToggleAnimating(false), 200);
+      animTimeout.current = setTimeout(() => setToggleAnimating(false), 200);
     }
   };
 
