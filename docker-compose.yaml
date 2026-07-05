@@ -13,6 +13,12 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+    memswap_limit: 256M
 
   luminaire-service:
     build:

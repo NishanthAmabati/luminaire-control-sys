@@ -2,7 +2,7 @@ import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { THEME_TOKENS } from '../../../config/theme.tokens';
 import type { DashboardTheme } from '../../../types/theme';
-import * as echarts from 'echarts';
+import { graphic } from 'echarts';
 
 interface DualProfileChartProps {
   theme: DashboardTheme;
@@ -108,7 +108,7 @@ export const DualProfileChart: React.FC<DualProfileChartProps> = ({
 
   const cctGrad = () => {
     const g = tokens.chartGradients.cct;
-    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    return new graphic.LinearGradient(0, 0, 0, 1, [
       { offset: 0, color: g[0] },
       { offset: 0.3, color: g[1] },
       { offset: 0.6, color: g[2] },
@@ -119,7 +119,7 @@ export const DualProfileChart: React.FC<DualProfileChartProps> = ({
 
   const intGrad = () => {
     const g = tokens.chartGradients.intensity;
-    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    return new graphic.LinearGradient(0, 0, 0, 1, [
       { offset: 0, color: g[0] },
       { offset: 0.4, color: g[1] },
       { offset: 1, color: g[2] },
