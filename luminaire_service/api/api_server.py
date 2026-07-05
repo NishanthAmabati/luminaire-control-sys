@@ -1,11 +1,37 @@
+import os
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Response, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from models.requests import LuminaireControlRequest
 
 log = structlog.get_logger()
 
 def createAPI(luminaire_service):
     app = FastAPI(title="Luminaire Control API")
+
+    cors_origins_raw = os.getenv('CORS_ORIGINS', '')
+    cors_origins = [origin.strip() for origin in cors_origins_raw.split(',') if origin.strip()]
+    if not cors_origins:
+        cors_origins = [
+            'http://localhost',
+            'http://127.0.0.1',
+            'http://localhost:8080',
+            'http://127.0.0.1:8080',
+        ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=False,
+        allow_methods=['*'],
+        allow_headers=['*'],
+    )
+
+    log.info("cors_configured", origins=cors_origins)
+
+    @app.options("/{path:path}")
+    async def preflight_handler(path: str):
+        return Response(status_code=204)
 
     @app.get("/health")
     async def health_alias():
