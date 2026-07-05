@@ -10,6 +10,7 @@ log = structlog.get_logger()
 class LuminaireService:
     def __init__(self, redisURL: str, channel: str):
         self.luminaires: Dict[str, dict] = {} # dict of luminaire ip -> dict of context
+        self._lock = asyncio.Lock()
         self._tasks = set()
         self.redis = Redis.from_url(redisURL)
         self.channel = channel
@@ -29,12 +30,13 @@ class LuminaireService:
         return status
 
     async def register(self, ip: str, writer: asyncio.StreamWriter):
-        self.luminaires[ip] = {
-            "writer": writer,
-            "ip34": CommandBuilder.extract_ip34(ip),
-            "log": log.bind(ip=ip)
-        }
-        l_log = self.luminaires[ip]["log"]
+        async with self._lock:
+            self.luminaires[ip] = {
+                "writer": writer,
+                "ip34": CommandBuilder.extract_ip34(ip),
+                "log": log.bind(ip=ip)
+            }
+            l_log = self.luminaires[ip]["log"]
         l_log.info("luminaire_registered")
         
         try:
@@ -48,7 +50,8 @@ class LuminaireService:
             l_log.error("redis_publish_failed", redis_event="connection", error=str(e), exc_info=True)
 
     async def unregister(self, ip: str):
-        entry = self.luminaires.pop(ip, None)
+        async with self._lock:
+            entry = self.luminaires.pop(ip, None)
         l_log = entry.get("log", log.bind(ip=ip)) if entry else log.bind(ip=ip)
         writer = entry.get("writer") if entry else None
         
@@ -73,20 +76,22 @@ class LuminaireService:
             l_log.error("redis_publish_failed", redis_event="disconnection", error=str(e), exc_info=True)
 
     async def list_luminaires(self):
-        return list(self.luminaires.keys())
+        async with self._lock:
+            return list(self.luminaires.keys())
 
     async def send_luminaire(self, ip: str, command: str):
-        if not self.luminaires:
-            log.warning("send_failed_no_luminaires_connected")
-            return
-            
-        entry = self.luminaires.get(ip)
-        if not entry:
-            log.error("send_failed_luminaire_not_found", ip=ip)
-            return
+        async with self._lock:
+            if not self.luminaires:
+                log.warning("send_failed_no_luminaires_connected")
+                return
+                
+            entry = self.luminaires.get(ip)
+            if not entry:
+                log.error("send_failed_luminaire_not_found", ip=ip)
+                return
 
-        l_log = entry["log"]
-        writer = entry["writer"]
+            l_log = entry["log"]
+            writer = entry["writer"]
         
         try:
             writer.write(command.encode())
@@ -105,12 +110,14 @@ class LuminaireService:
             raise
 
     async def send_luminaires(self, cw: float, ww: float):
-        if not self.luminaires:
-            log.warning("broadcast_skipped_no_luminaires_connected")
-            return
+        async with self._lock:
+            if not self.luminaires:
+                log.warning("broadcast_skipped_no_luminaires_connected")
+                return
+            items = list(self.luminaires.items())
 
         cw_ww = CommandBuilder.build_cw_ww(cw, ww)
-        for ip, entry in self.luminaires.items():
+        for ip, entry in items:
             l_log = entry["log"]
             writer = entry["writer"]
             ip34 = entry["ip34"]
@@ -124,10 +131,11 @@ class LuminaireService:
             except Exception:
                 l_log.error("broadcast_write_failed", exc_info=True)
                 
-        log.info("broadcast_completed", count=len(self.luminaires), payload=cw_ww)
+        log.info("broadcast_completed", count=len(items), payload=cw_ww)
     
     async def publish_ack(self, ip: str, cw: float, ww: float):
-        l_log = self.luminaires.get(ip, {}).get("log", log.bind(ip=ip))
+        async with self._lock:
+            l_log = self.luminaires.get(ip, {}).get("log", log.bind(ip=ip))
         try:
             payload = {
                 "event": "ack",
@@ -156,9 +164,10 @@ class LuminaireService:
         except Exception:
             log.error("redis_shutdown_failed", exc_info=True)
             
-        items = list(self.luminaires.items())
+        async with self._lock:
+            items = list(self.luminaires.items())
+            self.luminaires.clear()
+
         for ip, _ in items:
             await self.unregister(ip)
-            
-        self.luminaires.clear()
         log.info("service_shutdown_complete")
