@@ -52,6 +52,7 @@ services:
   scheduler:
     scenes_dir: "/app/scheduler_service/scenes"
     interval: 1 #seconds
+    interpolation_mode: "linear"
     luminaire_service_url: "http://luminaire-service:8000/devices/luminaires/set"
 
     redis:

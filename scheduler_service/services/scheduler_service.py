@@ -26,6 +26,7 @@ class Scheduler:
             tz,
             scene_loader,
             scheduler_interval,
+            interpolation_mode,
             pub_chan,
             cct_min, cct_max,
             lux_min, lux_max,
@@ -40,7 +41,7 @@ class Scheduler:
         self.runtime.available_scenes = list(self.scenes.keys())
         self.scheduler_interval = scheduler_interval
         self.pub_chan = pub_chan
-        self.interpolator = Interpolator(self.runtime, self.scenes, self.tz)
+        self.interpolator = Interpolator(self.runtime, self.scenes, self.tz, interpolation_mode)
         self.channeler = LightChanneler(
                     cct_min=cct_min, cct_max=cct_max, 
                     lux_min=lux_min, lux_max=lux_max
@@ -108,11 +109,16 @@ class Scheduler:
             log.debug("tick_executed", system_on=self.runtime.system_on, cw=self.runtime.cw, ww=self.runtime.ww)
             await self.publish_runtime()
 
+    def _compute_tick_interval(self):
+        if self.runtime.system_on:
+            return self.scheduler_interval
+        return max(self.scheduler_interval * 5, 5.0)
+
     async def run(self):
         log.info("scheduler_loop_started", interval_s=self.scheduler_interval)
         while self.running:
             await self.tick()
-            await asyncio.sleep(self.scheduler_interval)
+            await asyncio.sleep(self._compute_tick_interval())
 
     async def publish_available_scenes(self):
         payload = {

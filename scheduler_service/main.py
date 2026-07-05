@@ -42,6 +42,7 @@ async def main():
             tz=require_env("TIMEZONE"),
             scene_loader=scene_loader,
             scheduler_interval=float(require_env("SCHEDULER_INTERVAL")),
+            interpolation_mode=require_env("SCHEDULER_INTERPOLATION_MODE"),
             pub_chan=require_env("SCHEDULER_REDIS_PUB"),
             cct_min=int(require_env("SCALES_CCT_MIN")),
             cct_max=int(require_env("SCALES_CCT_MAX")),

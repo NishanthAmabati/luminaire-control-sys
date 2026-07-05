@@ -9,7 +9,7 @@ from services.scheduler import Scheduler
 from clients.state_client import StateClient
 
 log = structlog.get_logger()
-logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
 class TimerService:
 
@@ -71,20 +71,17 @@ class TimerService:
         log.info("timer_service_shutting_down")
         self.scheduler.shutdown()
 
-    async def toggle_timer(self):
+    async def toggle_timer(self, payload=None):
         try:
-            raw = await self.redis.get("system:state")
-            if not raw:
-                log.warning("timer_toggle_skipped", reason="state_not_found_in_redis")
-                return
-            
-            state = json.loads(raw)
-            timer_state = state.get("timer", {})
-            
-            self.runtime.timer_enabled = timer_state.get("enabled")
-            self.runtime.timer_start = timer_state.get("start")
-            self.runtime.timer_end = timer_state.get("end")
-            
+            enabled = payload.get("enabled") if payload else None
+            if enabled is None:
+                raw = await self.redis.get("system:state")
+                if raw:
+                    state = json.loads(raw)
+                    enabled = state.get("timer", {}).get("enabled")
+
+            self.runtime.timer_enabled = enabled
+
             if self.runtime.timer_enabled and self.runtime.timer_start and self.runtime.timer_end:
                 self.scheduler.start()
                 self.scheduler.configure(self.runtime.timer_start, self.runtime.timer_end)
@@ -95,22 +92,19 @@ class TimerService:
         except Exception as e:
             log.error("timer_toggle_failed", error=str(e), exc_info=True)
 
-    async def configure_timer(self):
+    async def configure_timer(self, payload=None):
         try:
-            raw = await self.redis.get("system:state")
-            if not raw:
-                log.warning("timer_configure_skipped", reason="state_not_found_in_redis")
-                return
-            
-            state = json.loads(raw)
-            timer_state = state.get("timer", {})
-            
+            start = payload.get("start") if payload else None
+            end = payload.get("end") if payload else None
+
             if not self.runtime.timer_enabled:
                 log.info("timer_config_skipped", reason="timer_not_enabled", enabled=self.runtime.timer_enabled)
                 return
-                
-            self.runtime.timer_start = timer_state.get("start")
-            self.runtime.timer_end = timer_state.get("end")
+
+            if start:
+                self.runtime.timer_start = start
+            if end:
+                self.runtime.timer_end = end
             
             if self.runtime.timer_enabled:
                 self.scheduler.start()
@@ -120,20 +114,12 @@ class TimerService:
         except Exception as e:
             log.error("timer_configure_failed", error=str(e), exc_info=True)
             
-    async def clear_timer(self):
+    async def clear_timer(self, payload=None):
         try:
-            raw = await self.redis.get("system:state")
-            if not raw:
-                log.warning("timer_clear_skipped", reason="state_not_found_in_redis")
-                return
-                
-            state = json.loads(raw)
-            timer_state = state.get("timer", {})
-            
-            self.runtime.timer_enabled = timer_state.get("enabled")
-            self.runtime.timer_start = timer_state.get("start")
-            self.runtime.timer_end = timer_state.get("end")
-            
+            self.runtime.timer_enabled = False
+            self.runtime.timer_start = None
+            self.runtime.timer_end = None
+
             self.scheduler.clear_jobs()
             await self.publish_state()
         except Exception as e:

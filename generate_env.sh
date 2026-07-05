@@ -172,6 +172,7 @@ lines+=(
 
 SCHEDULER_SCENES_DIR="/app/scheduler_service/scenes"
 SCHEDULER_INTERVAL="$(get_yaml '.services.scheduler.interval')"
+SCHEDULER_INTERPOLATION_MODE="$(get_yaml '.services.scheduler.interpolation_mode')"
 SCHEDULER_LUMINAIRE_URL="$(get_yaml '.services.scheduler.luminaire_service_url')"
 SCHEDULER_LUMINAIRE_URL="$(replace_host "$SCHEDULER_LUMINAIRE_URL" "luminaire-service")"
 SCALES_CCT_MIN="$(get_yaml '.scales.cct.min')"
@@ -183,6 +184,7 @@ TIMEZONE="$(get_yaml '.timezone')"
 lines+=(
   "SCHEDULER_SCENES_DIR=$SCHEDULER_SCENES_DIR"
   "SCHEDULER_INTERVAL=$SCHEDULER_INTERVAL"
+  "SCHEDULER_INTERPOLATION_MODE=$SCHEDULER_INTERPOLATION_MODE"
   "SCHEDULER_LUMINAIRE_URL=$SCHEDULER_LUMINAIRE_URL"
   "SCALES_CCT_MIN=$SCALES_CCT_MIN"
   "SCALES_CCT_MAX=$SCALES_CCT_MAX"
