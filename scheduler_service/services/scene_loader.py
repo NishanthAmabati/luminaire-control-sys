@@ -84,11 +84,14 @@ class SceneLoader:
                     path,
                     i,
                 )
-                
-                points.append({
-                    "time": t,
-                    "cct": cct,
-                    "lux": lux,
-                })
-                
+
+                is_initial = False
+                if row.get("initial", "").strip().lower() in ("true", "1", "yes"):
+                    is_initial = True
+
+                pt = {"time": t, "cct": cct, "lux": lux}
+                if is_initial:
+                    pt["initial"] = True
+                points.append(pt)
+
         return sorted(points, key=lambda x: x["time"])

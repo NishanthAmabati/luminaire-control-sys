@@ -30,6 +30,19 @@ class Interpolator:
             (now_dt.microsecond / 1_000_000)
         )
 
+        initial = scene[0] if scene[0].get("initial") else None
+        if initial:
+            first_real = scene[1] if len(scene) > 1 else None
+            if first_real:
+                t_first = first_real["time"].hour * 3600 + first_real["time"].minute * 60 + first_real["time"].second
+                if now_sec < t_first:
+                    self.runtime.cct = initial["cct"]
+                    self.runtime.lux = initial["lux"]
+                    self.runtime.progress = 0.0
+                    log.debug("interpolation_initial_hold", cct=self.runtime.cct, lux=self.runtime.lux)
+                    return
+            scene = [p for p in scene if not p.get("initial")]
+
         for i in range(len(scene)):
             curr = scene[i]
             next_ = scene[(i + 1) % len(scene)]
@@ -49,7 +62,6 @@ class Interpolator:
                 span = t2_adj - t1_adj
                 factor = (now_adj - t1_adj) / span if span > 0 else 0
 
-                # Linear Interpolation
                 self.runtime.cct = round((curr["cct"] + (next_["cct"] - curr["cct"]) * factor), 2)
                 self.runtime.lux = round((curr["lux"] + (next_["lux"] - curr["lux"]) * factor), 2)
 
