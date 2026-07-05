@@ -3,19 +3,17 @@ import os
 import structlog
 
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 from services.metrics_service import MetricsService
 
 configure_logging()
 log = structlog.get_logger()
 
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if value is None or value == "":
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
-
 async def main():
     log.info("metrics_service_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("METRICS_REDIS_PUB")
+    require_env("METRICS_INTERVAL")
     
     try:
         service = MetricsService(
