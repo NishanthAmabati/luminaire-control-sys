@@ -26,6 +26,7 @@ class Scheduler:
             tz,
             scene_loader,
             scheduler_interval,
+            interpolation_mode,
             pub_chan,
             cct_min, cct_max,
             lux_min, lux_max,
@@ -40,7 +41,7 @@ class Scheduler:
         self.runtime.available_scenes = list(self.scenes.keys())
         self.scheduler_interval = scheduler_interval
         self.pub_chan = pub_chan
-        self.interpolator = Interpolator(self.runtime, self.scenes, self.tz)
+        self.interpolator = Interpolator(self.runtime, self.scenes, self.tz, interpolation_mode)
         self.channeler = LightChanneler(
                     cct_min=cct_min, cct_max=cct_max, 
                     lux_min=lux_min, lux_max=lux_max
