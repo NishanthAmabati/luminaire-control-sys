@@ -19,6 +19,12 @@ services:
           cpus: '0.3'
           memory: 128M
     memswap_limit: 256M
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
 
   luminaire-service:
     build:
@@ -54,6 +60,10 @@ services:
           cpus: '0.5'
           memory: 256M
     memswap_limit: 512M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   state-service:
     build:
@@ -83,6 +93,10 @@ services:
           cpus: '0.5'
           memory: 256M
     memswap_limit: 512M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   scheduler-service:
     build:
@@ -111,6 +125,10 @@ services:
           cpus: '0.3'
           memory: 192M
     memswap_limit: 384M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   timer-service:
     build:
@@ -133,6 +151,10 @@ services:
           cpus: '0.3'
           memory: 192M
     memswap_limit: 384M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   metrics-service:
     build:
@@ -154,6 +176,10 @@ services:
           cpus: '0.3'
           memory: 192M
     memswap_limit: 384M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   event-gateway:
     build:
@@ -185,6 +211,10 @@ services:
           cpus: '0.3'
           memory: 256M
     memswap_limit: 512M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   webapp:
     build:
@@ -208,6 +238,10 @@ services:
           cpus: '0.3'
           memory: 128M
     memswap_limit: 256M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   redis-data:
