@@ -1,0 +1,82 @@
+{
+  "title": "Luminaire Control Sys — System Health",
+  "uid": "lcs-system-health",
+  "editable": true,
+  "tags": ["luminaire", "health"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "panels": [
+    {
+      "title": "Service Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "time() - process_start_time_seconds{job=~\"scheduler|state|timer|metrics|luminaire\"}",
+        "legendFormat": "{{job}}"
+      }]
+    },
+    {
+      "title": "Redis Connected Clients",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 0 },
+      "targets": [{
+        "expr": "redis_connected_clients",
+        "legendFormat": "clients"
+      }]
+    },
+    {
+      "title": "CPU Usage per Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+      "targets": [{
+        "expr": "process_cpu_seconds_total{job=~\"scheduler|state|timer|metrics|luminaire\"}",
+        "legendFormat": "{{job}}"
+      }]
+    },
+    {
+      "title": "Memory Usage (RSS)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "process_resident_memory_bytes{job=~\"scheduler|state|timer|metrics|luminaire\"}",
+        "legendFormat": "{{job}}"
+      }]
+    },
+    {
+      "title": "Container Health",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 4 },
+      "targets": [{
+        "expr": "up{job=~\"scheduler|state|timer|metrics|luminaire|redis|gateway|web\"}",
+        "legendFormat": "{{job}} {{instance}}"
+      }]
+    },
+    {
+      "title": "System Temperature",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "targets": [{
+        "expr": "node_hwmon_temp_celsius",
+        "legendFormat": "{{sensor}}"
+      }]
+    },
+    {
+      "title": "Disk Usage",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 3, "x": 12, "y": 8 },
+      "targets": [{
+        "expr": "100 - (node_filesystem_free_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"} * 100)",
+        "legendFormat": "disk %"
+      }]
+    },
+    {
+      "title": "Redis Memory",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 3, "x": 15, "y": 8 },
+      "targets": [{
+        "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+        "legendFormat": "redis mem %"
+      }]
+    }
+  ]
+}

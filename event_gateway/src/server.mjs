@@ -355,10 +355,6 @@ app.get('/events', (req, res) => {
   clients.add(res);
   logger.info({ current_clients: clients.size }, 'sse_client_connected');
 
-  res.write(
-    `data: ${JSON.stringify({ type: 'snapshot', snapshot })}\n\n`
-  );
-
   const hb = setInterval(() => {
       try {
           res.write(': ping\n\n');
@@ -373,6 +369,16 @@ app.get('/events', (req, res) => {
     clients.delete(res);
     logger.info({ current_clients: clients.size }, 'sse_client_disconnected');
   });
+
+  try {
+    res.write(
+      `data: ${JSON.stringify({ type: 'snapshot', snapshot })}\n\n`
+    );
+  } catch (err) {
+    clearInterval(hb);
+    clients.delete(res);
+    logger.warn({ err }, 'sse_initial_write_failed');
+  }
 });
 
 setInterval(() => {
@@ -406,11 +412,30 @@ const redis = createClient({
 
 redis.on('error', (e) => logger.error({ err: e }, 'redis_main_client_error'));
 
-await redis.connect();
+const connectWithRetry = async (client, name) => {
+  let attempts = 0;
+  const maxAttempts = 12;
+  while (attempts < maxAttempts) {
+    attempts += 1;
+    try {
+      await client.connect();
+      return;
+    } catch (err) {
+      logger.warn({ err, name, attempts, maxAttempts }, 'redis_connect_attempt_failed');
+      if (attempts >= maxAttempts) {
+        logger.error({ name, attempts }, 'redis_connect_failed_after_retries');
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, REDIS_RECONNECT_MS));
+    }
+  }
+};
+
+await connectWithRetry(redis, 'redis_main');
 
 const sub = redis.duplicate();
 sub.on('error', (e) => logger.error({ err: e }, 'redis_sub_client_error'));
-await sub.connect();
+await connectWithRetry(sub, 'redis_sub');
 
 await sub.subscribe([CHANNELS.scheduler, CHANNELS.luminaires, CHANNELS.timer, CHANNELS.metrics], (raw, channel) => {
   try {
@@ -458,6 +483,7 @@ const startBootstrap = async () => {
 startBootstrap().catch(err => logger.error({ err }, 'bootstrap_process_crashed'));
 
 const server = app.listen(PORT, () => logger.info({ port: PORT }, 'event_gateway_started'));
+server.on('error', (err) => { logger.error({ err }, 'server_start_failed'); process.exit(1); });
 
 /* ===============================
    GRACEFUL SHUTDOWN
