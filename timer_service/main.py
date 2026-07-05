@@ -4,20 +4,20 @@ import structlog
 
 from redis.asyncio import Redis
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 from services.timer_service import TimerService
 from services.redis_listener import RedisListener
 
 configure_logging()
 log = structlog.get_logger()
 
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
-
 async def main():
     log.info("timer_service_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("TIMER_REDIS_PUB")
+    require_env("TIMEZONE")
+    require_env("TIMER_STATE_SERVICE_URL")
+    require_env("STATE_REDIS_PUB")
     
     try:
         redis = Redis.from_url(require_env("REDIS_URL"))

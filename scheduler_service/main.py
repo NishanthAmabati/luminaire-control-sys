@@ -4,6 +4,7 @@ import structlog
 
 from redis.asyncio import Redis
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 from services.scene_loader import SceneLoader
 from services.scheduler_service import Scheduler
 from services.redis_listener import RedisListener
@@ -11,14 +12,20 @@ from services.redis_listener import RedisListener
 configure_logging()
 log = structlog.get_logger()
 
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if value is None or value == "":
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
-
 async def main():
     log.info("scheduler_service_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("SCHEDULER_SCENES_DIR")
+    require_env("SCALES_CCT_MIN")
+    require_env("SCALES_CCT_MAX")
+    require_env("SCALES_LUX_MIN")
+    require_env("SCALES_LUX_MAX")
+    require_env("TIMEZONE")
+    require_env("SCHEDULER_INTERVAL")
+    require_env("SCHEDULER_INTERPOLATION_MODE")
+    require_env("SCHEDULER_REDIS_PUB")
+    require_env("SCHEDULER_LUMINAIRE_URL")
+    require_env("STATE_REDIS_PUB")
     
     try:
         redis = Redis.from_url(require_env("REDIS_URL"))

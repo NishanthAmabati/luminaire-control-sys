@@ -5,18 +5,13 @@ import structlog
 
 from redis.asyncio import Redis
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 from services.state_service import StateService
 from clients.redis_listener import RedisListener
 from api.api_server import createAPI
 
 configure_logging()
 log = structlog.get_logger()
-
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
 
 def parse_bool(value: str) -> bool:
     return value.lower() in ("1", "true", "yes", "on")
@@ -36,6 +31,13 @@ async def startFastAPI(app):
 
 async def main():
     log.info("state_service_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("STATE_API_HOST")
+    require_env("STATE_API_PORT")
+    require_env("STATE_API_LOOP")
+    require_env("STATE_API_LOG_LEVEL")
+    require_env("SCHEDULER_REDIS_PUB")
+    require_env("METRICS_REDIS_PUB")
     
     try:
         redis_url = require_env("REDIS_URL")
