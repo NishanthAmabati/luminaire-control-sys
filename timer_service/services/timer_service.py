@@ -9,7 +9,7 @@ from services.scheduler import Scheduler
 from clients.state_client import StateClient
 
 log = structlog.get_logger()
-logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
 class TimerService:
 
