@@ -108,11 +108,16 @@ class Scheduler:
             log.debug("tick_executed", system_on=self.runtime.system_on, cw=self.runtime.cw, ww=self.runtime.ww)
             await self.publish_runtime()
 
+    def _compute_tick_interval(self):
+        if self.runtime.system_on:
+            return self.scheduler_interval
+        return max(self.scheduler_interval * 5, 5.0)
+
     async def run(self):
         log.info("scheduler_loop_started", interval_s=self.scheduler_interval)
         while self.running:
             await self.tick()
-            await asyncio.sleep(self.scheduler_interval)
+            await asyncio.sleep(self._compute_tick_interval())
 
     async def publish_available_scenes(self):
         payload = {
