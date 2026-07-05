@@ -43,4 +43,8 @@ ENV GATEWAY_PORT=$GATEWAY_PORT \
 COPY --from=deps /app/node_modules /app/node_modules
 COPY event_gateway /app
 
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --gid 1001 --no-create-home appuser
+USER appuser
+
 CMD ["node", "src/server.mjs"]
