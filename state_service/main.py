@@ -5,18 +5,13 @@ import structlog
 
 from redis.asyncio import Redis
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 from services.state_service import StateService
 from clients.redis_listener import RedisListener
 from api.api_server import createAPI
 
 configure_logging()
 log = structlog.get_logger()
-
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
 
 def parse_bool(value: str) -> bool:
     return value.lower() in ("1", "true", "yes", "on")

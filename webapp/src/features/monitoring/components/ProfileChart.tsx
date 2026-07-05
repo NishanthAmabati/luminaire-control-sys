@@ -2,7 +2,7 @@ import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { THEME_TOKENS } from '../../../config/theme.tokens';
 import type { DashboardTheme } from '../../../types/theme';
-import * as echarts from 'echarts';
+import { graphic } from 'echarts';
 
 interface ProfileChartProps {
   theme: DashboardTheme;
@@ -89,7 +89,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
 
   const getCCTGradient = () => {
     const gradient = tokens.chartGradients.cct;
-    return new echarts.graphic.LinearGradient(
+    return new graphic.LinearGradient(
       0, 0, 0, 1,
       [
         { offset: 0.0, color: gradient[0] },
@@ -103,7 +103,7 @@ export const ProfileChart: React.FC<ProfileChartProps> = ({
 
   const getIntensityGradient = () => {
     const gradient = tokens.chartGradients.intensity;
-    return new echarts.graphic.LinearGradient(
+    return new graphic.LinearGradient(
       0, 0, 0, 1,
       [
         { offset: 0, color: gradient[0] },

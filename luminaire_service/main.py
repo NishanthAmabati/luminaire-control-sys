@@ -39,6 +39,14 @@ async def startFastAPI(app):
 
 async def main():
     log.info("application_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("LUMINAIRE_REDIS_PUB")
+    require_env("LUMINAIRE_API_HOST")
+    require_env("LUMINAIRE_API_PORT")
+    require_env("LUMINAIRE_API_LOOP")
+    require_env("LUMINAIRE_API_LOG_LEVEL")
+    require_env("LUMINAIRE_TCP_HOST")
+    require_env("LUMINAIRE_TCP_PORT")
     
     try:
         service = LuminaireService(
