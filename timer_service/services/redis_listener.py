@@ -46,13 +46,13 @@ class RedisListener:
 
         try:
             if event == "timer:toggled":
-                await self.timer.toggle_timer()
+                await self.timer.toggle_timer(payload)
 
             elif event == "timer:configured":
-                await self.timer.configure_timer()
+                await self.timer.configure_timer(payload)
 
             elif event == "timer:cleared":
-                await self.timer.clear_timer()
+                await self.timer.clear_timer(payload)
             else:
                 event_log.warning("unhandled_redis_event")
                 return

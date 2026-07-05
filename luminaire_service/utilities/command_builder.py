@@ -14,10 +14,8 @@ class CommandBuilder:
 
     @staticmethod
     def build_cw_ww(cw: float, ww: float) -> str:
-        # If value is 100, 100 * 10 = 1000 (4 characters). 
-        # This would break the strictly expected 3-character format (000-999).
-        # cw = CommandBuilder._clamp(cw, 0.0, 99.9)
-        # ww = CommandBuilder._clamp(ww, 0.0, 99.9)
+        cw = CommandBuilder._clamp(cw, 0.0, 99.9)
+        ww = CommandBuilder._clamp(ww, 0.0, 99.9)
 
         cw_scaled = int(round(cw * 10))
         ww_scaled = int(round(ww * 10))
