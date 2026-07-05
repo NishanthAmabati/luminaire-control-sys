@@ -1,0 +1,13 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "state_service/tests",
+    "scheduler_service/tests",
+    "luminaire_service/tests",
+    "timer_service/tests",
+    "metrics_service/tests",
+    "event_gateway",
+]
+markers = [
+    "asyncio: mark test as async",
+]
