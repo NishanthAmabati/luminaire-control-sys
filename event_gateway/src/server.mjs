@@ -162,11 +162,6 @@ function applyScheduler(event, payload) {
 
       if (typeof payload?.system_on === 'boolean') {
         sch.system_on = payload.system_on;
-      } else if (
-        sch.system_on === false &&
-        (Number(payload?.cct ?? 0) > 0 || Number(payload?.lux ?? 0) > 0 || Boolean(sch.running_scene))
-      ) {
-        sch.system_on = true;
       }
     }
 
