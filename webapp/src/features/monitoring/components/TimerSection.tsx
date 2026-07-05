@@ -17,7 +17,6 @@ export const TimerSection: React.FC<TimerSectionProps> = ({ variant = 'card' }) 
   const {
     onHour, onMinute, offHour, offMinute,
     isTimerEnabled, timerTogglePending, timerSetPending, timerClearPending,
-    onFocused, offFocused,
     activePicker, draftHour, draftMinute,
     setDraftHour, setDraftMinute,
     openPicker, closePicker, applyDraft,

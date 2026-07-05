@@ -31,6 +31,13 @@ async def startFastAPI(app):
 
 async def main():
     log.info("state_service_startup_initiated")
+    require_env("REDIS_URL")
+    require_env("STATE_API_HOST")
+    require_env("STATE_API_PORT")
+    require_env("STATE_API_LOOP")
+    require_env("STATE_API_LOG_LEVEL")
+    require_env("SCHEDULER_REDIS_PUB")
+    require_env("METRICS_REDIS_PUB")
     
     try:
         redis_url = require_env("REDIS_URL")

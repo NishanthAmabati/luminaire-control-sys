@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUiFeedback } from '../context/useUiFeedback';
 import { readErrorMessage, unknownToMessage } from '../utils/apiError';
 
@@ -51,7 +51,6 @@ export const useTimerControl = (stats: Record<string, unknown> | undefined, apiB
   const [draftHour, setDraftHour] = useState('');
   const [draftMinute, setDraftMinute] = useState('');
   const [suppressTimerSyncUntil, setSuppressTimerSyncUntil] = useState(0);
-  const dragRef = useRef<{ part: 'hour' | 'minute' | null; el: HTMLDivElement | null }>({ part: null, el: null });
 
   const isTimerEnabled = typeof stats?.timerEnabled === 'boolean' ? stats.timerEnabled : false;
   const onTime = onHour && onMinute ? `${onHour}:${onMinute}` : '';
