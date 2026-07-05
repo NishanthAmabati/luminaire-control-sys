@@ -4,6 +4,7 @@
 deploy/build-args.env
 
 # Python
+.venv/
 __pycache__/
 *.py[cod]
 *.pyo
