@@ -8,7 +8,7 @@ class SchedulerRuntime:
     system_on: Optional[bool] = None
     mode: Optional[str] = None
 
-    available_secnes: Optional[list[str]] = None
+    available_scenes: Optional[list[str]] = None
     loaded_scene: Optional[str] = None
     running_scene: Optional[str] = None
 
