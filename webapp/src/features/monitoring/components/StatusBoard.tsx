@@ -18,7 +18,6 @@ export const StatusBoard: React.FC<StatusBoardProps> = ({ systemOn }) => {
   const {
     onHour, onMinute, offHour, offMinute,
     isTimerEnabled, timerTogglePending, timerSetPending, timerClearPending,
-    onFocused, offFocused,
     activePicker, draftHour, draftMinute,
     setDraftHour, setDraftMinute,
     openPicker, closePicker, applyDraft,
