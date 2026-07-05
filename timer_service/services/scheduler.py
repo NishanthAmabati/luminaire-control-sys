@@ -10,7 +10,7 @@ from apscheduler.events import (
     JobExecutionEvent
 )
 
-logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
 log = structlog.get_logger()
 
 class Scheduler:
