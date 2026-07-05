@@ -36,6 +36,10 @@ def createAPI(state_service: StateService) -> FastAPI:
     async def preflight_handler(path: str):
         return Response(status_code=204)
 
+    @app.get("/health")
+    async def health_check():
+        return {"status": "ok", "service": "state_service"}
+
     @app.on_event('startup')
     async def startup():
         log.info("api_startup_hook_triggered")
