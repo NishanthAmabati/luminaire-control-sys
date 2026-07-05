@@ -3,6 +3,7 @@ import os
 import uvicorn
 import structlog
 from app_logging.logging_config import configure_logging
+from app_logging.require_env import require_env
 
 from api.api_server import createAPI
 from tcp.tcp_server import TCPServer
@@ -10,12 +11,6 @@ from services.luminaire_service import LuminaireService
 
 configure_logging()
 log = structlog.get_logger()
-
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"missing required env var: {name}")
-    return value
 
 def parse_bool_env(name: str, default: bool) -> bool:
     value = os.getenv(name, "").lower()
