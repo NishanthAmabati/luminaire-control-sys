@@ -31,4 +31,12 @@ COPY webapp/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
+RUN addgroup -S -g 1001 appgroup && \
+    adduser -S -u 1001 -G appgroup -s /sbin/nologin appuser && \
+    chown -R appuser:appgroup /usr/share/nginx/html && \
+    chown -R appuser:appgroup /var/cache/nginx && \
+    touch /var/run/nginx.pid && \
+    chown appuser:appgroup /var/run/nginx.pid
+USER appuser
+
 CMD ["nginx", "-g", "daemon off;"]

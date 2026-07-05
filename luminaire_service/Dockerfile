@@ -62,4 +62,8 @@ ENV REDIS_URL=$REDIS_URL \
 
 ENV PYTHONUNBUFFERED=1
 
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --gid 1001 --no-create-home appuser
+USER appuser
+
 CMD ["python", "main.py"]
