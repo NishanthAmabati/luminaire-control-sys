@@ -46,6 +46,7 @@ services:
         LUMINAIRE_API_LOOP: ${LUMINAIRE_API_LOOP}
         LUMINAIRE_API_LOG_LEVEL: ${LUMINAIRE_API_LOG_LEVEL}
         LUMINAIRE_API_ACCESS_LOG: ${LUMINAIRE_API_ACCESS_LOG}
+        CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:80}
     container_name: luminaire-service
     ports:
       - "5250:5250"
@@ -80,6 +81,7 @@ services:
         STATE_REDIS_PUB: ${STATE_REDIS_PUB}
         SCHEDULER_REDIS_PUB: ${SCHEDULER_REDIS_PUB}
         METRICS_REDIS_PUB: ${METRICS_REDIS_PUB}
+        CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:80}
     container_name: state-service
     ports:
       - "8001:8001"
