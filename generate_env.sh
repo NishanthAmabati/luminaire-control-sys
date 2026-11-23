@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# usage: /generate_env.sh --config ./config-dev.yaml or ./generate_env.sh -c ./config-dev.yaml
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/" && pwd)"
 CONFIG_PATH="${CONFIG_PATH:-./config.yaml}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c|--config)
+      CONFIG_PATH="$2"
+      shift 2
+      ;;
+    --config=*)
+      CONFIG_PATH="${1#*=}"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 HOST_REWRITE="${HOST_REWRITE:-1}"
 if [[ "$CONFIG_PATH" == *"config-dev.yaml"* ]]; then
   HOST_REWRITE=0
